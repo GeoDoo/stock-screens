@@ -344,7 +344,7 @@ export default function App() {
               <button
                 onClick={runValuation}
                 disabled={loading || !canRunValuation}
-                className="px-10 py-3 text-sm font-semibold bg-emerald-600 text-white rounded-lg transition-colors hover:bg-emerald-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {loading ? 'Calculating...' : hasValidationErrors ? 'Fix Errors Above' : 'Run Valuation'}
               </button>
@@ -537,7 +537,7 @@ export default function App() {
               <button
                 onClick={runScenarios}
                 disabled={scenarioLoading || hasValidationErrors}
-                className="px-6 py-2 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {scenarioLoading ? 'Analyzing...' : 'Run Scenarios'}
               </button>
