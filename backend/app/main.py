@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from app.services.stock_data_client import StockDataClient
 from app.services.data_adapter import stock_data_to_legacy
-from app.services.base_provider import ProviderError, TickerNotFoundError, DataNotAvailableError
+from app.services.base_provider import ProviderError, TickerNotFoundError, DataNotAvailableError, RateLimitError
 from app.services.data_extractor import DataExtractor
 from app.services.valuation_service import ValuationService
 from app.services.fcf_projector import FCFProjector
@@ -174,6 +174,8 @@ async def get_stock(symbol: str, provider: str):
         risk_free_rate = await client.get_treasury_rate()
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except RateLimitError as e:
+        raise HTTPException(status_code=429, detail=str(e))
     except DataNotAvailableError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except ProviderError as e:
@@ -307,6 +309,8 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
         risk_free_rate = await client.get_treasury_rate()
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except RateLimitError as e:
+        raise HTTPException(status_code=429, detail=str(e))
     except DataNotAvailableError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except ProviderError as e:
@@ -445,11 +449,14 @@ async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
     
     try:
         result = await analyzer.analyze(symbol.upper(), max_peers=max_peers)
+    except RateLimitError as e:
+        raise HTTPException(status_code=429, detail=str(e))
+    except TickerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ProviderError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        error_msg = str(e)
-        if "429" in error_msg:
-            raise HTTPException(status_code=429, detail="Rate limit exceeded. Please wait a moment and try again.")
-        raise HTTPException(status_code=400, detail=f"Comparable analysis error: {error_msg}")
+        raise HTTPException(status_code=400, detail=f"Comparable analysis error: {str(e)}")
     
     return {
         "symbol": result.target.symbol,

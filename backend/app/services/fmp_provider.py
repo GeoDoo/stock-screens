@@ -51,11 +51,13 @@ class FMPProvider(StockDataProvider):
                 elif response.status_code == 402:
                     if error_detail and ("subscription" in error_detail.lower() or "premium" in error_detail.lower()):
                         raise DataNotAvailableError("Data requires premium FMP subscription")
-                    raise RateLimitError("FMP API limit reached")
+                    raise RateLimitError("FMP daily API limit reached")
                 elif response.status_code == 403:
                     raise ProviderError("FMP access denied")
                 elif response.status_code == 404:
                     raise TickerNotFoundError("Ticker not found")
+                elif response.status_code == 429:
+                    raise RateLimitError("FMP rate limit exceeded")
                 else:
                     raise ProviderError(error_detail or f"FMP API error ({response.status_code})")
             
