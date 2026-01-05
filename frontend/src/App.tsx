@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult } from './types';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -54,6 +54,10 @@ export default function App() {
   // Scenario Analysis
   const [scenarioResult, setScenarioResult] = useState<ScenarioAnalysisResult | null>(null);
   const [scenarioLoading, setScenarioLoading] = useState(false);
+  
+  // Comparable Analysis
+  const [comparableResult, setComparableResult] = useState<ComparableResult | null>(null);
+  const [comparableLoading, setComparableLoading] = useState(false);
 
   const fetchStock = async () => {
     if (!ticker.trim()) return;
@@ -147,6 +151,27 @@ export default function App() {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setScenarioLoading(false);
+    }
+  };
+
+  const runComparables = async () => {
+    if (!stockData) return;
+    
+    setComparableLoading(true);
+    setComparableResult(null);
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/comparables`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Comparable analysis failed');
+      }
+      const data: ComparableResult = await res.json();
+      setComparableResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setComparableLoading(false);
     }
   };
 
@@ -600,6 +625,178 @@ export default function App() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Comparable Analysis Section */}
+        {stockData && (
+          <section className="mt-16 pt-8 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Comparable Analysis</h2>
+              <button
+                onClick={runComparables}
+                disabled={comparableLoading}
+                className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {comparableLoading ? 'Loading...' : 'Run Comparables'}
+              </button>
+            </div>
+
+            {comparableResult && (
+              <div className="space-y-8">
+                {/* Summary */}
+                <div className="flex items-baseline gap-4">
+                  <span className="text-4xl font-bold font-mono">
+                    ${comparableResult.summary.average_implied_price?.toFixed(2) || '—'}
+                  </span>
+                  <span className="text-sm text-gray-400">implied fair value (peer median)</span>
+                  {comparableResult.summary.average_upside_percent !== null && (
+                    <span className={`text-sm font-medium ${
+                      comparableResult.summary.average_upside_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
+                    }`}>
+                      {comparableResult.summary.average_upside_percent >= 0 ? '+' : ''}
+                      {comparableResult.summary.average_upside_percent.toFixed(0)}%
+                    </span>
+                  )}
+                </div>
+
+                {/* Sector Info */}
+                <div className="text-sm text-gray-500">
+                  <span className="font-medium">{comparableResult.sector}</span>
+                  {comparableResult.industry && comparableResult.industry !== comparableResult.sector && (
+                    <span> / {comparableResult.industry}</span>
+                  )}
+                  <span className="text-gray-400 ml-2">• {comparableResult.peers.length} peers</span>
+                </div>
+
+                {/* Implied Valuations */}
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Implied Value by Multiple</h3>
+                  <table className="w-full max-w-2xl">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Multiple</th>
+                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Company</th>
+                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Peer Median</th>
+                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Implied Price</th>
+                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">vs Current</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparableResult.implied_valuations.map((iv) => (
+                        <tr key={iv.metric} className="border-b border-gray-100">
+                          <td className="py-3 text-sm font-medium">{iv.metric}</td>
+                          <td className="py-3 text-right font-mono text-sm">
+                            {iv.company_value !== null ? iv.company_value.toFixed(1) + 'x' : '—'}
+                          </td>
+                          <td className="py-3 text-right font-mono text-sm text-gray-500">
+                            {iv.peer_median !== null ? iv.peer_median.toFixed(1) + 'x' : '—'}
+                          </td>
+                          <td className="py-3 text-right font-mono text-sm font-medium">
+                            {iv.implied_price !== null ? '$' + iv.implied_price.toFixed(2) : '—'}
+                          </td>
+                          <td className={`py-3 text-right font-mono text-sm ${
+                            iv.upside_percent !== null && iv.upside_percent >= 0 
+                              ? 'text-emerald-600' 
+                              : 'text-red-600'
+                          }`}>
+                            {iv.upside_percent !== null 
+                              ? `${iv.upside_percent >= 0 ? '+' : ''}${iv.upside_percent.toFixed(0)}%`
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Peer Comparison */}
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Peer Companies</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Company</th>
+                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Market Cap</th>
+                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">P/E</th>
+                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">EV/EBITDA</th>
+                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">P/S</th>
+                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">P/B</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* Target company row */}
+                        <tr className="border-b border-gray-200 bg-gray-50">
+                          <td className="py-3 font-medium">
+                            {comparableResult.symbol}
+                            <span className="text-xs text-gray-400 ml-2">(target)</span>
+                          </td>
+                          <td className="py-3 text-right font-mono">
+                            {formatCurrency(stockData.data.market_cap)}
+                          </td>
+                          <td className="py-3 text-right font-mono">
+                            {comparableResult.target_metrics.pe_ratio?.toFixed(1) || '—'}
+                          </td>
+                          <td className="py-3 text-right font-mono">
+                            {comparableResult.target_metrics.ev_to_ebitda?.toFixed(1) || '—'}
+                          </td>
+                          <td className="py-3 text-right font-mono">
+                            {comparableResult.target_metrics.price_to_sales?.toFixed(1) || '—'}
+                          </td>
+                          <td className="py-3 text-right font-mono">
+                            {comparableResult.target_metrics.price_to_book?.toFixed(1) || '—'}
+                          </td>
+                        </tr>
+                        {/* Peer rows */}
+                        {comparableResult.peers.map((peer) => (
+                          <tr key={peer.symbol} className="border-b border-gray-100">
+                            <td className="py-3">
+                              <span className="font-medium">{peer.symbol}</span>
+                              <span className="text-xs text-gray-400 ml-2 truncate max-w-[150px] inline-block align-bottom">
+                                {peer.name}
+                              </span>
+                            </td>
+                            <td className="py-3 text-right font-mono text-gray-500">
+                              {formatCurrency(peer.market_cap)}
+                            </td>
+                            <td className="py-3 text-right font-mono text-gray-500">
+                              {peer.pe_ratio?.toFixed(1) || '—'}
+                            </td>
+                            <td className="py-3 text-right font-mono text-gray-500">
+                              {peer.ev_to_ebitda?.toFixed(1) || '—'}
+                            </td>
+                            <td className="py-3 text-right font-mono text-gray-500">
+                              {peer.price_to_sales?.toFixed(1) || '—'}
+                            </td>
+                            <td className="py-3 text-right font-mono text-gray-500">
+                              {peer.price_to_book?.toFixed(1) || '—'}
+                            </td>
+                          </tr>
+                        ))}
+                        {/* Median row */}
+                        <tr className="border-t-2 border-gray-200">
+                          <td className="py-3 font-medium text-gray-500">Peer Median</td>
+                          <td className="py-3 text-right font-mono">—</td>
+                          <td className="py-3 text-right font-mono font-medium">
+                            {comparableResult.peer_medians.pe_ratio?.toFixed(1) || '—'}
+                          </td>
+                          <td className="py-3 text-right font-mono font-medium">
+                            {comparableResult.peer_medians.ev_to_ebitda?.toFixed(1) || '—'}
+                          </td>
+                          <td className="py-3 text-right font-mono font-medium">
+                            {comparableResult.peer_medians.price_to_sales?.toFixed(1) || '—'}
+                          </td>
+                          <td className="py-3 text-right font-mono font-medium">
+                            {comparableResult.peer_medians.price_to_book?.toFixed(1) || '—'}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
           </section>

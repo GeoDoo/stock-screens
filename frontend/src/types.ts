@@ -126,3 +126,48 @@ export interface ScenarioAnalysisResult {
   };
 }
 
+// Comparable Analysis Types
+export interface PeerCompany {
+  symbol: string;
+  name: string;
+  market_cap: number | null;
+  pe_ratio: number | null;
+  ev_to_ebitda: number | null;
+  price_to_sales: number | null;
+  price_to_book: number | null;
+}
+
+export interface ImpliedValuation {
+  metric: string;
+  peer_median: number | null;
+  company_value: number | null;
+  implied_price: number | null;
+  upside_percent: number | null;
+}
+
+export interface ComparableResult {
+  symbol: string;
+  company_name: string;
+  current_price: number | null;
+  sector: string;
+  industry: string;
+  target_metrics: {
+    pe_ratio: number | null;
+    ev_to_ebitda: number | null;
+    price_to_sales: number | null;
+    price_to_book: number | null;
+  };
+  peer_medians: {
+    pe_ratio: number | null;
+    ev_to_ebitda: number | null;
+    price_to_sales: number | null;
+    price_to_book: number | null;
+  };
+  peers: PeerCompany[];
+  implied_valuations: ImpliedValuation[];
+  summary: {
+    average_implied_price: number | null;
+    average_upside_percent: number | null;
+  };
+}
+
