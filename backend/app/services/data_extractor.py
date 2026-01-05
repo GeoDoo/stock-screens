@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 
 class DataExtractor:
@@ -21,6 +21,13 @@ class DataExtractor:
         if not statements:
             return None
         return statements[0].get(key)
+
+    def _get_history(self, statements: list, key: str) -> List[float]:
+        """Get historical values (oldest first for CAGR calculation)."""
+        if not statements:
+            return []
+        values = [s.get(key) for s in reversed(statements) if s.get(key) is not None]
+        return values
 
     def beta(self) -> Optional[float]:
         """Stock beta from profile."""
@@ -86,4 +93,38 @@ class DataExtractor:
         if self._market_risk_premium is not None:
             return self._market_risk_premium
         return self.DEFAULT_MARKET_RISK_PREMIUM
+
+    # Historical data for FCF projections
+    def revenue_history(self) -> List[float]:
+        """Historical revenue (oldest first)."""
+        return self._get_history(self.income_statement, "revenue")
+
+    def ebit_history(self) -> List[float]:
+        """Historical EBIT / operating income (oldest first)."""
+        return self._get_history(self.income_statement, "operatingIncome")
+
+    def da_history(self) -> List[float]:
+        """Historical depreciation & amortization (oldest first)."""
+        return self._get_history(self.cash_flow, "depreciationAndAmortization")
+
+    def capex_history(self) -> List[float]:
+        """Historical capital expenditures (oldest first)."""
+        # CapEx is usually negative in cash flow, we want positive values
+        values = self._get_history(self.cash_flow, "capitalExpenditure")
+        return [abs(v) for v in values]
+
+    def working_capital_history(self) -> List[float]:
+        """
+        Historical working capital (oldest first).
+        WC = Current Assets - Current Liabilities
+        """
+        if not self.balance_sheet:
+            return []
+        
+        wc_values = []
+        for bs in reversed(self.balance_sheet):
+            current_assets = bs.get("totalCurrentAssets", 0) or 0
+            current_liabilities = bs.get("totalCurrentLiabilities", 0) or 0
+            wc_values.append(current_assets - current_liabilities)
+        return wc_values
 
