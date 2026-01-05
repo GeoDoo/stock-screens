@@ -118,3 +118,25 @@ class TestDataExtractor:
         extractor = DataExtractor(data)
         assert extractor.cost_of_debt() == 0.0
 
+    def test_market_risk_premium_default(self):
+        """Market risk premium defaults to 6%."""
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        assert extractor.market_risk_premium() == 0.06
+
+    def test_market_risk_premium_override(self):
+        """User can override market risk premium."""
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data, market_risk_premium=0.07)
+        assert extractor.market_risk_premium() == 0.07
+

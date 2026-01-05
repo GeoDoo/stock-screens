@@ -6,11 +6,15 @@ class DataExtractor:
     Extracts financial metrics from FMP data for use in valuation models.
     """
 
-    def __init__(self, data: dict):
+    # Default market risk premium (historical average ~6%)
+    DEFAULT_MARKET_RISK_PREMIUM = 0.06
+
+    def __init__(self, data: dict, market_risk_premium: float = None):
         self.profile = data.get("profile", {})
         self.income_statement = data.get("income_statement", [])
         self.balance_sheet = data.get("balance_sheet", [])
         self.cash_flow = data.get("cash_flow", [])
+        self._market_risk_premium = market_risk_premium
 
     def _get_latest(self, statements: list, key: str) -> Optional[Any]:
         """Get value from most recent statement."""
@@ -71,4 +75,15 @@ class DataExtractor:
     def shares_outstanding(self) -> Optional[float]:
         """Weighted average shares outstanding from income statement."""
         return self._get_latest(self.income_statement, "weightedAverageShsOut")
+
+    def market_risk_premium(self) -> float:
+        """
+        Market risk premium (expected market return - risk free rate).
+        
+        This is an assumption, not data. Historical average is ~6%.
+        User can override via constructor.
+        """
+        if self._market_risk_premium is not None:
+            return self._market_risk_premium
+        return self.DEFAULT_MARKET_RISK_PREMIUM
 
