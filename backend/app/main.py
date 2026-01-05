@@ -375,7 +375,7 @@ async def run_scenarios(symbol: str, request: ScenarioRequest):
 
 
 @app.get("/api/stock/{symbol}/comparables")
-async def get_comparables(symbol: str, max_peers: int = 10):
+async def get_comparables(symbol: str, max_peers: int = 5):
     """
     Run comparable company analysis.
     
@@ -387,16 +387,17 @@ async def get_comparables(symbol: str, max_peers: int = 10):
     
     Returns implied fair value based on peer median multiples.
     """
-    if not FMP_API_KEY:
-        raise HTTPException(status_code=500, detail="FMP_API_KEY not configured")
-    
-    fmp = FMPClient(api_key=FMP_API_KEY)
+    # FMP client is optional (used for peer list), Yahoo used for metrics
+    fmp = FMPClient(api_key=FMP_API_KEY) if FMP_API_KEY else None
     analyzer = ComparableAnalyzer(fmp)
     
     try:
         result = await analyzer.analyze(symbol.upper(), max_peers=max_peers)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Comparable analysis error: {str(e)}")
+        error_msg = str(e)
+        if "429" in error_msg:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded. Please wait a moment and try again.")
+        raise HTTPException(status_code=400, detail=f"Comparable analysis error: {error_msg}")
     
     return {
         "symbol": result.target.symbol,
