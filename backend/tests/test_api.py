@@ -76,6 +76,7 @@ class TestStockEndpoint:
             assert "company_name" in result
             assert "data" in result
             assert "hints" in result
+            assert "validation" in result
             
             # Check data (read-only from FMP)
             assert result["symbol"] == "AAPL"
@@ -87,6 +88,12 @@ class TestStockEndpoint:
             # Check hints (calculated from historical)
             assert "revenue_growth" in result["hints"]
             assert "operating_margin" in result["hints"]
+            
+            # Check validation
+            assert "has_errors" in result["validation"]
+            assert "has_warnings" in result["validation"]
+            assert "errors" in result["validation"]
+            assert "warnings" in result["validation"]
 
     def test_get_stock_without_api_key(self):
         with patch("app.main.FMP_API_KEY", ""):

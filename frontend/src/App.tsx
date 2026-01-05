@@ -100,7 +100,9 @@ export default function App() {
     }
   };
 
-  const isValid = revenueGrowth && operatingMargin && terminalGrowth && marketRiskPremium && projectionYears;
+  const hasInputs = revenueGrowth && operatingMargin && terminalGrowth && marketRiskPremium && projectionYears;
+  const hasValidationErrors = stockData?.validation?.has_errors ?? false;
+  const canRunValuation = hasInputs && !hasValidationErrors;
 
   return (
     <div className="app">
@@ -127,6 +129,36 @@ export default function App() {
 
       {stockData && (
         <>
+          {/* Validation Alerts */}
+          {(stockData.validation.has_errors || stockData.validation.has_warnings) && (
+            <section className="validation-section">
+              {stockData.validation.errors.length > 0 && (
+                <div className="validation-errors">
+                  <h3>⛔ Cannot Run Valuation</h3>
+                  <ul>
+                    {stockData.validation.errors.map((e, i) => (
+                      <li key={i}>
+                        <strong>{e.field}:</strong> {e.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {stockData.validation.warnings.length > 0 && (
+                <div className="validation-warnings">
+                  <h3>⚠️ Data Quality Warnings</h3>
+                  <ul>
+                    {stockData.validation.warnings.map((w, i) => (
+                      <li key={i}>
+                        <strong>{w.field}:</strong> {w.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          )}
+
           <section className="data-section">
             <h2>{stockData.symbol} {stockData.company_name && `— ${stockData.company_name}`}</h2>
             
@@ -238,9 +270,9 @@ export default function App() {
             <button 
               className="run-btn"
               onClick={runValuation} 
-              disabled={loading || !isValid}
+              disabled={loading || !canRunValuation}
             >
-              {loading ? 'Calculating...' : 'Run Valuation'}
+              {loading ? 'Calculating...' : hasValidationErrors ? 'Fix Errors Above' : 'Run Valuation'}
             </button>
           </section>
         </>
