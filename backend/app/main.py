@@ -10,6 +10,7 @@ from app.services.data_extractor import DataExtractor
 from app.services.valuation_service import ValuationService
 from app.services.fcf_projector import FCFProjector
 from app.services.data_validator import DataValidator
+from app.services.wacc_calculator import WACCCalculator
 
 load_dotenv()
 
@@ -38,6 +39,7 @@ class CompanyData(BaseModel):
     cost_of_debt: Optional[float]
     shares_outstanding: Optional[float]
     risk_free_rate: float
+    wacc: Optional[float]  # Calculated from the above
 
 
 class HistoricalHints(BaseModel):
@@ -79,6 +81,7 @@ class ValuationRequest(BaseModel):
     terminal_growth_rate: float
     market_risk_premium: float
     projection_years: int
+    discount_rate_override: Optional[float] = None  # If set, use this instead of calculated WACC
 
 
 @app.get("/health")
@@ -137,6 +140,26 @@ async def get_stock(symbol: str):
         tax_rate=extractor.tax_rate() or 0.25,
     )
 
+    # Calculate WACC for display
+    beta = extractor.beta()
+    cost_of_debt = extractor.cost_of_debt()
+    tax_rate = extractor.tax_rate()
+    market_cap = extractor.market_cap()
+    total_debt = extractor.total_debt()
+    
+    wacc = None
+    if beta is not None and market_cap is not None:
+        wacc_calculator = WACCCalculator(
+            risk_free_rate=risk_free_rate,
+            beta=beta,
+            market_risk_premium=0.06,  # Default
+            cost_of_debt=cost_of_debt if cost_of_debt is not None else 0.05,
+            tax_rate=tax_rate if tax_rate is not None else 0.25,
+            market_cap=market_cap,
+            total_debt=total_debt if total_debt is not None else 0,
+        )
+        wacc = wacc_calculator.calculate()
+
     return StockDataResponse(
         symbol=symbol.upper(),
         company_name=data.get("profile", {}).get("companyName"),
@@ -149,6 +172,7 @@ async def get_stock(symbol: str):
             cost_of_debt=extractor.cost_of_debt(),
             shares_outstanding=extractor.shares_outstanding(),
             risk_free_rate=risk_free_rate,
+            wacc=wacc,
         ),
         hints=HistoricalHints(
             revenue_growth=fcf_projector.revenue_cagr() if extractor.revenue_history() else None,
@@ -181,6 +205,7 @@ async def run_valuation(symbol: str, request: ValuationRequest):
             revenue_growth=request.revenue_growth,
             operating_margin=request.operating_margin,
             market_risk_premium=request.market_risk_premium,
+            discount_rate_override=request.discount_rate_override,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Valuation error: {str(e)}")

@@ -7,6 +7,7 @@ export interface CompanyData {
   cost_of_debt: number | null;
   shares_outstanding: number | null;
   risk_free_rate: number;
+  wacc: number | null;
 }
 
 export interface HistoricalHints {
@@ -43,6 +44,7 @@ export interface ValuationRequest {
   terminal_growth_rate: number;
   market_risk_premium: number;
   projection_years: number;
+  discount_rate_override?: number | null;
 }
 
 export interface ValuationResult {
@@ -53,6 +55,8 @@ export interface ValuationResult {
   market_cap: number | null;
   net_debt: number;
   wacc: number;
+  discount_rate: number;
+  using_custom_discount_rate: boolean;
   terminal_value: number;
   projections: Array<{
     revenue: number;

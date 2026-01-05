@@ -27,6 +27,7 @@ class ValuationService:
         revenue_growth: Optional[float] = None,
         operating_margin: Optional[float] = None,
         market_risk_premium: Optional[float] = None,
+        discount_rate_override: Optional[float] = None,
     ) -> dict:
         """
         Perform full DCF valuation for a stock.
@@ -38,6 +39,7 @@ class ValuationService:
             revenue_growth: Override historical growth rate
             operating_margin: Override historical margin
             market_risk_premium: Override default 6%
+            discount_rate_override: If set, use this instead of calculated WACC
         
         Returns:
             Dict with intrinsic value, WACC, projections, and inputs used
@@ -66,7 +68,10 @@ class ValuationService:
             market_cap=market_cap if market_cap is not None else 0,
             total_debt=total_debt if total_debt is not None else 0,
         )
-        wacc = wacc_calculator.calculate()
+        calculated_wacc = wacc_calculator.calculate()
+        
+        # Use custom discount rate if provided, otherwise use calculated WACC
+        discount_rate = discount_rate_override if discount_rate_override is not None else calculated_wacc
 
         # 4. Project FCF
         fcf_projector = FCFProjector(
@@ -90,14 +95,14 @@ class ValuationService:
         # Use the projected FCFs directly instead of growth-based projection
         # Calculate PV of projected FCFs
         pv_fcf = sum(
-            fcf / ((1 + wacc) ** year)
+            fcf / ((1 + discount_rate) ** year)
             for year, fcf in enumerate(projected_fcf, start=1)
         )
 
         # Terminal value
         final_fcf = projected_fcf[-1]
-        terminal_value = final_fcf * (1 + terminal_growth_rate) / (wacc - terminal_growth_rate)
-        pv_terminal = terminal_value / ((1 + wacc) ** projection_years)
+        terminal_value = final_fcf * (1 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
+        pv_terminal = terminal_value / ((1 + discount_rate) ** projection_years)
 
         enterprise_value = pv_fcf + pv_terminal
 
@@ -118,7 +123,9 @@ class ValuationService:
             "equity_value": equity_value,
             "market_cap": extractor.market_cap(),
             "net_debt": net_debt,
-            "wacc": wacc,
+            "wacc": calculated_wacc,
+            "discount_rate": discount_rate,
+            "using_custom_discount_rate": discount_rate_override is not None,
             "terminal_value": terminal_value,
             "projections": projections,
             "inputs": {
@@ -131,6 +138,7 @@ class ValuationService:
                 "operating_margin": operating_margin or fcf_projector.operating_margin(),
                 "terminal_growth_rate": terminal_growth_rate,
                 "projection_years": projection_years,
+                "discount_rate_override": discount_rate_override,
             },
         }
 
