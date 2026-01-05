@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from dotenv import load_dotenv
 
-from app.services.fmp_client import FMPClient
+from app.services.fmp_client import FMPClient, FMPClientError
 from app.services.data_extractor import DataExtractor
 from app.services.valuation_service import ValuationService
 from app.services.fcf_projector import FCFProjector
@@ -103,8 +103,10 @@ async def get_stock(symbol: str):
     try:
         data = await fmp_client.get_stock_data(symbol.upper())
         risk_free_rate = await fmp_client.get_treasury_rate()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error fetching data: {str(e)}")
+    except FMPClientError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to fetch stock data")
 
     extractor = DataExtractor(data)
 
