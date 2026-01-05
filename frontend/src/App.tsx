@@ -663,9 +663,8 @@ export default function App() {
           </section>
         )}
 
-        {/* Scenario Analysis Section */}
-        {stockData && (
-          <section className="pt-12 border-t border-gray-100">
+            {/* Scenario Analysis Section */}
+            <section className="pt-12 border-t border-gray-100">
             <div className="mb-8">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Scenario Analysis</h2>
               <p className="text-sm text-gray-400 mb-6">Bear / Base / Bull case valuations with probability weighting</p>
@@ -738,13 +737,11 @@ export default function App() {
               </div>
             )}
           </section>
-        )}
 
-        {/* Comparable Analysis Section */}
-        {stockData && (
-          <section className="pt-12 border-t border-gray-100">
-            <div className="mb-8">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Comparable Analysis</h2>
+            {/* Comparable Analysis Section */}
+            <section className="pt-12 border-t border-gray-100">
+              <div className="mb-8">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Comparable Analysis</h2>
               <p className="text-sm text-gray-400 mb-6">Relative valuation vs sector peers using P/E, EV/EBITDA, P/S, P/B</p>
               <button
                 onClick={runComparables}
@@ -910,7 +907,8 @@ export default function App() {
                 </div>
               </div>
             )}
-          </section>
+            </section>
+          </>
         )}
 
         {/* TECHNICAL TAB */}
