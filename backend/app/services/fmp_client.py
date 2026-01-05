@@ -28,6 +28,18 @@ class FMPClient:
     async def get_cash_flow(self, symbol: str, limit: int = 5) -> list:
         return await self._request(f"/cash-flow-statement/{symbol}", limit=limit)
 
+    async def get_treasury_rate(self) -> float:
+        """
+        Fetch current 10-year treasury rate (risk-free rate).
+        Returns rate as decimal (e.g., 0.045 for 4.5%).
+        """
+        result = await self._request("/treasury", from_="2024-01-01")
+        if result and len(result) > 0:
+            # FMP returns rates as percentages, convert to decimal
+            rate = result[0].get("year10", 4.5)
+            return rate / 100
+        return 0.045  # Default fallback
+
     async def get_stock_data(self, symbol: str) -> dict:
         """Fetch all data needed for DCF valuation."""
         return {
