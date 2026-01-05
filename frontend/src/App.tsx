@@ -34,7 +34,7 @@ export default function App() {
   const [operatingMargin, setOperatingMargin] = useState('');
   const [terminalGrowth, setTerminalGrowth] = useState('3');
   const [marketRiskPremium, setMarketRiskPremium] = useState('6');
-  const [projectionYears, setProjectionYears] = useState('5');
+  const [projectionYears, setProjectionYears] = useState('10');
 
   const fetchStock = async () => {
     if (!ticker.trim()) return;
