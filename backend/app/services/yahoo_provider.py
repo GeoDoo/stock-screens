@@ -10,6 +10,8 @@ from app.services.base_provider import (
     ProviderError,
     TickerNotFoundError,
     DataNotAvailableError,
+    HistoricalPrices,
+    PriceBar,
 )
 
 
@@ -148,5 +150,46 @@ class YahooProvider(StockDataProvider):
         # ^TNX price is the yield in percentage points (e.g., 4.5 for 4.5%)
         rate = info.get("regularMarketPrice") or info.get("previousClose") or 4.5
         return rate / 100  # Convert to decimal
+    
+    @property
+    def supports_fundamentals(self) -> bool:
+        return True
+    
+    @property
+    def supports_technical(self) -> bool:
+        return True
+    
+    async def get_historical_prices(self, symbol: str, days: int = 365) -> HistoricalPrices:
+        """Fetch historical OHLCV data from Yahoo Finance."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._get_history_sync, symbol, days)
+    
+    def _get_history_sync(self, symbol: str, days: int) -> HistoricalPrices:
+        """Synchronous history fetch."""
+        ticker = yf.Ticker(symbol.upper())
+        
+        # Fetch history
+        period = f"{days}d" if days <= 365 else f"{days // 365}y"
+        hist = ticker.history(period=period)
+        
+        if hist.empty:
+            raise DataNotAvailableError(f"No historical data for {symbol}")
+        
+        bars = []
+        for date, row in hist.iterrows():
+            bars.append(PriceBar(
+                timestamp=date.strftime("%Y-%m-%d"),
+                open=round(row["Open"], 2),
+                high=round(row["High"], 2),
+                low=round(row["Low"], 2),
+                close=round(row["Close"], 2),
+                volume=int(row["Volume"]),
+            ))
+        
+        return HistoricalPrices(
+            symbol=symbol.upper(),
+            bars=bars,
+            provider=self.name,
+        )
 
 

@@ -1,11 +1,10 @@
 """
 Technical Analysis Service.
-Combines price data from Polygon with indicator calculations.
+Works with any provider that supports historical prices.
 """
 from typing import List
-from datetime import datetime
 
-from app.services.polygon_provider import PolygonProvider, PriceBar
+from app.services.base_provider import StockDataProvider, PriceBar, HistoricalPrices
 from app.services.technical_indicators import (
     TechnicalIndicators,
     TechnicalAnalysisResult,
@@ -17,10 +16,19 @@ from app.services.technical_indicators import (
 class TechnicalService:
     """
     Service for running technical analysis on a stock.
+    Uses any provider that supports get_historical_prices().
     """
     
-    def __init__(self, polygon_api_key: str):
-        self.polygon = PolygonProvider(polygon_api_key)
+    def __init__(self, provider: StockDataProvider):
+        """
+        Initialize with a provider that supports technical analysis.
+        
+        Args:
+            provider: Any StockDataProvider with supports_technical=True
+        """
+        if not provider.supports_technical:
+            raise ValueError(f"{provider.name} does not support technical analysis")
+        self.provider = provider
     
     async def analyze(self, symbol: str, days: int = 365) -> TechnicalAnalysisResult:
         """
@@ -33,8 +41,9 @@ class TechnicalService:
         Returns:
             TechnicalAnalysisResult with all indicators
         """
-        # Fetch price data
-        bars = await self.polygon.get_daily_bars(symbol, days=days)
+        # Fetch price data from provider
+        historical = await self.provider.get_historical_prices(symbol, days=days)
+        bars = historical.bars
         
         if not bars:
             raise ValueError(f"No price data for {symbol}")
@@ -56,7 +65,7 @@ class TechnicalService:
             for i, val in enumerate(values):
                 if val is not None:
                     result.append(IndicatorValue(
-                        timestamp=bars[i].timestamp.isoformat(),
+                        timestamp=bars[i].timestamp,
                         value=round(val, 2),
                     ))
             return result
@@ -66,7 +75,7 @@ class TechnicalService:
         for i, (m, s, h) in enumerate(zip(macd_line, signal_line, histogram)):
             if m is not None and s is not None and h is not None:
                 macd_values.append(MACDValue(
-                    timestamp=bars[i].timestamp.isoformat(),
+                    timestamp=bars[i].timestamp,
                     macd=round(m, 4),
                     signal=round(s, 4),
                     histogram=round(h, 4),
@@ -75,11 +84,11 @@ class TechnicalService:
         # Format price data for charting
         prices = [
             {
-                "timestamp": bar.timestamp.isoformat(),
-                "open": round(bar.open, 2),
-                "high": round(bar.high, 2),
-                "low": round(bar.low, 2),
-                "close": round(bar.close, 2),
+                "timestamp": bar.timestamp,
+                "open": bar.open,
+                "high": bar.high,
+                "low": bar.low,
+                "close": bar.close,
                 "volume": bar.volume,
             }
             for bar in bars
@@ -111,4 +120,3 @@ class TechnicalService:
             rsi_signal=rsi_signal,
             macd_signal=macd_signal,
         )
-
