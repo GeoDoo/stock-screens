@@ -245,3 +245,4 @@ class TestDataValidator:
         assert len(d["errors"]) == 1
         assert d["errors"][0]["field"] == "market_cap"
 
+

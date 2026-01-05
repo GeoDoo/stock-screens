@@ -122,3 +122,4 @@ class StockDataClient:
         """List of configured provider names."""
         return [p.name for p in self.providers]
 
+

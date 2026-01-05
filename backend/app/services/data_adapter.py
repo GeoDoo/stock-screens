@@ -80,3 +80,4 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
         "cash_flow": cash_flows,
     }
 
+

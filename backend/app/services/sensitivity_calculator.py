@@ -90,3 +90,4 @@ class SensitivityCalculator:
             "base_terminal_growth": base_terminal_growth,
         }
 
+
