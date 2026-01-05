@@ -160,3 +160,4 @@ class FMPProvider(StockDataProvider):
             pass
         return 0.045  # Default fallback
 
+

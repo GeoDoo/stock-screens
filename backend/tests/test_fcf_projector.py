@@ -158,3 +158,4 @@ class TestFCFProjector:
         assert fcf["delta_wc"] < 0
         # FCF should be higher due to WC release
 
+

@@ -634,34 +634,6 @@ export default function App() {
                   </table>
                 </div>
 
-                {/* Range indicator */}
-                <div className="pt-4">
-                  <div className="flex justify-between text-xs text-gray-400 mb-2">
-                    <span>Bear ${scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bear')?.intrinsic_value.toFixed(0)}</span>
-                    <span>Bull ${scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bull')?.intrinsic_value.toFixed(0)}</span>
-                  </div>
-                  <div className="relative h-2 bg-gray-100 rounded-full">
-                    <div 
-                      className="absolute h-full bg-gray-300 rounded-full"
-                      style={{ left: '0%', right: '0%' }}
-                    />
-                    {/* Current price marker */}
-                    {(() => {
-                      const bear = scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bear')?.intrinsic_value || 0;
-                      const bull = scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bull')?.intrinsic_value || 0;
-                      const current = scenarioResult.current_price || 0;
-                      const position = Math.min(100, Math.max(0, ((current - bear) / (bull - bear)) * 100));
-                      
-                      return (
-                        <div 
-                          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-gray-900 rounded-full border-2 border-white"
-                          style={{ left: `${position}%`, transform: 'translate(-50%, -50%)' }}
-                        />
-                      );
-                    })()}
-                  </div>
-                  <p className="text-xs text-gray-400 text-center mt-2">● = Current price position</p>
-                </div>
               </div>
             )}
           </section>

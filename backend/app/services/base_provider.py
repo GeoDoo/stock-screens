@@ -111,3 +111,4 @@ class StockDataProvider(ABC):
         """
         pass
 
+

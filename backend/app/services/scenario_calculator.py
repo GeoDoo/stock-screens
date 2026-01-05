@@ -233,3 +233,4 @@ class ScenarioCalculator:
             upside_range=upside_range,
         )
 
+

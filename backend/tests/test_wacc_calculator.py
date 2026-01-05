@@ -86,3 +86,4 @@ class TestWACCCalculator:
         # Should be closer to after-tax cost of debt due to high leverage
         assert wacc > 0 and wacc < 0.15
 
+

@@ -149,3 +149,4 @@ class YahooProvider(StockDataProvider):
         rate = info.get("regularMarketPrice") or info.get("previousClose") or 4.5
         return rate / 100  # Convert to decimal
 
+
