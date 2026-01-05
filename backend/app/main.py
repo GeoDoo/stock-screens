@@ -5,7 +5,9 @@ from pydantic import BaseModel
 from typing import Optional, List
 from dotenv import load_dotenv
 
-from app.services.fmp_client import FMPClient, FMPClientError
+from app.services.stock_data_client import StockDataClient
+from app.services.data_adapter import stock_data_to_legacy
+from app.services.base_provider import ProviderError, TickerNotFoundError, DataNotAvailableError
 from app.services.data_extractor import DataExtractor
 from app.services.valuation_service import ValuationService
 from app.services.fcf_projector import FCFProjector
@@ -66,9 +68,10 @@ class ValidationResponse(BaseModel):
 
 
 class StockDataResponse(BaseModel):
-    """Response for /inputs endpoint."""
+    """Response for /api/stock endpoint."""
     symbol: str
     company_name: Optional[str]
+    data_provider: str  # Which provider supplied the data (fmp, yahoo, etc.)
     data: CompanyData
     hints: HistoricalHints
     validation: ValidationResponse
@@ -94,23 +97,30 @@ async def get_stock(symbol: str):
     """
     Get stock data and historical hints.
     
+    Uses multiple data providers with automatic fallback:
+    1. FMP (Financial Modeling Prep) - primary
+    2. Yahoo Finance - fallback for tickers not on FMP
+    
     Returns:
-    - data: Read-only values from FMP (beta, debt, cash, etc.)
+    - data: Read-only values (beta, debt, cash, etc.)
     - hints: Historical averages for reference (user decides what to use)
     """
-    if not FMP_API_KEY:
-        raise HTTPException(status_code=500, detail="FMP_API_KEY not configured")
-
-    fmp_client = FMPClient(api_key=FMP_API_KEY)
+    client = StockDataClient(fmp_api_key=FMP_API_KEY if FMP_API_KEY else None)
     
     try:
-        data = await fmp_client.get_stock_data(symbol.upper())
-        risk_free_rate = await fmp_client.get_treasury_rate()
-    except FMPClientError as e:
+        stock_data = await client.get_stock_data(symbol.upper())
+        risk_free_rate = await client.get_treasury_rate()
+    except TickerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DataNotAvailableError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to fetch stock data")
+    except ProviderError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch stock data: {str(e)}")
 
+    # Convert to legacy format for DataExtractor
+    data = stock_data_to_legacy(stock_data)
     extractor = DataExtractor(data)
 
     # Run validation
@@ -163,6 +173,7 @@ async def get_stock(symbol: str):
     return StockDataResponse(
         symbol=symbol.upper(),
         company_name=data.get("profile", {}).get("companyName"),
+        data_provider=stock_data.provider,
         data=CompanyData(
             beta=extractor.beta(),
             market_cap=extractor.market_cap(),
