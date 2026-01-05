@@ -459,7 +459,7 @@ export default function App() {
                                     isCurrentCell ? 'ring-2 ring-emerald-500 ring-inset font-bold' : ''
                                   }`}
                                 >
-                                  {value !== null ? `$${value.toFixed(0)}` : '—'}
+                                  {value !== null ? `$${value.toFixed(2)}` : '—'}
                                 </td>
                               );
                             })}
