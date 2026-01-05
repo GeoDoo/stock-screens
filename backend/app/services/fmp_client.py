@@ -18,17 +18,39 @@ class FMPClient:
             params["apikey"] = self.api_key
             response = await client.get(f"{self.BASE_URL}{endpoint}", params=params)
             
-            # Handle common HTTP errors with clean messages
-            if response.status_code == 401:
-                raise FMPClientError("Invalid API key")
-            elif response.status_code == 402:
-                raise FMPClientError("API limit reached or invalid subscription")
-            elif response.status_code == 403:
-                raise FMPClientError("Access denied - check your API subscription")
-            elif response.status_code == 404:
-                raise FMPClientError("Data not found")
-            elif response.status_code >= 400:
-                raise FMPClientError(f"API error (status {response.status_code})")
+            # Check for subscription/premium-only responses (FMP returns 200 with text message)
+            content_type = response.headers.get("content-type", "")
+            if response.status_code == 200 and "application/json" not in content_type:
+                text = response.text
+                if "subscription" in text.lower() or "premium" in text.lower():
+                    raise FMPClientError("Financial data not available for this ticker (may require premium subscription)")
+                if "not found" in text.lower():
+                    raise FMPClientError("Data not found for this ticker")
+            
+            # Handle HTTP errors with context-aware messages
+            if response.status_code >= 400:
+                # Try to get error details from response body
+                error_detail = None
+                try:
+                    body = response.json()
+                    if isinstance(body, dict):
+                        error_detail = body.get("error") or body.get("message")
+                except Exception:
+                    error_detail = response.text[:200] if response.text else None
+                
+                # Map status codes to user-friendly messages
+                if response.status_code == 401:
+                    raise FMPClientError("Invalid API key")
+                elif response.status_code == 402:
+                    if error_detail and ("subscription" in error_detail.lower() or "premium" in error_detail.lower()):
+                        raise FMPClientError("Financial data not available (requires premium subscription)")
+                    raise FMPClientError("API limit reached or premium data required")
+                elif response.status_code == 403:
+                    raise FMPClientError("Access denied - check your API subscription")
+                elif response.status_code == 404:
+                    raise FMPClientError("Data not found")
+                else:
+                    raise FMPClientError(error_detail or f"API error (status {response.status_code})")
             
             return response.json()
 
