@@ -365,7 +365,7 @@ export default function App() {
 
             {/* Projections */}
             {result.projections.length > 0 && (
-              <div>
+              <div className="mb-12">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">FCF Projections</h3>
                 <table className="w-full text-sm">
                   <thead>
@@ -387,6 +387,94 @@ export default function App() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Sensitivity Analysis */}
+            {result.sensitivity && (
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Sensitivity Analysis</h3>
+                <p className="text-sm text-gray-400 mb-6">Intrinsic value per share at different discount rates & terminal growth rates</p>
+                
+                <div className="overflow-x-auto">
+                  <table className="text-sm">
+                    <thead>
+                      <tr>
+                        <th className="py-2 px-3 text-left text-xs font-medium text-gray-400">
+                          <span className="block">Discount</span>
+                          <span className="block">Rate ↓</span>
+                        </th>
+                        {result.sensitivity.terminal_growth_rates.map((tg) => (
+                          <th 
+                            key={tg} 
+                            className={`py-2 px-3 text-center text-xs font-medium ${
+                              Math.abs(tg - result.sensitivity.base_terminal_growth) < 0.001 
+                                ? 'text-emerald-600 bg-emerald-50' 
+                                : 'text-gray-400'
+                            }`}
+                          >
+                            {(tg * 100).toFixed(1)}%
+                          </th>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th className="py-1 px-3 text-left text-xs text-gray-300">Terminal Growth →</th>
+                        {result.sensitivity.terminal_growth_rates.map((tg) => (
+                          <th key={tg} className="py-1"></th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.sensitivity.matrix.map((row, rowIdx) => {
+                        const dr = result.sensitivity.discount_rates[rowIdx];
+                        const isBaseRow = Math.abs(dr - result.sensitivity.base_discount_rate) < 0.001;
+                        
+                        return (
+                          <tr key={rowIdx}>
+                            <td className={`py-2 px-3 text-xs font-medium ${
+                              isBaseRow ? 'text-emerald-600 bg-emerald-50' : 'text-gray-500'
+                            }`}>
+                              {(dr * 100).toFixed(1)}%
+                            </td>
+                            {row.map((value, colIdx) => {
+                              const tg = result.sensitivity.terminal_growth_rates[colIdx];
+                              const isBaseCol = Math.abs(tg - result.sensitivity.base_terminal_growth) < 0.001;
+                              const isCurrentCell = isBaseRow && isBaseCol;
+                              
+                              // Color based on comparison to current price
+                              let cellClass = 'text-gray-700';
+                              if (value !== null && result.market_cap && stockData?.data.shares_outstanding) {
+                                const currentPrice = result.market_cap / stockData.data.shares_outstanding;
+                                const diff = ((value - currentPrice) / currentPrice) * 100;
+                                if (diff > 20) cellClass = 'text-emerald-700 bg-emerald-50';
+                                else if (diff > 0) cellClass = 'text-emerald-600';
+                                else if (diff > -20) cellClass = 'text-red-500';
+                                else cellClass = 'text-red-600 bg-red-50';
+                              }
+                              
+                              return (
+                                <td 
+                                  key={colIdx} 
+                                  className={`py-2 px-3 text-center font-mono text-sm ${cellClass} ${
+                                    isCurrentCell ? 'ring-2 ring-emerald-500 ring-inset font-bold' : ''
+                                  }`}
+                                >
+                                  {value !== null ? `$${value.toFixed(0)}` : '—'}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                
+                <div className="mt-4 flex gap-6 text-xs text-gray-400">
+                  <span><span className="inline-block w-3 h-3 bg-emerald-50 border border-emerald-200 rounded mr-1"></span> Undervalued (vs current price)</span>
+                  <span><span className="inline-block w-3 h-3 bg-red-50 border border-red-200 rounded mr-1"></span> Overvalued</span>
+                  <span><span className="inline-block w-3 h-3 ring-2 ring-emerald-500 rounded mr-1"></span> Current assumptions</span>
+                </div>
               </div>
             )}
           </section>

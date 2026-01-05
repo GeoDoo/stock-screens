@@ -47,6 +47,14 @@ export interface ValuationRequest {
   discount_rate_override?: number | null;
 }
 
+export interface SensitivityMatrix {
+  discount_rates: number[];
+  terminal_growth_rates: number[];
+  matrix: (number | null)[][];
+  base_discount_rate: number;
+  base_terminal_growth: number;
+}
+
 export interface ValuationResult {
   symbol: string;
   intrinsic_value_per_share: number;
@@ -69,5 +77,6 @@ export interface ValuationResult {
     fcf: number;
   }>;
   inputs: Record<string, unknown>;
+  sensitivity: SensitivityMatrix;
 }
 

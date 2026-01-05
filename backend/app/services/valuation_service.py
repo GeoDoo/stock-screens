@@ -4,6 +4,7 @@ from app.services.data_extractor import DataExtractor
 from app.services.wacc_calculator import WACCCalculator
 from app.services.fcf_projector import FCFProjector
 from app.services.dcf_calculator import DCFCalculator
+from app.services.sensitivity_calculator import SensitivityCalculator
 
 
 class ValuationService:
@@ -116,6 +117,25 @@ class ValuationService:
         shares = extractor.shares_outstanding() or 1
         intrinsic_value_per_share = equity_value / shares
 
+        # 6. Sensitivity Analysis
+        sensitivity_calc = SensitivityCalculator(
+            projected_fcfs=projected_fcf,
+            projection_years=projection_years,
+            shares_outstanding=shares,
+            total_debt=total_debt,
+            cash=cash,
+        )
+        
+        # Generate matrix with discount rate vs terminal growth
+        # Discount rate: current ± 2% in 1% steps
+        # Terminal growth: 1.5% to 4.5% in 0.5% steps
+        sensitivity = sensitivity_calc.generate_matrix(
+            base_discount_rate=discount_rate,
+            base_terminal_growth=terminal_growth_rate,
+            discount_rate_steps=[-0.02, -0.01, 0, 0.01, 0.02],
+            terminal_growth_steps=[-0.015, -0.01, -0.005, 0, 0.005, 0.01, 0.015],
+        )
+
         return {
             "symbol": symbol,
             "intrinsic_value_per_share": intrinsic_value_per_share,
@@ -140,5 +160,6 @@ class ValuationService:
                 "projection_years": projection_years,
                 "discount_rate_override": discount_rate_override,
             },
+            "sensitivity": sensitivity,
         }
 
