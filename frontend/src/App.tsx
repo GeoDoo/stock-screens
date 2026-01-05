@@ -210,68 +210,71 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white text-gray-900">
       <div className="w-full max-w-[1600px] mx-auto px-8 lg:px-16 py-16">
-        {/* Header */}
-        <header className="mb-16">
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Stock Valuation</h1>
-          <p className="text-sm text-gray-400 mt-1">DCF Analysis</p>
+        {/* Header + Input Area */}
+        <header className="mb-12">
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Stock Valuation</h1>
+          <p className="text-sm text-gray-400 mt-2">Discounted Cash Flow Analysis</p>
         </header>
 
-        {/* Provider Selection - MUST be chosen first */}
-        <section className="mb-8">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Data Provider</h2>
-          {providersLoading ? (
-            <p className="text-sm text-gray-400">Loading providers...</p>
-          ) : (
-            <div className="flex gap-4">
-              {providers.map((provider) => (
-                <button
-                  key={provider.id}
-                  onClick={() => {
-                    setSelectedProvider(provider.id);
-                    // Clear all data when provider changes
-                    setStockData(null);
-                    setResult(null);
-                    setScenarioResult(null);
-                    setComparableResult(null);
-                  }}
-                  disabled={!provider.available}
-                  className={`px-8 py-4 rounded-lg border-2 transition-all text-left min-w-[220px] ${
-                    selectedProvider === provider.id
-                      ? 'border-gray-900 bg-gray-900 text-white'
-                      : provider.available
-                      ? 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
-                      : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
-                  }`}
-                >
-                  <span className="font-semibold text-sm block">{provider.name}</span>
-                  <span className="text-xs mt-1 opacity-70 block">{provider.description}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Search */}
-        <section className="mb-16">
-          <div className="flex gap-4 max-w-2xl">
-            <input
-              type="text"
-              placeholder={selectedProvider ? "Enter ticker (e.g., AAPL)" : "Select a provider first"}
-              value={ticker}
-              onChange={(e) => setTicker(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === 'Enter' && fetchStock()}
-              disabled={!selectedProvider}
-              className="flex-1 px-4 py-4 text-base font-mono font-medium bg-white border-2 border-gray-200 rounded-lg outline-none transition-colors focus:border-gray-400 placeholder:text-gray-400 placeholder:font-normal disabled:bg-gray-50 disabled:cursor-not-allowed"
-            />
-            <button
-              onClick={fetchStock}
-              disabled={loading || !ticker.trim() || !selectedProvider}
-              className="px-10 py-4 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Loading...' : 'Analyze'}
-            </button>
+        {/* Provider + Ticker in one cohesive block */}
+        <section className="mb-12 space-y-6">
+          {/* Provider Selection */}
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-3">Data Provider</label>
+            {providersLoading ? (
+              <p className="text-sm text-gray-400">Loading providers...</p>
+            ) : (
+              <div className="flex gap-3">
+                {providers.map((provider) => (
+                  <button
+                    key={provider.id}
+                    onClick={() => {
+                      setSelectedProvider(provider.id);
+                      setStockData(null);
+                      setResult(null);
+                      setScenarioResult(null);
+                      setComparableResult(null);
+                    }}
+                    disabled={!provider.available}
+                    className={`px-6 py-3 rounded-lg border-2 transition-all text-left min-w-[200px] ${
+                      selectedProvider === provider.id
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : provider.available
+                        ? 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                        : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                    }`}
+                  >
+                    <span className="font-semibold text-sm block">{provider.name}</span>
+                    <span className="text-xs opacity-70 block">{provider.description}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+
+          {/* Ticker Search */}
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-3">Stock Ticker</label>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                placeholder={selectedProvider ? "AAPL" : "Select provider first"}
+                value={ticker}
+                onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && fetchStock()}
+                disabled={!selectedProvider}
+                className="w-48 px-4 py-3 text-base font-mono font-medium bg-white border-2 border-gray-200 rounded-lg outline-none transition-colors focus:border-gray-400 placeholder:text-gray-300 placeholder:font-normal disabled:bg-gray-50 disabled:cursor-not-allowed"
+              />
+              <button
+                onClick={fetchStock}
+                disabled={loading || !ticker.trim() || !selectedProvider}
+                className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Loading...' : 'Analyze'}
+              </button>
+            </div>
+            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+          </div>
         </section>
 
         {stockData && (
