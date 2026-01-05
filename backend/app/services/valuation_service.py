@@ -1,5 +1,6 @@
 from typing import Optional
-from app.services.fmp_client import FMPClient
+from app.services.stock_data_client import StockDataClient
+from app.services.data_adapter import stock_data_to_legacy
 from app.services.data_extractor import DataExtractor
 from app.services.wacc_calculator import WACCCalculator
 from app.services.fcf_projector import FCFProjector
@@ -10,15 +11,15 @@ from app.services.sensitivity_calculator import SensitivityCalculator
 class ValuationService:
     """
     Orchestrates the full DCF valuation:
-    1. Fetch data from FMP
+    1. Fetch data (with automatic provider fallback)
     2. Extract inputs using DataExtractor
     3. Calculate WACC
     4. Project FCF using FCFProjector
     5. Run DCF to get intrinsic value
     """
 
-    def __init__(self, api_key: str):
-        self.fmp_client = FMPClient(api_key=api_key)
+    def __init__(self, api_key: Optional[str] = None):
+        self.client = StockDataClient(fmp_api_key=api_key)
 
     async def value_stock(
         self,
@@ -45,11 +46,12 @@ class ValuationService:
         Returns:
             Dict with intrinsic value, WACC, projections, and inputs used
         """
-        # 1. Fetch data
-        data = await self.fmp_client.get_stock_data(symbol)
-        risk_free_rate = await self.fmp_client.get_treasury_rate()
+        # 1. Fetch data (with automatic provider fallback)
+        stock_data = await self.client.get_stock_data(symbol)
+        risk_free_rate = await self.client.get_treasury_rate()
 
-        # 2. Extract inputs
+        # 2. Convert to legacy format and extract inputs
+        data = stock_data_to_legacy(stock_data)
         extractor = DataExtractor(data, market_risk_premium=market_risk_premium)
 
         # 3. Calculate WACC
@@ -138,6 +140,7 @@ class ValuationService:
 
         return {
             "symbol": symbol,
+            "data_provider": stock_data.provider,
             "intrinsic_value_per_share": intrinsic_value_per_share,
             "enterprise_value": enterprise_value,
             "equity_value": equity_value,
