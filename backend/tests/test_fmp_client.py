@@ -17,7 +17,7 @@ class TestFMPClient:
                 "companyName": "Apple Inc.",
                 "sector": "Technology",
                 "industry": "Consumer Electronics",
-                "mktCap": 3000000000000,
+                "marketCap": 3000000000000,
             }
         ]
 
