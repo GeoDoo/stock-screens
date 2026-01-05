@@ -16,6 +16,8 @@ from app.services.wacc_calculator import WACCCalculator
 from app.services.scenario_calculator import ScenarioCalculator, Scenario
 from app.services.comparable_analyzer import ComparableAnalyzer
 from app.services.fmp_client import FMPClient
+from app.services.technical_service import TechnicalService
+from app.services.polygon_provider import PolygonProviderError
 
 load_dotenv()
 
@@ -29,8 +31,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Get API key from environment
+# Get API keys from environment
 FMP_API_KEY = os.getenv("FMP_API_KEY", "")
+POLYGON_API_KEY = os.getenv("POLYGON_API_KEY", "")
 
 
 # Response models
@@ -496,5 +499,54 @@ async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
         "summary": {
             "average_implied_price": result.average_implied_price,
             "average_upside_percent": result.average_upside,
+        },
+    }
+
+
+@app.get("/api/stock/{symbol}/technical")
+async def get_technical_analysis(symbol: str, days: int = 365):
+    """
+    Run technical analysis on a stock.
+    
+    Args:
+        symbol: Stock ticker symbol
+        days: Days of historical data (default 365)
+    
+    Returns:
+        Price data, moving averages, RSI, MACD, and trend signals.
+    """
+    if not POLYGON_API_KEY:
+        raise HTTPException(status_code=400, detail="Polygon API key not configured")
+    
+    service = TechnicalService(POLYGON_API_KEY)
+    
+    try:
+        result = await service.analyze(symbol.upper(), days=days)
+    except PolygonProviderError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Technical analysis error: {str(e)}")
+    
+    return {
+        "symbol": result.symbol,
+        "period_days": result.period_days,
+        "current_price": result.current_price,
+        "price_change_pct": result.price_change_pct,
+        "prices": result.prices,
+        "indicators": {
+            "sma_20": [{"timestamp": v.timestamp, "value": v.value} for v in result.sma_20],
+            "sma_50": [{"timestamp": v.timestamp, "value": v.value} for v in result.sma_50],
+            "ema_12": [{"timestamp": v.timestamp, "value": v.value} for v in result.ema_12],
+            "ema_26": [{"timestamp": v.timestamp, "value": v.value} for v in result.ema_26],
+            "rsi_14": [{"timestamp": v.timestamp, "value": v.value} for v in result.rsi_14],
+            "macd": [
+                {"timestamp": v.timestamp, "macd": v.macd, "signal": v.signal, "histogram": v.histogram}
+                for v in result.macd
+            ],
+        },
+        "signals": {
+            "trend": result.trend,
+            "rsi": result.rsi_signal,
+            "macd": result.macd_signal,
         },
     }
