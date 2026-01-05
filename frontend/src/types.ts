@@ -1,3 +1,15 @@
+// Provider Types
+export interface Provider {
+  id: string;
+  name: string;
+  description: string;
+  available: boolean;
+}
+
+export interface ProvidersResponse {
+  providers: Provider[];
+}
+
 export interface CompanyData {
   beta: number | null;
   market_cap: number | null;

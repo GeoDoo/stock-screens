@@ -49,6 +49,16 @@ class FinancialStatement:
     depreciation_amortization: Optional[float] = None
 
 
+@dataclass
+class ValuationRatios:
+    """Valuation ratios for comparable analysis."""
+    pe_ratio: Optional[float] = None
+    ev_to_ebitda: Optional[float] = None
+    price_to_sales: Optional[float] = None
+    price_to_book: Optional[float] = None
+    ev_to_revenue: Optional[float] = None
+
+
 @dataclass 
 class StockData:
     """Complete stock data from a provider."""
