@@ -5,10 +5,13 @@ const API_BASE = 'http://localhost:8000';
 
 function formatCurrency(value: number | null): string {
   if (value === null) return '—';
-  if (Math.abs(value) >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
-  if (Math.abs(value) >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-  if (Math.abs(value) >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
-  return `$${value.toFixed(2)}`;
+  const abs = Math.abs(value);
+  if (abs >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `$${(value / 1e3).toFixed(2)}K`;
+  // For very small values, show with commas
+  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatPercent(value: number | null): string {
@@ -19,6 +22,15 @@ function formatPercent(value: number | null): string {
 function formatNumber(value: number | null, decimals = 2): string {
   if (value === null) return '—';
   return value.toFixed(decimals);
+}
+
+function formatShareCount(value: number | null): string {
+  if (value === null) return '—';
+  const abs = Math.abs(value);
+  if (abs >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
+  return value.toLocaleString('en-US');
 }
 
 export default function App() {
@@ -175,9 +187,14 @@ export default function App() {
 
             {/* Company Data */}
             <section className="mb-16">
-              <h2 className="text-xl font-semibold mb-8">
-                {stockData.symbol} {stockData.company_name && `— ${stockData.company_name}`}
-              </h2>
+              <div className="flex items-center gap-3 mb-8">
+                <h2 className="text-xl font-semibold">
+                  {stockData.symbol} {stockData.company_name && `— ${stockData.company_name}`}
+                </h2>
+                <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500 uppercase tracking-wide">
+                  via {stockData.data_provider}
+                </span>
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                 {/* Company Data Card */}
@@ -193,7 +210,7 @@ export default function App() {
                         ['Cash', formatCurrency(stockData.data.cash)],
                         ['Tax Rate', formatPercent(stockData.data.tax_rate)],
                         ['Cost of Debt', formatPercent(stockData.data.cost_of_debt)],
-                        ['Shares Outstanding', stockData.data.shares_outstanding ? (stockData.data.shares_outstanding / 1e9).toFixed(2) + 'B' : '—'],
+                        ['Shares Outstanding', formatShareCount(stockData.data.shares_outstanding)],
                         ['Risk-Free Rate', formatPercent(stockData.data.risk_free_rate)],
                         ['WACC (calculated)', formatPercent(stockData.data.wacc)],
                       ].map(([label, value]) => (
