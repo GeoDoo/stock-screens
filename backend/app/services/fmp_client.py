@@ -28,20 +28,11 @@ class FMPClient:
     async def get_cash_flow(self, symbol: str, limit: int = 5) -> list:
         return await self._request(f"/cash-flow-statement/{symbol}", limit=limit)
 
-    async def get_ratios(self, symbol: str, limit: int = 5) -> list:
-        return await self._request(f"/ratios/{symbol}", limit=limit)
-
-    async def get_historical_prices(self, symbol: str) -> dict:
-        return await self._request(f"/historical-price-full/{symbol}")
-
     async def get_stock_data(self, symbol: str) -> dict:
-        """Fetch all data needed for fundamental and technical analysis."""
+        """Fetch all data needed for DCF valuation."""
         return {
             "profile": await self.get_profile(symbol),
             "income_statement": await self.get_income_statement(symbol),
             "balance_sheet": await self.get_balance_sheet(symbol),
             "cash_flow": await self.get_cash_flow(symbol),
-            "ratios": await self.get_ratios(symbol),
-            "historical_prices": await self.get_historical_prices(symbol),
         }
-

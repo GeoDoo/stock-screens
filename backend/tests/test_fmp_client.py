@@ -87,58 +87,17 @@ class TestFMPClient:
             assert result[0]["freeCashFlow"] == 99584000000
 
     @pytest.mark.asyncio
-    async def test_get_ratios(self, fmp_client):
-        mock_response = [
-            {
-                "date": "2023-09-30",
-                "symbol": "AAPL",
-                "peRatio": 28.5,
-                "pbRatio": 45.2,
-                "returnOnEquity": 1.56,
-            }
-        ]
-
-        with patch.object(fmp_client, "_request", new_callable=AsyncMock) as mock_request:
-            mock_request.return_value = mock_response
-            result = await fmp_client.get_ratios("AAPL")
-
-            mock_request.assert_called_once_with("/ratios/AAPL", limit=5)
-            assert result[0]["peRatio"] == 28.5
-
-    @pytest.mark.asyncio
-    async def test_get_historical_prices(self, fmp_client):
-        mock_response = {
-            "symbol": "AAPL",
-            "historical": [
-                {"date": "2024-01-02", "open": 185.0, "high": 186.0, "low": 184.0, "close": 185.5, "volume": 50000000},
-                {"date": "2024-01-03", "open": 185.5, "high": 187.0, "low": 185.0, "close": 186.0, "volume": 45000000},
-            ],
-        }
-
-        with patch.object(fmp_client, "_request", new_callable=AsyncMock) as mock_request:
-            mock_request.return_value = mock_response
-            result = await fmp_client.get_historical_prices("AAPL")
-
-            mock_request.assert_called_once_with("/historical-price-full/AAPL")
-            assert result["symbol"] == "AAPL"
-            assert len(result["historical"]) == 2
-
-    @pytest.mark.asyncio
     async def test_get_stock_data_aggregates_all(self, fmp_client):
-        """Test that get_stock_data fetches all required data for analysis."""
+        """Test that get_stock_data fetches all required data for DCF."""
         with patch.object(fmp_client, "get_profile", new_callable=AsyncMock) as mock_profile, \
              patch.object(fmp_client, "get_income_statement", new_callable=AsyncMock) as mock_income, \
              patch.object(fmp_client, "get_balance_sheet", new_callable=AsyncMock) as mock_balance, \
-             patch.object(fmp_client, "get_cash_flow", new_callable=AsyncMock) as mock_cash, \
-             patch.object(fmp_client, "get_ratios", new_callable=AsyncMock) as mock_ratios, \
-             patch.object(fmp_client, "get_historical_prices", new_callable=AsyncMock) as mock_prices:
+             patch.object(fmp_client, "get_cash_flow", new_callable=AsyncMock) as mock_cash:
 
             mock_profile.return_value = {"symbol": "AAPL", "companyName": "Apple Inc."}
             mock_income.return_value = [{"revenue": 100}]
             mock_balance.return_value = [{"totalAssets": 200}]
             mock_cash.return_value = [{"freeCashFlow": 50}]
-            mock_ratios.return_value = [{"peRatio": 25}]
-            mock_prices.return_value = {"historical": []}
 
             result = await fmp_client.get_stock_data("AAPL")
 
@@ -146,6 +105,3 @@ class TestFMPClient:
             assert "income_statement" in result
             assert "balance_sheet" in result
             assert "cash_flow" in result
-            assert "ratios" in result
-            assert "historical_prices" in result
-
