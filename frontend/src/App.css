@@ -113,6 +113,73 @@ header .subtitle {
   font-size: 0.875rem;
 }
 
+/* Validation Section */
+.validation-section {
+  margin-bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.validation-errors,
+.validation-warnings {
+  padding: 1.5rem 2rem;
+  border-radius: 8px;
+}
+
+.validation-errors {
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.validation-warnings {
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.2);
+}
+
+.validation-errors h3,
+.validation-warnings h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.validation-errors h3 {
+  color: var(--negative);
+}
+
+.validation-warnings h3 {
+  color: #d97706;
+}
+
+.validation-errors ul,
+.validation-warnings ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.validation-errors li,
+.validation-warnings li {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.validation-errors li {
+  color: #991b1b;
+}
+
+.validation-warnings li {
+  color: #92400e;
+}
+
+.validation-errors li strong,
+.validation-warnings li strong {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
 /* Data Section */
 .data-section {
   margin-bottom: 5rem;

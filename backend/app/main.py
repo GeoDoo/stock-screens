@@ -2,13 +2,14 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from dotenv import load_dotenv
 
 from app.services.fmp_client import FMPClient
 from app.services.data_extractor import DataExtractor
 from app.services.valuation_service import ValuationService
 from app.services.fcf_projector import FCFProjector
+from app.services.data_validator import DataValidator
 
 load_dotenv()
 
@@ -48,12 +49,27 @@ class HistoricalHints(BaseModel):
     wc_ratio: Optional[float]
 
 
+class ValidationIssueResponse(BaseModel):
+    """A single validation issue."""
+    field: str
+    message: str
+
+
+class ValidationResponse(BaseModel):
+    """Validation results for stock data."""
+    has_errors: bool
+    has_warnings: bool
+    errors: List[ValidationIssueResponse]
+    warnings: List[ValidationIssueResponse]
+
+
 class StockDataResponse(BaseModel):
     """Response for /inputs endpoint."""
     symbol: str
     company_name: Optional[str]
     data: CompanyData
     hints: HistoricalHints
+    validation: ValidationResponse
 
 
 class ValuationRequest(BaseModel):
@@ -92,6 +108,23 @@ async def get_stock(symbol: str):
 
     extractor = DataExtractor(data)
 
+    # Run validation
+    validator = DataValidator(
+        market_cap=extractor.market_cap(),
+        beta=extractor.beta(),
+        shares_outstanding=extractor.shares_outstanding(),
+        total_debt=extractor.total_debt(),
+        cash=extractor.cash(),
+        tax_rate=extractor.tax_rate(),
+        cost_of_debt=extractor.cost_of_debt(),
+        revenue_history=extractor.revenue_history(),
+        ebit_history=extractor.ebit_history(),
+        da_history=extractor.da_history(),
+        capex_history=extractor.capex_history(),
+        working_capital_history=extractor.working_capital_history(),
+    )
+    validation_result = validator.validate()
+
     # Calculate historical hints
     fcf_projector = FCFProjector(
         historical_revenue=extractor.revenue_history() or [0],
@@ -122,6 +155,7 @@ async def get_stock(symbol: str):
             capex_ratio=fcf_projector.capex_to_revenue_ratio() if extractor.capex_history() else None,
             wc_ratio=fcf_projector.wc_to_revenue_ratio() if extractor.working_capital_history() else None,
         ),
+        validation=ValidationResponse(**validation_result.to_dict()),
     )
 
 

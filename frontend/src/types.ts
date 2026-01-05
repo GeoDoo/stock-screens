@@ -17,11 +17,24 @@ export interface HistoricalHints {
   wc_ratio: number | null;
 }
 
+export interface ValidationIssue {
+  field: string;
+  message: string;
+}
+
+export interface ValidationResult {
+  has_errors: boolean;
+  has_warnings: boolean;
+  errors: ValidationIssue[];
+  warnings: ValidationIssue[];
+}
+
 export interface StockDataResponse {
   symbol: string;
   company_name: string | null;
   data: CompanyData;
   hints: HistoricalHints;
+  validation: ValidationResult;
 }
 
 export interface ValuationRequest {
