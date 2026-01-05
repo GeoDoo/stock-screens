@@ -17,7 +17,9 @@ from app.services.scenario_calculator import ScenarioCalculator, Scenario
 from app.services.comparable_analyzer import ComparableAnalyzer
 from app.services.fmp_client import FMPClient
 from app.services.technical_service import TechnicalService
-from app.services.polygon_provider import PolygonProviderError
+from app.services.fmp_provider import FMPProvider
+from app.services.yahoo_provider import YahooProvider
+from app.services.massive_provider import MassiveProvider
 
 load_dotenv()
 
@@ -33,7 +35,7 @@ app.add_middleware(
 
 # Get API keys from environment
 FMP_API_KEY = os.getenv("FMP_API_KEY", "")
-POLYGON_API_KEY = os.getenv("POLYGON_API_KEY", "")
+MASSIVE_API_KEY = os.getenv("POLYGON_API_KEY", "")  # Polygon is now Massive
 
 
 # Response models
@@ -118,35 +120,93 @@ def health_check():
 @app.get("/api/providers")
 def get_providers():
     """
-    Get list of available data providers.
-    User should choose ONE provider before analyzing any stock.
+    Get list of available data providers with their capabilities.
+    
+    Returns providers for:
+    - Fundamental analysis (financials, DCF, comparables)
+    - Technical analysis (price charts, indicators)
+    
+    User picks one provider for each analysis type.
     """
-    providers = []
+    # Fundamental analysis providers
+    fundamental_providers = [
+        {
+            "id": "yahoo",
+            "name": "Yahoo Finance",
+            "description": "Free, good coverage",
+            "available": True,
+            "recommended": False,
+        },
+        {
+            "id": "fmp",
+            "name": "FMP",
+            "description": "Best quality fundamentals",
+            "available": bool(FMP_API_KEY),
+            "recommended": True,
+        },
+    ]
     
-    # Yahoo is always available (no API key needed)
-    providers.append({
-        "id": "yahoo",
-        "name": "Yahoo Finance",
-        "description": "Free financial data, no API key required",
-        "available": True,
-    })
+    # Technical analysis providers
+    technical_providers = [
+        {
+            "id": "yahoo",
+            "name": "Yahoo Finance",
+            "description": "Free, good coverage",
+            "available": True,
+            "recommended": False,
+        },
+        {
+            "id": "fmp",
+            "name": "FMP",
+            "description": "Good price data",
+            "available": bool(FMP_API_KEY),
+            "recommended": False,
+        },
+        {
+            "id": "massive",
+            "name": "Massive",
+            "description": "Best price data quality",
+            "available": bool(MASSIVE_API_KEY),
+            "recommended": True,
+        },
+    ]
     
-    # FMP requires API key
-    providers.append({
-        "id": "fmp",
-        "name": "Financial Modeling Prep",
-        "description": "Professional financial data" + (" (API key configured)" if FMP_API_KEY else " (requires API key)"),
-        "available": bool(FMP_API_KEY),
-    })
-    
-    return {"providers": providers}
+    return {
+        "fundamental": fundamental_providers,
+        "technical": technical_providers,
+    }
+
+
+def get_fundamental_provider(provider: str):
+    """Get a provider for fundamental analysis."""
+    if provider == "fmp":
+        if not FMP_API_KEY:
+            raise HTTPException(status_code=400, detail="FMP provider requires API key")
+        return FMPProvider(FMP_API_KEY)
+    elif provider == "yahoo":
+        return YahooProvider()
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown fundamental provider: {provider}")
+
+
+def get_technical_provider(provider: str):
+    """Get a provider for technical analysis."""
+    if provider == "massive":
+        if not MASSIVE_API_KEY:
+            raise HTTPException(status_code=400, detail="Massive provider requires API key")
+        return MassiveProvider(MASSIVE_API_KEY)
+    elif provider == "fmp":
+        if not FMP_API_KEY:
+            raise HTTPException(status_code=400, detail="FMP provider requires API key")
+        return FMPProvider(FMP_API_KEY)
+    elif provider == "yahoo":
+        return YahooProvider()
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown technical provider: {provider}")
 
 
 def get_client_for_provider(provider: str) -> StockDataClient:
-    """Get a StockDataClient configured for a specific provider only."""
-    from app.services.fmp_provider import FMPProvider
-    from app.services.yahoo_provider import YahooProvider
-    
+    """Get a StockDataClient configured for a specific provider only (for fundamental)."""
     if provider == "fmp":
         if not FMP_API_KEY:
             raise HTTPException(status_code=400, detail="FMP provider requires API key")
@@ -504,31 +564,37 @@ async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
 
 
 @app.get("/api/stock/{symbol}/technical")
-async def get_technical_analysis(symbol: str, days: int = 365):
+async def get_technical_analysis(symbol: str, provider: str = "massive", days: int = 365):
     """
     Run technical analysis on a stock.
     
     Args:
         symbol: Stock ticker symbol
+        provider: Technical analysis provider (yahoo, fmp, massive)
         days: Days of historical data (default 365)
     
     Returns:
         Price data, moving averages, RSI, MACD, and trend signals.
     """
-    if not POLYGON_API_KEY:
-        raise HTTPException(status_code=400, detail="Polygon API key not configured")
-    
-    service = TechnicalService(POLYGON_API_KEY)
+    tech_provider = get_technical_provider(provider)
+    service = TechnicalService(tech_provider)
     
     try:
         result = await service.analyze(symbol.upper(), days=days)
-    except PolygonProviderError as e:
+    except TickerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RateLimitError as e:
+        raise HTTPException(status_code=429, detail=str(e))
+    except DataNotAvailableError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ProviderError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Technical analysis error: {str(e)}")
     
     return {
         "symbol": result.symbol,
+        "provider": provider,
         "period_days": result.period_days,
         "current_price": result.current_price,
         "price_change_pct": result.price_change_pct,

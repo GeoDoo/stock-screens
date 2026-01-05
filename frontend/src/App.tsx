@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse } from './types';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -34,9 +34,11 @@ function formatShareCount(value: number | null): string {
 }
 
 export default function App() {
-  // Provider selection - MUST be chosen before any analysis
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<string>('');
+  // Provider selection - separate providers for Fundamental and Technical
+  const [fundamentalProviders, setFundamentalProviders] = useState<Provider[]>([]);
+  const [technicalProviders, setTechnicalProviders] = useState<Provider[]>([]);
+  const [selectedFundamentalProvider, setSelectedFundamentalProvider] = useState<string>('');
+  const [selectedTechnicalProvider, setSelectedTechnicalProvider] = useState<string>('');
   const [providersLoading, setProvidersLoading] = useState(true);
   
   const [ticker, setTicker] = useState('');
@@ -50,12 +52,25 @@ export default function App() {
     const fetchProviders = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/providers`);
-        const data = await res.json();
-        setProviders(data.providers);
-        // Auto-select first available provider
-        const available = data.providers.find((p: Provider) => p.available);
-        if (available) {
-          setSelectedProvider(available.id);
+        const data: ProvidersResponse = await res.json();
+        setFundamentalProviders(data.fundamental);
+        setTechnicalProviders(data.technical);
+        
+        // Auto-select recommended or first available providers
+        const fundRecommended = data.fundamental.find((p: Provider) => p.recommended && p.available);
+        const fundAvailable = data.fundamental.find((p: Provider) => p.available);
+        if (fundRecommended) {
+          setSelectedFundamentalProvider(fundRecommended.id);
+        } else if (fundAvailable) {
+          setSelectedFundamentalProvider(fundAvailable.id);
+        }
+        
+        const techRecommended = data.technical.find((p: Provider) => p.recommended && p.available);
+        const techAvailable = data.technical.find((p: Provider) => p.available);
+        if (techRecommended) {
+          setSelectedTechnicalProvider(techRecommended.id);
+        } else if (techAvailable) {
+          setSelectedTechnicalProvider(techAvailable.id);
         }
       } catch (err) {
         console.error('Failed to fetch providers:', err);
@@ -93,7 +108,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
 
   const fetchStock = async () => {
-    if (!ticker.trim() || !selectedProvider) return;
+    if (!ticker.trim() || !selectedFundamentalProvider) return;
     
     setLoading(true);
     setError(null);
@@ -103,7 +118,7 @@ export default function App() {
     setComparableResult(null);
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${ticker.toUpperCase()}?provider=${selectedProvider}`);
+      const res = await fetch(`${API_BASE}/api/stock/${ticker.toUpperCase()}?provider=${selectedFundamentalProvider}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.detail || 'Failed to fetch stock data');
@@ -143,7 +158,7 @@ export default function App() {
     };
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/valuation?provider=${selectedProvider}`, {
+      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/valuation?provider=${selectedFundamentalProvider}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
@@ -168,7 +183,7 @@ export default function App() {
     setScenarioResult(null);
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/scenarios?provider=${selectedProvider}`, {
+      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/scenarios?provider=${selectedFundamentalProvider}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -196,7 +211,7 @@ export default function App() {
     setComparableResult(null);
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/comparables?provider=${selectedProvider}`);
+      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/comparables?provider=${selectedFundamentalProvider}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.detail || 'Comparable analysis failed');
@@ -211,14 +226,14 @@ export default function App() {
   };
 
   const runTechnicalAnalysis = async () => {
-    if (!stockData) return;
+    if (!stockData || !selectedTechnicalProvider) return;
     
     setTechnicalLoading(true);
     setTechnicalResult(null);
     setError(null);
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/technical?days=365`);
+      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/technical?provider=${selectedTechnicalProvider}&days=365`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.detail || 'Technical analysis failed');
@@ -245,41 +260,83 @@ export default function App() {
           <p className="text-sm text-gray-400 mt-2">Fundamental & Technical Analysis</p>
         </header>
 
-        {/* Provider + Ticker in one cohesive block */}
-        <section className="mb-12 space-y-6">
-          {/* Provider Selection */}
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-3">Data Provider</label>
-            {providersLoading ? (
-              <p className="text-sm text-gray-400">Loading providers...</p>
-            ) : (
-              <div className="flex gap-3">
-                {providers.map((provider) => (
-                  <button
-                    key={provider.id}
-                    onClick={() => {
-                      setSelectedProvider(provider.id);
-                      setStockData(null);
-                      setResult(null);
-                      setScenarioResult(null);
-                      setComparableResult(null);
-                    }}
-                    disabled={!provider.available}
-                    className={`px-6 py-3 rounded-lg border-2 transition-all text-left min-w-[200px] ${
-                      selectedProvider === provider.id
-                        ? 'border-gray-900 bg-gray-900 text-white'
-                        : provider.available
-                        ? 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
-                        : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
-                    }`}
-                  >
-                    <span className="font-semibold text-sm block">{provider.name}</span>
-                    <span className="text-xs opacity-70 block">{provider.description}</span>
-                  </button>
-                ))}
+        {/* Provider Selection + Ticker in one cohesive block */}
+        <section className="mb-12 space-y-8">
+          {/* Data Providers */}
+          {providersLoading ? (
+            <p className="text-sm text-gray-400">Loading providers...</p>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Fundamental Analysis Provider */}
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-3">
+                  Fundamental Analysis
+                  <span className="font-normal text-gray-300 ml-2">(DCF, Comparables, Scenarios)</span>
+                </label>
+                <div className="flex gap-2 flex-wrap">
+                  {fundamentalProviders.map((provider) => (
+                    <button
+                      key={provider.id}
+                      onClick={() => {
+                        setSelectedFundamentalProvider(provider.id);
+                        setStockData(null);
+                        setResult(null);
+                        setScenarioResult(null);
+                        setComparableResult(null);
+                      }}
+                      disabled={!provider.available}
+                      className={`px-4 py-2 rounded-lg border-2 transition-all text-left ${
+                        selectedFundamentalProvider === provider.id
+                          ? 'border-gray-900 bg-gray-900 text-white'
+                          : provider.available
+                          ? 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                          : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                      }`}
+                    >
+                      <span className="font-semibold text-sm">{provider.name}</span>
+                      {provider.recommended && <span className="ml-1 text-xs">★</span>}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  {fundamentalProviders.find(p => p.id === selectedFundamentalProvider)?.description}
+                </p>
               </div>
-            )}
-          </div>
+
+              {/* Technical Analysis Provider */}
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-3">
+                  Technical Analysis
+                  <span className="font-normal text-gray-300 ml-2">(Price Charts, Indicators)</span>
+                </label>
+                <div className="flex gap-2 flex-wrap">
+                  {technicalProviders.map((provider) => (
+                    <button
+                      key={provider.id}
+                      onClick={() => {
+                        setSelectedTechnicalProvider(provider.id);
+                        setTechnicalResult(null);
+                      }}
+                      disabled={!provider.available}
+                      className={`px-4 py-2 rounded-lg border-2 transition-all text-left ${
+                        selectedTechnicalProvider === provider.id
+                          ? 'border-gray-900 bg-gray-900 text-white'
+                          : provider.available
+                          ? 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                          : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                      }`}
+                    >
+                      <span className="font-semibold text-sm">{provider.name}</span>
+                      {provider.recommended && <span className="ml-1 text-xs">★</span>}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  {technicalProviders.find(p => p.id === selectedTechnicalProvider)?.description}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Ticker Search */}
           <div>
@@ -287,16 +344,16 @@ export default function App() {
             <div className="flex gap-3">
               <input
                 type="text"
-                placeholder={selectedProvider ? "AAPL" : "Select provider first"}
+                placeholder={selectedFundamentalProvider ? "AAPL" : "Select provider first"}
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
                 onKeyDown={(e) => e.key === 'Enter' && fetchStock()}
-                disabled={!selectedProvider}
+                disabled={!selectedFundamentalProvider}
                 className="w-48 px-4 py-3 text-base font-mono font-medium bg-white border-2 border-gray-200 rounded-lg outline-none transition-colors focus:border-gray-400 placeholder:text-gray-300 placeholder:font-normal disabled:bg-gray-50 disabled:cursor-not-allowed"
               />
               <button
                 onClick={fetchStock}
-                disabled={loading || !ticker.trim() || !selectedProvider}
+                disabled={loading || !ticker.trim() || !selectedFundamentalProvider}
                 className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {loading ? 'Loading...' : 'Analyze'}
@@ -943,10 +1000,13 @@ export default function App() {
             {!technicalResult && (
               <div className="mb-8">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Technical Analysis</h2>
-                <p className="text-sm text-gray-400 mb-6">Price charts, moving averages, RSI, MACD indicators</p>
+                <p className="text-sm text-gray-400 mb-4">Price charts, moving averages, RSI, MACD indicators</p>
+                <p className="text-xs text-gray-400 mb-6">
+                  Provider: <span className="font-semibold text-gray-600">{technicalProviders.find(p => p.id === selectedTechnicalProvider)?.name || selectedTechnicalProvider}</span>
+                </p>
                 <button
                   onClick={runTechnicalAnalysis}
-                  disabled={technicalLoading}
+                  disabled={technicalLoading || !selectedTechnicalProvider}
                   className="px-10 py-4 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   {technicalLoading ? 'Loading...' : 'Run Technical Analysis'}
@@ -958,6 +1018,11 @@ export default function App() {
             {technicalResult && (
               <div className="space-y-8">
                 {/* Price Summary */}
+                <div className="mb-2">
+                  <span className="text-xs text-gray-400">
+                    Data from <span className="font-semibold text-gray-600">{technicalProviders.find(p => p.id === technicalResult.provider)?.name || technicalResult.provider}</span>
+                  </span>
+                </div>
                 <div className="flex items-baseline gap-4">
                   <span className="text-4xl font-bold font-mono">${technicalResult.current_price.toFixed(2)}</span>
                   <span className={`text-lg font-semibold ${technicalResult.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>

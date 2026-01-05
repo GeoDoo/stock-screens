@@ -1,6 +1,8 @@
 import httpx
 from typing import Any, List
 
+from datetime import datetime, timedelta
+
 from app.services.base_provider import (
     StockDataProvider,
     StockData,
@@ -10,6 +12,8 @@ from app.services.base_provider import (
     TickerNotFoundError,
     DataNotAvailableError,
     RateLimitError,
+    HistoricalPrices,
+    PriceBar,
 )
 
 
@@ -161,5 +165,55 @@ class FMPProvider(StockDataProvider):
         except Exception:
             pass
         return 0.045  # Default fallback
+    
+    @property
+    def supports_fundamentals(self) -> bool:
+        return True
+    
+    @property
+    def supports_technical(self) -> bool:
+        return True
+    
+    async def get_historical_prices(self, symbol: str, days: int = 365) -> HistoricalPrices:
+        """Fetch historical OHLCV data from FMP."""
+        symbol = symbol.upper()
+        
+        # Calculate date range
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        
+        # FMP historical price endpoint
+        result = await self._request(
+            f"/historical-price-eod/full",
+            symbol=symbol,
+            from_=start_date.strftime("%Y-%m-%d"),
+            to=end_date.strftime("%Y-%m-%d"),
+        )
+        
+        if not result:
+            raise DataNotAvailableError(f"No historical data for {symbol}")
+        
+        # FMP returns data in reverse chronological order
+        prices = result if isinstance(result, list) else result.get("historical", [])
+        
+        bars = []
+        for p in reversed(prices):  # Reverse to get oldest first
+            bars.append(PriceBar(
+                timestamp=p.get("date"),
+                open=round(p.get("open", 0), 2),
+                high=round(p.get("high", 0), 2),
+                low=round(p.get("low", 0), 2),
+                close=round(p.get("close", 0), 2),
+                volume=int(p.get("volume", 0)),
+            ))
+        
+        if not bars:
+            raise DataNotAvailableError(f"No historical data for {symbol}")
+        
+        return HistoricalPrices(
+            symbol=symbol,
+            bars=bars,
+            provider=self.name,
+        )
 
 

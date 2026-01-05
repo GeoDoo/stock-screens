@@ -67,6 +67,25 @@ class StockData:
     provider: str  # Which provider supplied this data
 
 
+@dataclass
+class PriceBar:
+    """Single OHLCV price bar for technical analysis."""
+    timestamp: str  # ISO format date
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: int
+
+
+@dataclass
+class HistoricalPrices:
+    """Historical price data from a provider."""
+    symbol: str
+    bars: List[PriceBar]
+    provider: str
+
+
 class ProviderError(Exception):
     """Base exception for provider errors."""
     pass
@@ -120,5 +139,31 @@ class StockDataProvider(ABC):
             Rate as decimal (e.g., 0.045 for 4.5%)
         """
         pass
+    
+    async def get_historical_prices(self, symbol: str, days: int = 365) -> HistoricalPrices:
+        """
+        Fetch historical OHLCV price data for technical analysis.
+        
+        Args:
+            symbol: Stock ticker symbol
+            days: Number of days of history
+            
+        Returns:
+            HistoricalPrices with list of PriceBars
+            
+        Raises:
+            NotImplementedError: If provider doesn't support historical prices
+        """
+        raise NotImplementedError(f"{self.name} does not support historical prices")
+    
+    @property
+    def supports_fundamentals(self) -> bool:
+        """Whether this provider supports fundamental analysis."""
+        return True
+    
+    @property
+    def supports_technical(self) -> bool:
+        """Whether this provider supports technical analysis (historical prices)."""
+        return False
 
 

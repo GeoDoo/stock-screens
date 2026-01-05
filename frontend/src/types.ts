@@ -4,10 +4,12 @@ export interface Provider {
   name: string;
   description: string;
   available: boolean;
+  recommended?: boolean;
 }
 
 export interface ProvidersResponse {
-  providers: Provider[];
+  fundamental: Provider[];
+  technical: Provider[];
 }
 
 export interface CompanyData {
@@ -207,6 +209,7 @@ export interface MACDValue {
 
 export interface TechnicalAnalysisResult {
   symbol: string;
+  provider: string;
   period_days: number;
   current_price: number;
   price_change_pct: number;
