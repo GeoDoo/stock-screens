@@ -96,13 +96,30 @@ class StockDataClient:
                 errors.append((provider.name, ProviderError(str(e))))
                 continue
         
-        # All providers failed
+        # All providers failed - give clearer error messages
+        if len(errors) == 1:
+            # Single provider - just raise the original error with clearer message
+            provider_name, error = errors[0]
+            if isinstance(error, TickerNotFoundError):
+                raise error
+            elif isinstance(error, RateLimitError):
+                raise RateLimitError(f"Rate limit exceeded for {provider_name}. Try again later or switch provider.")
+            elif isinstance(error, DataNotAvailableError):
+                raise error
+            else:
+                raise ProviderError(f"{provider_name}: {error}")
+        
+        # Multiple providers failed
         if all(isinstance(e, TickerNotFoundError) for _, e in errors):
-            raise TickerNotFoundError(f"Ticker '{symbol}' not found on any provider")
+            raise TickerNotFoundError(f"Ticker '{symbol}' not found")
+        
+        # Check if all hit rate limits
+        if all(isinstance(e, RateLimitError) for _, e in errors):
+            raise RateLimitError("Rate limit exceeded on all providers. Try again later.")
         
         # Build detailed error message
         error_details = "; ".join(f"{name}: {e}" for name, e in errors)
-        raise ProviderError(f"All providers failed for {symbol}: {error_details}")
+        raise ProviderError(f"Failed to fetch {symbol}: {error_details}")
     
     async def get_treasury_rate(self) -> float:
         """
