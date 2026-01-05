@@ -25,7 +25,7 @@ class TestFMPClient:
             mock_request.return_value = mock_response
             result = await fmp_client.get_profile("AAPL")
 
-            mock_request.assert_called_once_with("/profile/AAPL")
+            mock_request.assert_called_once_with("/profile", symbol="AAPL")
             assert result["symbol"] == "AAPL"
             assert result["companyName"] == "Apple Inc."
 
@@ -45,7 +45,7 @@ class TestFMPClient:
             mock_request.return_value = mock_response
             result = await fmp_client.get_income_statement("AAPL")
 
-            mock_request.assert_called_once_with("/income-statement/AAPL", limit=5)
+            mock_request.assert_called_once_with("/income-statement", symbol="AAPL", limit=5)
             assert len(result) == 1
             assert result[0]["revenue"] == 383285000000
 
@@ -65,7 +65,7 @@ class TestFMPClient:
             mock_request.return_value = mock_response
             result = await fmp_client.get_balance_sheet("AAPL")
 
-            mock_request.assert_called_once_with("/balance-sheet-statement/AAPL", limit=5)
+            mock_request.assert_called_once_with("/balance-sheet-statement", symbol="AAPL", limit=5)
             assert result[0]["totalAssets"] == 352583000000
 
     @pytest.mark.asyncio
@@ -83,7 +83,7 @@ class TestFMPClient:
             mock_request.return_value = mock_response
             result = await fmp_client.get_cash_flow("AAPL")
 
-            mock_request.assert_called_once_with("/cash-flow-statement/AAPL", limit=5)
+            mock_request.assert_called_once_with("/cash-flow-statement", symbol="AAPL", limit=5)
             assert result[0]["freeCashFlow"] == 99584000000
 
     @pytest.mark.asyncio
