@@ -105,3 +105,25 @@ class TestFMPClient:
             assert "income_statement" in result
             assert "balance_sheet" in result
             assert "cash_flow" in result
+
+    @pytest.mark.asyncio
+    async def test_get_treasury_rate(self, fmp_client):
+        """Test fetching 10-year treasury rate."""
+        mock_response = [{"date": "2024-01-02", "year10": 4.25}]
+
+        with patch.object(fmp_client, "_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+            result = await fmp_client.get_treasury_rate()
+
+            # Should return as decimal (4.25% -> 0.0425)
+            assert abs(result - 0.0425) < 0.0001
+
+    @pytest.mark.asyncio
+    async def test_get_treasury_rate_fallback(self, fmp_client):
+        """Test fallback when treasury data unavailable."""
+        with patch.object(fmp_client, "_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = []
+            result = await fmp_client.get_treasury_rate()
+
+            # Should return default 4.5%
+            assert result == 0.045
