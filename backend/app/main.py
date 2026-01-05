@@ -70,10 +70,10 @@ def health_check():
     return {"status": "ok"}
 
 
-@app.get("/api/stock/{symbol}/inputs", response_model=StockDataResponse)
-async def get_stock_inputs(symbol: str):
+@app.get("/api/stock/{symbol}", response_model=StockDataResponse)
+async def get_stock(symbol: str):
     """
-    Get company data and historical hints for a stock.
+    Get stock data and historical hints.
     
     Returns:
     - data: Read-only values from FMP (beta, debt, cash, etc.)
