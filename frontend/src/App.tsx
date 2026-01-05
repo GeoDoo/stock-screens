@@ -34,6 +34,10 @@ export default function App() {
   const [terminalGrowth, setTerminalGrowth] = useState('3');
   const [marketRiskPremium, setMarketRiskPremium] = useState('6');
   const [projectionYears, setProjectionYears] = useState('10');
+  
+  // Advanced: custom discount rate
+  const [useCustomDiscountRate, setUseCustomDiscountRate] = useState(false);
+  const [customDiscountRate, setCustomDiscountRate] = useState('');
 
   const fetchStock = async () => {
     if (!ticker.trim()) return;
@@ -78,6 +82,9 @@ export default function App() {
       terminal_growth_rate: parseFloat(terminalGrowth) / 100,
       market_risk_premium: parseFloat(marketRiskPremium) / 100,
       projection_years: parseInt(projectionYears),
+      discount_rate_override: useCustomDiscountRate && customDiscountRate 
+        ? parseFloat(customDiscountRate) / 100 
+        : null,
     };
     
     try {
@@ -188,6 +195,7 @@ export default function App() {
                         ['Cost of Debt', formatPercent(stockData.data.cost_of_debt)],
                         ['Shares Outstanding', stockData.data.shares_outstanding ? (stockData.data.shares_outstanding / 1e9).toFixed(2) + 'B' : '—'],
                         ['Risk-Free Rate', formatPercent(stockData.data.risk_free_rate)],
+                        ['WACC (calculated)', formatPercent(stockData.data.wacc)],
                       ].map(([label, value]) => (
                         <tr key={label} className="border-b border-gray-100">
                           <td className="py-3 text-sm text-gray-500">{label}</td>
@@ -249,6 +257,41 @@ export default function App() {
                 ))}
               </div>
 
+              {/* Custom Discount Rate (non-intrusive) */}
+              <div className="mb-8 pt-4 border-t border-gray-100">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={useCustomDiscountRate}
+                    onChange={(e) => setUseCustomDiscountRate(e.target.checked)}
+                    className="w-4 h-4 accent-emerald-600"
+                  />
+                  <span className="text-sm text-gray-500 group-hover:text-gray-700">
+                    Use custom discount rate instead of WACC {stockData.data.wacc !== null && `(${formatPercent(stockData.data.wacc)})`}
+                  </span>
+                </label>
+                
+                {useCustomDiscountRate && (
+                  <div className="mt-4 flex items-center gap-4">
+                    <div className="flex flex-col gap-2 w-48">
+                      <label className="text-sm font-medium text-gray-600">Your Required Return (%)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={customDiscountRate}
+                        onChange={(e) => setCustomDiscountRate(e.target.value)}
+                        placeholder={stockData.data.wacc !== null ? `WACC: ${(stockData.data.wacc * 100).toFixed(1)}` : 'e.g., 12'}
+                        className="px-3 py-2.5 text-base font-mono bg-white border-2 border-emerald-200 rounded-md outline-none transition-colors focus:border-emerald-400"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 max-w-xs">
+                      Override the calculated WACC with your personal required return. 
+                      Higher rate = lower intrinsic value = more conservative.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={runValuation}
                 disabled={loading || !canRunValuation}
@@ -302,11 +345,17 @@ export default function App() {
                     ['Enterprise Value', formatCurrency(result.enterprise_value)],
                     ['Equity Value', formatCurrency(result.equity_value)],
                     ['Net Debt', formatCurrency(result.net_debt)],
-                    ['WACC', formatPercent(result.wacc)],
+                    ['Calculated WACC', formatPercent(result.wacc)],
+                    ['Discount Rate Used', formatPercent(result.discount_rate)],
                     ['Terminal Value', formatCurrency(result.terminal_value)],
                   ].map(([label, value]) => (
                     <tr key={label} className="border-b border-gray-100">
-                      <td className="py-3 text-sm text-gray-500">{label}</td>
+                      <td className="py-3 text-sm text-gray-500">
+                        {label}
+                        {label === 'Discount Rate Used' && result.using_custom_discount_rate && (
+                          <span className="ml-2 text-xs text-emerald-600">(custom)</span>
+                        )}
+                      </td>
                       <td className="py-3 text-sm font-mono font-medium text-right">{value}</td>
                     </tr>
                   ))}
