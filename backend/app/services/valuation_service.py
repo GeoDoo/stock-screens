@@ -11,15 +11,21 @@ from app.services.sensitivity_calculator import SensitivityCalculator
 class ValuationService:
     """
     Orchestrates the full DCF valuation:
-    1. Fetch data (with automatic provider fallback)
+    1. Fetch data from the specified provider
     2. Extract inputs using DataExtractor
     3. Calculate WACC
     4. Project FCF using FCFProjector
     5. Run DCF to get intrinsic value
     """
 
-    def __init__(self, api_key: Optional[str] = None):
-        self.client = StockDataClient(fmp_api_key=api_key)
+    def __init__(self, client: StockDataClient):
+        """
+        Initialize with a configured StockDataClient.
+        
+        Args:
+            client: StockDataClient configured with the user's chosen provider
+        """
+        self.client = client
 
     async def value_stock(
         self,

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult } from './types';
+import { useState, useEffect } from 'react';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider } from './types';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -34,11 +34,37 @@ function formatShareCount(value: number | null): string {
 }
 
 export default function App() {
+  // Provider selection - MUST be chosen before any analysis
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<string>('');
+  const [providersLoading, setProvidersLoading] = useState(true);
+  
   const [ticker, setTicker] = useState('');
   const [stockData, setStockData] = useState<StockDataResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ValuationResult | null>(null);
+  
+  // Fetch available providers on mount
+  useEffect(() => {
+    const fetchProviders = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/providers`);
+        const data = await res.json();
+        setProviders(data.providers);
+        // Auto-select first available provider
+        const available = data.providers.find((p: Provider) => p.available);
+        if (available) {
+          setSelectedProvider(available.id);
+        }
+      } catch (err) {
+        console.error('Failed to fetch providers:', err);
+      } finally {
+        setProvidersLoading(false);
+      }
+    };
+    fetchProviders();
+  }, []);
   
   // User inputs
   const [revenueGrowth, setRevenueGrowth] = useState('');
@@ -60,15 +86,17 @@ export default function App() {
   const [comparableLoading, setComparableLoading] = useState(false);
 
   const fetchStock = async () => {
-    if (!ticker.trim()) return;
+    if (!ticker.trim() || !selectedProvider) return;
     
     setLoading(true);
     setError(null);
     setStockData(null);
     setResult(null);
+    setScenarioResult(null);
+    setComparableResult(null);
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${ticker.toUpperCase()}`);
+      const res = await fetch(`${API_BASE}/api/stock/${ticker.toUpperCase()}?provider=${selectedProvider}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.detail || 'Failed to fetch stock data');
@@ -108,7 +136,7 @@ export default function App() {
     };
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/valuation`, {
+      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/valuation?provider=${selectedProvider}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
@@ -133,7 +161,7 @@ export default function App() {
     setScenarioResult(null);
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/scenarios`, {
+      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/scenarios?provider=${selectedProvider}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -161,7 +189,7 @@ export default function App() {
     setComparableResult(null);
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/comparables`);
+      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/comparables?provider=${selectedProvider}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.detail || 'Comparable analysis failed');
@@ -188,20 +216,56 @@ export default function App() {
           <p className="text-sm text-gray-400 mt-1">DCF Analysis</p>
         </header>
 
+        {/* Provider Selection - MUST be chosen first */}
+        <section className="mb-8">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Data Provider</h2>
+          {providersLoading ? (
+            <p className="text-sm text-gray-400">Loading providers...</p>
+          ) : (
+            <div className="flex gap-4">
+              {providers.map((provider) => (
+                <button
+                  key={provider.id}
+                  onClick={() => {
+                    setSelectedProvider(provider.id);
+                    // Clear all data when provider changes
+                    setStockData(null);
+                    setResult(null);
+                    setScenarioResult(null);
+                    setComparableResult(null);
+                  }}
+                  disabled={!provider.available}
+                  className={`px-6 py-3 rounded-lg border-2 transition-all ${
+                    selectedProvider === provider.id
+                      ? 'border-gray-900 bg-gray-900 text-white'
+                      : provider.available
+                      ? 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                      : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                  }`}
+                >
+                  <span className="font-semibold text-sm">{provider.name}</span>
+                  <span className="block text-xs mt-1 opacity-70">{provider.description}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* Search */}
         <section className="mb-16">
           <div className="flex gap-4 max-w-xl">
             <input
               type="text"
-              placeholder="Enter ticker (e.g., AAPL)"
+              placeholder={selectedProvider ? "Enter ticker (e.g., AAPL)" : "Select a provider first"}
               value={ticker}
               onChange={(e) => setTicker(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === 'Enter' && fetchStock()}
-              className="flex-1 px-4 py-3 text-base font-mono font-medium bg-white border-2 border-gray-200 rounded-lg outline-none transition-colors focus:border-gray-400 placeholder:text-gray-400 placeholder:font-normal"
+              disabled={!selectedProvider}
+              className="flex-1 px-4 py-3 text-base font-mono font-medium bg-white border-2 border-gray-200 rounded-lg outline-none transition-colors focus:border-gray-400 placeholder:text-gray-400 placeholder:font-normal disabled:bg-gray-50 disabled:cursor-not-allowed"
             />
             <button
               onClick={fetchStock}
-              disabled={loading || !ticker.trim()}
+              disabled={loading || !ticker.trim() || !selectedProvider}
               className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               {loading ? 'Loading...' : 'Analyze'}

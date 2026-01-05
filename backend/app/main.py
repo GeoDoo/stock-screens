@@ -112,20 +112,62 @@ def health_check():
     return {"status": "ok"}
 
 
+@app.get("/api/providers")
+def get_providers():
+    """
+    Get list of available data providers.
+    User should choose ONE provider before analyzing any stock.
+    """
+    providers = []
+    
+    # Yahoo is always available (no API key needed)
+    providers.append({
+        "id": "yahoo",
+        "name": "Yahoo Finance",
+        "description": "Free financial data, no API key required",
+        "available": True,
+    })
+    
+    # FMP requires API key
+    providers.append({
+        "id": "fmp",
+        "name": "Financial Modeling Prep",
+        "description": "Professional financial data" + (" (API key configured)" if FMP_API_KEY else " (requires API key)"),
+        "available": bool(FMP_API_KEY),
+    })
+    
+    return {"providers": providers}
+
+
+def get_client_for_provider(provider: str) -> StockDataClient:
+    """Get a StockDataClient configured for a specific provider only."""
+    from app.services.fmp_provider import FMPProvider
+    from app.services.yahoo_provider import YahooProvider
+    
+    if provider == "fmp":
+        if not FMP_API_KEY:
+            raise HTTPException(status_code=400, detail="FMP provider requires API key")
+        return StockDataClient(providers=[FMPProvider(FMP_API_KEY)])
+    elif provider == "yahoo":
+        return StockDataClient(providers=[YahooProvider()])
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+
+
 @app.get("/api/stock/{symbol}", response_model=StockDataResponse)
-async def get_stock(symbol: str):
+async def get_stock(symbol: str, provider: str):
     """
     Get stock data and historical hints.
     
-    Uses multiple data providers with automatic fallback:
-    1. FMP (Financial Modeling Prep) - primary
-    2. Yahoo Finance - fallback for tickers not on FMP
+    Args:
+        symbol: Stock ticker symbol
+        provider: Data provider to use (fmp or yahoo) - REQUIRED
     
     Returns:
     - data: Read-only values (beta, debt, cash, etc.)
     - hints: Historical averages for reference (user decides what to use)
     """
-    client = StockDataClient(fmp_api_key=FMP_API_KEY if FMP_API_KEY else None)
+    client = get_client_for_provider(provider)
     
     try:
         stock_data = await client.get_stock_data(symbol.upper())
@@ -217,16 +259,17 @@ async def get_stock(symbol: str):
 
 
 @app.post("/api/stock/{symbol}/valuation")
-async def run_valuation(symbol: str, request: ValuationRequest):
+async def run_valuation(symbol: str, provider: str, request: ValuationRequest):
     """
     Run DCF valuation with user-provided assumptions.
     
-    ALL assumptions must be provided by the user.
+    Args:
+        symbol: Stock ticker symbol
+        provider: Data provider to use (fmp or yahoo) - REQUIRED
+        request: Valuation assumptions from user
     """
-    if not FMP_API_KEY:
-        raise HTTPException(status_code=500, detail="FMP_API_KEY not configured")
-
-    service = ValuationService(api_key=FMP_API_KEY)
+    client = get_client_for_provider(provider)
+    service = ValuationService(client=client)
 
     try:
         result = await service.value_stock(
@@ -245,14 +288,19 @@ async def run_valuation(symbol: str, request: ValuationRequest):
 
 
 @app.post("/api/stock/{symbol}/scenarios")
-async def run_scenarios(symbol: str, request: ScenarioRequest):
+async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
     """
     Run scenario analysis (Bear/Base/Bull cases).
+    
+    Args:
+        symbol: Stock ticker symbol
+        provider: Data provider to use (fmp or yahoo) - REQUIRED
+        request: Scenario parameters
     
     If no scenarios provided, generates smart defaults based on historical data.
     Returns intrinsic values for each scenario and probability-weighted average.
     """
-    client = StockDataClient(fmp_api_key=FMP_API_KEY if FMP_API_KEY else None)
+    client = get_client_for_provider(provider)
     
     try:
         stock_data = await client.get_stock_data(symbol.upper())
@@ -375,9 +423,14 @@ async def run_scenarios(symbol: str, request: ScenarioRequest):
 
 
 @app.get("/api/stock/{symbol}/comparables")
-async def get_comparables(symbol: str, max_peers: int = 5):
+async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
     """
     Run comparable company analysis.
+    
+    Args:
+        symbol: Stock ticker symbol
+        provider: Data provider to use (fmp or yahoo) - REQUIRED
+        max_peers: Maximum number of peer companies to include
     
     Compares the stock against sector peers using valuation multiples:
     - P/E (Price to Earnings)
@@ -387,9 +440,8 @@ async def get_comparables(symbol: str, max_peers: int = 5):
     
     Returns implied fair value based on peer median multiples.
     """
-    # FMP client is optional (used for peer list), Yahoo used for metrics
-    fmp = FMPClient(api_key=FMP_API_KEY) if FMP_API_KEY else None
-    analyzer = ComparableAnalyzer(fmp)
+    client = get_client_for_provider(provider)
+    analyzer = ComparableAnalyzer(client, provider)
     
     try:
         result = await analyzer.analyze(symbol.upper(), max_peers=max_peers)
