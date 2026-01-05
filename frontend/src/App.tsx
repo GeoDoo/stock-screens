@@ -547,164 +547,121 @@ export default function App() {
             </div>
 
             {scenarioResult && (
-              <div className="space-y-8">
-                {/* Scenario Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {scenarioResult.scenarios.map((scenario) => {
-                    const isBear = scenario.name.toLowerCase() === 'bear';
-                    const isBull = scenario.name.toLowerCase() === 'bull';
-                    const isBase = scenario.name.toLowerCase() === 'base';
-                    
-                    let bgClass = 'bg-gray-50 border-gray-200';
-                    let iconClass = '📊';
-                    let textClass = 'text-gray-600';
-                    
-                    if (isBear) {
-                      bgClass = 'bg-red-50 border-red-200';
-                      iconClass = '🐻';
-                      textClass = 'text-red-600';
-                    } else if (isBull) {
-                      bgClass = 'bg-emerald-50 border-emerald-200';
-                      iconClass = '🐂';
-                      textClass = 'text-emerald-600';
-                    } else if (isBase) {
-                      bgClass = 'bg-blue-50 border-blue-200';
-                      iconClass = '📊';
-                      textClass = 'text-blue-600';
-                    }
-                    
-                    return (
-                      <div 
-                        key={scenario.name} 
-                        className={`p-6 rounded-xl border ${bgClass}`}
-                      >
-                        <div className="flex items-center gap-2 mb-4">
-                          <span className="text-2xl">{iconClass}</span>
-                          <h3 className={`text-lg font-semibold ${textClass}`}>{scenario.name} Case</h3>
-                          {scenario.probability > 0 && (
-                            <span className="ml-auto text-xs bg-white/50 px-2 py-1 rounded font-medium">
-                              {(scenario.probability * 100).toFixed(0)}%
-                            </span>
-                          )}
-                        </div>
-                        
-                        <div className="mb-4">
-                          <div className="text-3xl font-bold font-mono">
-                            ${scenario.intrinsic_value.toFixed(2)}
-                          </div>
-                          {scenario.upside_percent !== null && (
-                            <div className={`text-sm font-medium mt-1 ${
-                              scenario.upside_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
-                            }`}>
-                              {scenario.upside_percent >= 0 ? '↑' : '↓'} {Math.abs(scenario.upside_percent).toFixed(1)}% vs current
-                            </div>
-                          )}
-                        </div>
-                        
-                        <p className="text-sm text-gray-500 mb-4">{scenario.description}</p>
-                        
-                        <div className="text-xs text-gray-400 space-y-1">
-                          <div className="flex justify-between">
-                            <span>Revenue Growth</span>
-                            <span className="font-mono">{(scenario.assumptions.revenue_growth * 100).toFixed(1)}%</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Operating Margin</span>
-                            <span className="font-mono">{(scenario.assumptions.operating_margin * 100).toFixed(1)}%</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Terminal Growth</span>
-                            <span className="font-mono">{(scenario.assumptions.terminal_growth * 100).toFixed(1)}%</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Summary - The Verdict */}
+              <div className="space-y-12">
+                {/* Summary Row */}
                 {(() => {
                   const currentPrice = scenarioResult.current_price || 0;
                   const fairValue = scenarioResult.probability_weighted_value || 0;
-                  const bearValue = scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bear')?.intrinsic_value || 0;
-                  const bullValue = scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bull')?.intrinsic_value || 0;
-                  
                   const isOvervalued = currentPrice > fairValue;
-                  const premiumDiscount = ((currentPrice - fairValue) / fairValue) * 100;
+                  const diff = ((fairValue - currentPrice) / currentPrice) * 100;
                   
                   return (
-                    <div className={`p-6 rounded-xl border-2 ${
-                      isOvervalued ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'
-                    }`}>
-                      {/* Main Verdict */}
-                      <div className="text-center mb-6">
-                        <div className={`text-sm font-semibold uppercase tracking-wider mb-2 ${
-                          isOvervalued ? 'text-red-600' : 'text-emerald-600'
-                        }`}>
-                          {isOvervalued ? '⚠️ Stock Appears Overvalued' : '✅ Stock Appears Undervalued'}
-                        </div>
-                        <div className="text-gray-600">
-                          Trading at <span className="font-bold">${currentPrice.toFixed(2)}</span>
-                          {' '}vs fair value of{' '}
-                          <span className="font-bold text-indigo-600">${fairValue.toFixed(2)}</span>
-                          {' '}
-                          <span className={`font-semibold ${isOvervalued ? 'text-red-600' : 'text-emerald-600'}`}>
-                            ({isOvervalued ? '+' : ''}{premiumDiscount.toFixed(0)}% {isOvervalued ? 'premium' : 'discount'})
-                          </span>
-                        </div>
+                    <div className="flex items-baseline gap-6">
+                      <div>
+                        <span className="text-sm text-gray-500">Fair Value (weighted)</span>
+                        <span className="text-4xl font-bold font-mono ml-3">${fairValue.toFixed(2)}</span>
                       </div>
-                      
-                      {/* Value Range Bar */}
-                      <div className="mb-6">
-                        <div className="flex justify-between text-xs text-gray-500 mb-2">
-                          <span>🐻 Bear: ${bearValue.toFixed(0)}</span>
-                          <span>Fair: ${fairValue.toFixed(0)}</span>
-                          <span>🐂 Bull: ${bullValue.toFixed(0)}</span>
-                        </div>
-                        <div className="relative h-3 bg-gradient-to-r from-red-200 via-gray-200 to-emerald-200 rounded-full">
-                          {/* Current price marker */}
-                          {currentPrice > 0 && bullValue > 0 && (
-                            <div 
-                              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-800 rounded-full border-2 border-white shadow-lg"
-                              style={{
-                                left: `${Math.min(100, Math.max(0, ((currentPrice - bearValue) / (bullValue - bearValue)) * 100))}%`,
-                                transform: 'translate(-50%, -50%)'
-                              }}
-                              title={`Current: $${currentPrice.toFixed(2)}`}
-                            />
-                          )}
-                        </div>
-                        <div className="text-center text-xs text-gray-400 mt-1">
-                          ● Current price position in the value range
-                        </div>
+                      <div className="text-sm text-gray-400">vs</div>
+                      <div>
+                        <span className="text-sm text-gray-500">Current</span>
+                        <span className="text-2xl font-mono ml-3">${currentPrice.toFixed(2)}</span>
                       </div>
-                      
-                      {/* Key Numbers */}
-                      <div className="grid grid-cols-3 gap-4 text-center">
-                        <div>
-                          <div className="text-xs text-gray-400 mb-1">If Bear Case</div>
-                          <div className="text-lg font-bold font-mono text-red-600">
-                            {scenarioResult.upside_range.min_percent.toFixed(0)}%
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-400 mb-1">Expected Return</div>
-                          <div className={`text-lg font-bold font-mono ${
-                            premiumDiscount > 0 ? 'text-red-600' : 'text-emerald-600'
-                          }`}>
-                            {premiumDiscount > 0 ? '' : '+'}{(-premiumDiscount).toFixed(0)}%
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-400 mb-1">If Bull Case</div>
-                          <div className="text-lg font-bold font-mono text-emerald-600">
-                            {scenarioResult.upside_range.max_percent >= 0 ? '+' : ''}{scenarioResult.upside_range.max_percent.toFixed(0)}%
-                          </div>
-                        </div>
-                      </div>
+                      <span className={`text-sm font-semibold px-3 py-1 rounded-md ${
+                        isOvervalued 
+                          ? 'text-red-600 bg-red-50' 
+                          : 'text-emerald-600 bg-emerald-50'
+                      }`}>
+                        {diff >= 0 ? '+' : ''}{diff.toFixed(0)}% {isOvervalued ? 'overvalued' : 'undervalued'}
+                      </span>
                     </div>
                   );
                 })()}
+
+                {/* Scenarios Table */}
+                <div>
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Scenario</th>
+                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Intrinsic Value</th>
+                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">vs Current</th>
+                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Rev Growth</th>
+                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Op Margin</th>
+                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Probability</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scenarioResult.scenarios.map((scenario) => {
+                        const isBear = scenario.name.toLowerCase() === 'bear';
+                        const isBull = scenario.name.toLowerCase() === 'bull';
+                        
+                        return (
+                          <tr key={scenario.name} className="border-b border-gray-100">
+                            <td className="py-4">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${
+                                  isBear ? 'bg-red-400' : isBull ? 'bg-emerald-400' : 'bg-gray-400'
+                                }`}></span>
+                                <span className="font-medium">{scenario.name}</span>
+                              </div>
+                              <p className="text-xs text-gray-400 mt-1 ml-4">{scenario.description}</p>
+                            </td>
+                            <td className="py-4 text-right font-mono font-medium">
+                              ${scenario.intrinsic_value.toFixed(2)}
+                            </td>
+                            <td className={`py-4 text-right font-mono font-medium ${
+                              scenario.upside_percent !== null && scenario.upside_percent >= 0 
+                                ? 'text-emerald-600' 
+                                : 'text-red-600'
+                            }`}>
+                              {scenario.upside_percent !== null 
+                                ? `${scenario.upside_percent >= 0 ? '+' : ''}${scenario.upside_percent.toFixed(0)}%`
+                                : '—'}
+                            </td>
+                            <td className="py-4 text-right font-mono text-gray-500">
+                              {(scenario.assumptions.revenue_growth * 100).toFixed(1)}%
+                            </td>
+                            <td className="py-4 text-right font-mono text-gray-500">
+                              {(scenario.assumptions.operating_margin * 100).toFixed(1)}%
+                            </td>
+                            <td className="py-4 text-right font-mono text-gray-400">
+                              {(scenario.probability * 100).toFixed(0)}%
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Range indicator */}
+                <div className="pt-4">
+                  <div className="flex justify-between text-xs text-gray-400 mb-2">
+                    <span>Bear ${scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bear')?.intrinsic_value.toFixed(0)}</span>
+                    <span>Bull ${scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bull')?.intrinsic_value.toFixed(0)}</span>
+                  </div>
+                  <div className="relative h-2 bg-gray-100 rounded-full">
+                    <div 
+                      className="absolute h-full bg-gray-300 rounded-full"
+                      style={{ left: '0%', right: '0%' }}
+                    />
+                    {/* Current price marker */}
+                    {(() => {
+                      const bear = scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bear')?.intrinsic_value || 0;
+                      const bull = scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bull')?.intrinsic_value || 0;
+                      const current = scenarioResult.current_price || 0;
+                      const position = Math.min(100, Math.max(0, ((current - bear) / (bull - bear)) * 100));
+                      
+                      return (
+                        <div 
+                          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-gray-900 rounded-full border-2 border-white"
+                          style={{ left: `${position}%`, transform: 'translate(-50%, -50%)' }}
+                        />
+                      );
+                    })()}
+                  </div>
+                  <p className="text-xs text-gray-400 text-center mt-2">● = Current price position</p>
+                </div>
               </div>
             )}
           </section>
