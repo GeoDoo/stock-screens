@@ -35,7 +35,7 @@ class DataExtractor:
 
     def market_cap(self) -> Optional[float]:
         """Market capitalization from profile."""
-        return self.profile.get("mktCap")
+        return self.profile.get("marketCap")
 
     def total_debt(self) -> Optional[float]:
         """Total debt from balance sheet."""

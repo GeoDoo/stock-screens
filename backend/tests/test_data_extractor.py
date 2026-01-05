@@ -17,7 +17,7 @@ class TestDataExtractor:
     def test_extract_market_cap(self):
         """Extract market cap from profile data."""
         data = {
-            "profile": {"mktCap": 3000000000000},
+            "profile": {"marketCap": 3000000000000},
             "income_statement": [],
             "balance_sheet": [],
             "cash_flow": [],

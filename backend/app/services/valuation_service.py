@@ -50,14 +50,21 @@ class ValuationService:
         extractor = DataExtractor(data, market_risk_premium=market_risk_premium)
 
         # 3. Calculate WACC
+        # Use explicit None checks - 0.0 is a valid value, don't fallback
+        beta = extractor.beta()
+        cost_of_debt = extractor.cost_of_debt()
+        tax_rate = extractor.tax_rate()
+        market_cap = extractor.market_cap()
+        total_debt = extractor.total_debt()
+
         wacc_calculator = WACCCalculator(
             risk_free_rate=risk_free_rate,
-            beta=extractor.beta() or 1.0,
+            beta=beta if beta is not None else 1.0,
             market_risk_premium=extractor.market_risk_premium(),
-            cost_of_debt=extractor.cost_of_debt() or 0.05,
-            tax_rate=extractor.tax_rate() or 0.25,
-            market_cap=extractor.market_cap() or 0,
-            total_debt=extractor.total_debt() or 0,
+            cost_of_debt=cost_of_debt if cost_of_debt is not None else 0.05,
+            tax_rate=tax_rate if tax_rate is not None else 0.25,
+            market_cap=market_cap if market_cap is not None else 0,
+            total_debt=total_debt if total_debt is not None else 0,
         )
         wacc = wacc_calculator.calculate()
 

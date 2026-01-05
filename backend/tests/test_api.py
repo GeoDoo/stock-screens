@@ -22,7 +22,7 @@ class TestStockEndpoint:
                 "symbol": "AAPL",
                 "companyName": "Apple Inc.",
                 "beta": 1.25,
-                "mktCap": 3000000000000,
+                "marketCap": 3000000000000,
             },
             "income_statement": [
                 {
