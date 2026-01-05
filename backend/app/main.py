@@ -14,6 +14,8 @@ from app.services.fcf_projector import FCFProjector
 from app.services.data_validator import DataValidator
 from app.services.wacc_calculator import WACCCalculator
 from app.services.scenario_calculator import ScenarioCalculator, Scenario
+from app.services.comparable_analyzer import ComparableAnalyzer
+from app.services.fmp_client import FMPClient
 
 load_dotenv()
 
@@ -368,5 +370,71 @@ async def run_scenarios(symbol: str, request: ScenarioRequest):
         "upside_range": {
             "min_percent": result.upside_range[0],
             "max_percent": result.upside_range[1],
+        },
+    }
+
+
+@app.get("/api/stock/{symbol}/comparables")
+async def get_comparables(symbol: str, max_peers: int = 10):
+    """
+    Run comparable company analysis.
+    
+    Compares the stock against sector peers using valuation multiples:
+    - P/E (Price to Earnings)
+    - EV/EBITDA (Enterprise Value to EBITDA)
+    - P/S (Price to Sales)
+    - P/B (Price to Book)
+    
+    Returns implied fair value based on peer median multiples.
+    """
+    if not FMP_API_KEY:
+        raise HTTPException(status_code=500, detail="FMP_API_KEY not configured")
+    
+    fmp = FMPClient(api_key=FMP_API_KEY)
+    analyzer = ComparableAnalyzer(fmp)
+    
+    try:
+        result = await analyzer.analyze(symbol.upper(), max_peers=max_peers)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Comparable analysis error: {str(e)}")
+    
+    return {
+        "symbol": result.target.symbol,
+        "company_name": result.target.name,
+        "current_price": result.target.price,
+        "sector": result.sector,
+        "industry": result.industry,
+        "target_metrics": {
+            "pe_ratio": result.target.pe_ratio,
+            "ev_to_ebitda": result.target.ev_to_ebitda,
+            "price_to_sales": result.target.price_to_sales,
+            "price_to_book": result.target.price_to_book,
+        },
+        "peer_medians": result.peer_medians,
+        "peers": [
+            {
+                "symbol": p.symbol,
+                "name": p.name,
+                "market_cap": p.market_cap,
+                "pe_ratio": p.pe_ratio,
+                "ev_to_ebitda": p.ev_to_ebitda,
+                "price_to_sales": p.price_to_sales,
+                "price_to_book": p.price_to_book,
+            }
+            for p in result.peers
+        ],
+        "implied_valuations": [
+            {
+                "metric": iv.metric_name,
+                "peer_median": iv.peer_median,
+                "company_value": iv.company_value,
+                "implied_price": iv.implied_price,
+                "upside_percent": iv.upside_percent,
+            }
+            for iv in result.implied_valuations
+        ],
+        "summary": {
+            "average_implied_price": result.average_implied_price,
+            "average_upside_percent": result.average_upside,
         },
     }

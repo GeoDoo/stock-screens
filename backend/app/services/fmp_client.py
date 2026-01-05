@@ -95,3 +95,33 @@ class FMPClient:
             "balance_sheet": await self.get_balance_sheet(symbol),
             "cash_flow": await self.get_cash_flow(symbol),
         }
+
+    async def get_stock_peers(self, symbol: str) -> list:
+        """Get list of peer company symbols for a stock."""
+        try:
+            result = await self._request("/stock_peers", symbol=symbol)
+            if result and len(result) > 0:
+                return result[0].get("peersList", [])
+        except Exception:
+            pass
+        return []
+
+    async def get_key_metrics_ttm(self, symbol: str) -> dict:
+        """Get trailing twelve months key metrics (P/E, EV/EBITDA, etc.)."""
+        try:
+            result = await self._request("/key-metrics-ttm", symbol=symbol)
+            if result and len(result) > 0:
+                return result[0]
+        except Exception:
+            pass
+        return {}
+
+    async def get_ratios_ttm(self, symbol: str) -> dict:
+        """Get trailing twelve months ratios."""
+        try:
+            result = await self._request("/ratios-ttm", symbol=symbol)
+            if result and len(result) > 0:
+                return result[0]
+        except Exception:
+            pass
+        return {}
