@@ -622,35 +622,89 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Summary */}
-                <div className="bg-gray-50 p-6 rounded-xl">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                    <div>
-                      <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Current Price</div>
-                      <div className="text-xl font-bold font-mono">
-                        ${scenarioResult.current_price?.toFixed(2) || '—'}
+                {/* Summary - The Verdict */}
+                {(() => {
+                  const currentPrice = scenarioResult.current_price || 0;
+                  const fairValue = scenarioResult.probability_weighted_value || 0;
+                  const bearValue = scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bear')?.intrinsic_value || 0;
+                  const bullValue = scenarioResult.scenarios.find(s => s.name.toLowerCase() === 'bull')?.intrinsic_value || 0;
+                  
+                  const isOvervalued = currentPrice > fairValue;
+                  const premiumDiscount = ((currentPrice - fairValue) / fairValue) * 100;
+                  
+                  return (
+                    <div className={`p-6 rounded-xl border-2 ${
+                      isOvervalued ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'
+                    }`}>
+                      {/* Main Verdict */}
+                      <div className="text-center mb-6">
+                        <div className={`text-sm font-semibold uppercase tracking-wider mb-2 ${
+                          isOvervalued ? 'text-red-600' : 'text-emerald-600'
+                        }`}>
+                          {isOvervalued ? '⚠️ Stock Appears Overvalued' : '✅ Stock Appears Undervalued'}
+                        </div>
+                        <div className="text-gray-600">
+                          Trading at <span className="font-bold">${currentPrice.toFixed(2)}</span>
+                          {' '}vs fair value of{' '}
+                          <span className="font-bold text-indigo-600">${fairValue.toFixed(2)}</span>
+                          {' '}
+                          <span className={`font-semibold ${isOvervalued ? 'text-red-600' : 'text-emerald-600'}`}>
+                            ({isOvervalued ? '+' : ''}{premiumDiscount.toFixed(0)}% {isOvervalued ? 'premium' : 'discount'})
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Value Range Bar */}
+                      <div className="mb-6">
+                        <div className="flex justify-between text-xs text-gray-500 mb-2">
+                          <span>🐻 Bear: ${bearValue.toFixed(0)}</span>
+                          <span>Fair: ${fairValue.toFixed(0)}</span>
+                          <span>🐂 Bull: ${bullValue.toFixed(0)}</span>
+                        </div>
+                        <div className="relative h-3 bg-gradient-to-r from-red-200 via-gray-200 to-emerald-200 rounded-full">
+                          {/* Current price marker */}
+                          {currentPrice > 0 && bullValue > 0 && (
+                            <div 
+                              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-800 rounded-full border-2 border-white shadow-lg"
+                              style={{
+                                left: `${Math.min(100, Math.max(0, ((currentPrice - bearValue) / (bullValue - bearValue)) * 100))}%`,
+                                transform: 'translate(-50%, -50%)'
+                              }}
+                              title={`Current: $${currentPrice.toFixed(2)}`}
+                            />
+                          )}
+                        </div>
+                        <div className="text-center text-xs text-gray-400 mt-1">
+                          ● Current price position in the value range
+                        </div>
+                      </div>
+                      
+                      {/* Key Numbers */}
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                          <div className="text-xs text-gray-400 mb-1">If Bear Case</div>
+                          <div className="text-lg font-bold font-mono text-red-600">
+                            {scenarioResult.upside_range.min_percent.toFixed(0)}%
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-400 mb-1">Expected Return</div>
+                          <div className={`text-lg font-bold font-mono ${
+                            premiumDiscount > 0 ? 'text-red-600' : 'text-emerald-600'
+                          }`}>
+                            {premiumDiscount > 0 ? '' : '+'}{(-premiumDiscount).toFixed(0)}%
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-400 mb-1">If Bull Case</div>
+                          <div className="text-lg font-bold font-mono text-emerald-600">
+                            {scenarioResult.upside_range.max_percent >= 0 ? '+' : ''}{scenarioResult.upside_range.max_percent.toFixed(0)}%
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Probability-Weighted Value</div>
-                      <div className="text-xl font-bold font-mono text-indigo-600">
-                        ${scenarioResult.probability_weighted_value?.toFixed(2) || '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Downside Risk</div>
-                      <div className="text-xl font-bold font-mono text-red-600">
-                        {scenarioResult.upside_range.min_percent.toFixed(1)}%
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Upside Potential</div>
-                      <div className="text-xl font-bold font-mono text-emerald-600">
-                        +{scenarioResult.upside_range.max_percent.toFixed(1)}%
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
             )}
           </section>
