@@ -14,7 +14,7 @@ class TestHealthEndpoint:
         assert response.json() == {"status": "ok"}
 
 
-class TestStockInputsEndpoint:
+class TestStockEndpoint:
     @pytest.fixture
     def mock_fmp_data(self):
         return {
@@ -59,14 +59,14 @@ class TestStockInputsEndpoint:
             ],
         }
 
-    def test_get_inputs_returns_structured_data(self, mock_fmp_data):
+    def test_get_stock_returns_data_and_hints(self, mock_fmp_data):
         with patch("app.main.FMP_API_KEY", "test_key"), \
              patch("app.main.FMPClient") as MockClient:
             mock_instance = MockClient.return_value
             mock_instance.get_stock_data = AsyncMock(return_value=mock_fmp_data)
             mock_instance.get_treasury_rate = AsyncMock(return_value=0.045)
 
-            response = client.get("/api/stock/AAPL/inputs")
+            response = client.get("/api/stock/AAPL")
 
             assert response.status_code == 200
             result = response.json()
@@ -88,9 +88,9 @@ class TestStockInputsEndpoint:
             assert "revenue_growth" in result["hints"]
             assert "operating_margin" in result["hints"]
 
-    def test_get_inputs_without_api_key(self):
+    def test_get_stock_without_api_key(self):
         with patch("app.main.FMP_API_KEY", ""):
-            response = client.get("/api/stock/AAPL/inputs")
+            response = client.get("/api/stock/AAPL")
             assert response.status_code == 500
             assert "FMP_API_KEY" in response.json()["detail"]
 
