@@ -84,6 +84,9 @@ export default function App() {
   // Comparable Analysis
   const [comparableResult, setComparableResult] = useState<ComparableResult | null>(null);
   const [comparableLoading, setComparableLoading] = useState(false);
+  
+  // Tab navigation
+  const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
 
   const fetchStock = async () => {
     if (!ticker.trim() || !selectedProvider) return;
@@ -210,10 +213,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white text-gray-900">
       <div className="w-full max-w-[1600px] mx-auto px-8 lg:px-16 py-16">
-        {/* Header + Input Area */}
+        {/* Header */}
         <header className="mb-12">
-          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Stock Valuation</h1>
-          <p className="text-sm text-gray-400 mt-2">Discounted Cash Flow Analysis</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Stock Analysis</h1>
+          <p className="text-sm text-gray-400 mt-2">Fundamental & Technical Analysis</p>
         </header>
 
         {/* Provider + Ticker in one cohesive block */}
@@ -277,7 +280,42 @@ export default function App() {
           </div>
         </section>
 
+        {/* Tab Switcher */}
         {stockData && (
+          <nav className="mb-10 border-b border-gray-200">
+            <div className="flex gap-8">
+              <button
+                onClick={() => setActiveTab('fundamental')}
+                className={`pb-4 text-sm font-semibold transition-colors relative ${
+                  activeTab === 'fundamental'
+                    ? 'text-gray-900'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Fundamental
+                {activeTab === 'fundamental' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('technical')}
+                className={`pb-4 text-sm font-semibold transition-colors relative ${
+                  activeTab === 'technical'
+                    ? 'text-gray-900'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                Technical
+                {activeTab === 'technical' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900" />
+                )}
+              </button>
+            </div>
+          </nav>
+        )}
+
+        {/* FUNDAMENTAL TAB */}
+        {stockData && activeTab === 'fundamental' && (
           <>
             {/* Validation Alerts */}
             {(stockData.validation.has_errors || stockData.validation.has_warnings) && (
@@ -873,6 +911,20 @@ export default function App() {
               </div>
             )}
           </section>
+        )}
+
+        {/* TECHNICAL TAB */}
+        {stockData && activeTab === 'technical' && (
+          <div className="py-8">
+            <div className="text-center py-20">
+              <div className="text-6xl mb-6">📈</div>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-3">Technical Analysis</h2>
+              <p className="text-gray-400 max-w-md mx-auto">
+                Price charts, moving averages, RSI, MACD, support/resistance levels, and more.
+              </p>
+              <p className="text-sm text-gray-300 mt-6">Coming soon</p>
+            </div>
+          </div>
         )}
       </div>
     </div>
