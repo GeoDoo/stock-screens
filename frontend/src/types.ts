@@ -183,3 +183,46 @@ export interface ComparableResult {
   };
 }
 
+// Technical Analysis Types
+export interface PriceBar {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface IndicatorValue {
+  timestamp: string;
+  value: number;
+}
+
+export interface MACDValue {
+  timestamp: string;
+  macd: number;
+  signal: number;
+  histogram: number;
+}
+
+export interface TechnicalAnalysisResult {
+  symbol: string;
+  period_days: number;
+  current_price: number;
+  price_change_pct: number;
+  prices: PriceBar[];
+  indicators: {
+    sma_20: IndicatorValue[];
+    sma_50: IndicatorValue[];
+    ema_12: IndicatorValue[];
+    ema_26: IndicatorValue[];
+    rsi_14: IndicatorValue[];
+    macd: MACDValue[];
+  };
+  signals: {
+    trend: 'bullish' | 'bearish' | 'neutral';
+    rsi: 'overbought' | 'oversold' | 'neutral';
+    macd: 'bullish' | 'bearish' | 'neutral';
+  };
+}
+

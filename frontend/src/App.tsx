@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult } from './types';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -84,6 +84,10 @@ export default function App() {
   // Comparable Analysis
   const [comparableResult, setComparableResult] = useState<ComparableResult | null>(null);
   const [comparableLoading, setComparableLoading] = useState(false);
+  
+  // Technical Analysis
+  const [technicalResult, setTechnicalResult] = useState<TechnicalAnalysisResult | null>(null);
+  const [technicalLoading, setTechnicalLoading] = useState(false);
   
   // Tab navigation
   const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
@@ -203,6 +207,28 @@ export default function App() {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setComparableLoading(false);
+    }
+  };
+
+  const runTechnicalAnalysis = async () => {
+    if (!stockData) return;
+    
+    setTechnicalLoading(true);
+    setTechnicalResult(null);
+    setError(null);
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/technical?days=365`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Technical analysis failed');
+      }
+      const data: TechnicalAnalysisResult = await res.json();
+      setTechnicalResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setTechnicalLoading(false);
     }
   };
 
@@ -913,14 +939,286 @@ export default function App() {
         {/* TECHNICAL TAB */}
         {stockData && activeTab === 'technical' && (
           <div className="py-8">
-            <div className="text-center py-20">
-              <div className="text-6xl mb-6">📈</div>
-              <h2 className="text-2xl font-semibold text-gray-900 mb-3">Technical Analysis</h2>
-              <p className="text-gray-400 max-w-md mx-auto">
-                Price charts, moving averages, RSI, MACD, support/resistance levels, and more.
-              </p>
-              <p className="text-sm text-gray-300 mt-6">Coming soon</p>
-            </div>
+            {/* Run Technical Analysis */}
+            {!technicalResult && (
+              <div className="mb-8">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Technical Analysis</h2>
+                <p className="text-sm text-gray-400 mb-6">Price charts, moving averages, RSI, MACD indicators</p>
+                <button
+                  onClick={runTechnicalAnalysis}
+                  disabled={technicalLoading}
+                  className="px-10 py-4 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {technicalLoading ? 'Loading...' : 'Run Technical Analysis'}
+                </button>
+              </div>
+            )}
+
+            {/* Technical Analysis Results */}
+            {technicalResult && (
+              <div className="space-y-8">
+                {/* Price Summary */}
+                <div className="flex items-baseline gap-4">
+                  <span className="text-4xl font-bold font-mono">${technicalResult.current_price.toFixed(2)}</span>
+                  <span className={`text-lg font-semibold ${technicalResult.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {technicalResult.price_change_pct >= 0 ? '+' : ''}{technicalResult.price_change_pct.toFixed(2)}%
+                  </span>
+                  <span className="text-sm text-gray-400">{technicalResult.period_days} days</span>
+                </div>
+
+                {/* Signal Summary */}
+                <div className="grid grid-cols-3 gap-6 max-w-xl">
+                  <div className="p-4 rounded-lg border border-gray-100">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Trend</div>
+                    <div className={`text-lg font-semibold capitalize ${
+                      technicalResult.signals.trend === 'bullish' ? 'text-emerald-600' :
+                      technicalResult.signals.trend === 'bearish' ? 'text-red-600' : 'text-gray-500'
+                    }`}>
+                      {technicalResult.signals.trend}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg border border-gray-100">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">RSI (14)</div>
+                    <div className={`text-lg font-semibold capitalize ${
+                      technicalResult.signals.rsi === 'overbought' ? 'text-red-600' :
+                      technicalResult.signals.rsi === 'oversold' ? 'text-emerald-600' : 'text-gray-500'
+                    }`}>
+                      {technicalResult.signals.rsi}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg border border-gray-100">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">MACD</div>
+                    <div className={`text-lg font-semibold capitalize ${
+                      technicalResult.signals.macd === 'bullish' ? 'text-emerald-600' :
+                      technicalResult.signals.macd === 'bearish' ? 'text-red-600' : 'text-gray-500'
+                    }`}>
+                      {technicalResult.signals.macd}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Price Chart */}
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Price Chart</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
+                    <svg viewBox="0 0 800 300" className="w-full h-64">
+                      {/* Chart background */}
+                      <rect x="0" y="0" width="800" height="300" fill="#fafafa" />
+                      
+                      {/* Price line */}
+                      {technicalResult.prices.length > 1 && (() => {
+                        const prices = technicalResult.prices;
+                        const minPrice = Math.min(...prices.map(p => p.low));
+                        const maxPrice = Math.max(...prices.map(p => p.high));
+                        const priceRange = maxPrice - minPrice || 1;
+                        const padding = 20;
+                        const chartHeight = 260;
+                        const chartWidth = 760;
+                        
+                        const points = prices.map((p, i) => {
+                          const x = padding + (i / (prices.length - 1)) * chartWidth;
+                          const y = padding + ((maxPrice - p.close) / priceRange) * chartHeight;
+                          return `${x},${y}`;
+                        }).join(' ');
+                        
+                        // SMA 20 line
+                        const sma20Points = technicalResult.indicators.sma_20.map((s, i) => {
+                          const priceIdx = prices.findIndex(p => p.timestamp === s.timestamp);
+                          if (priceIdx === -1) return null;
+                          const x = padding + (priceIdx / (prices.length - 1)) * chartWidth;
+                          const y = padding + ((maxPrice - s.value) / priceRange) * chartHeight;
+                          return `${x},${y}`;
+                        }).filter(Boolean).join(' ');
+                        
+                        // SMA 50 line
+                        const sma50Points = technicalResult.indicators.sma_50.map((s, i) => {
+                          const priceIdx = prices.findIndex(p => p.timestamp === s.timestamp);
+                          if (priceIdx === -1) return null;
+                          const x = padding + (priceIdx / (prices.length - 1)) * chartWidth;
+                          const y = padding + ((maxPrice - s.value) / priceRange) * chartHeight;
+                          return `${x},${y}`;
+                        }).filter(Boolean).join(' ');
+                        
+                        return (
+                          <>
+                            {/* Grid lines */}
+                            {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => (
+                              <line
+                                key={i}
+                                x1={padding}
+                                y1={padding + pct * chartHeight}
+                                x2={padding + chartWidth}
+                                y2={padding + pct * chartHeight}
+                                stroke="#e5e7eb"
+                                strokeWidth="1"
+                              />
+                            ))}
+                            
+                            {/* SMA 50 */}
+                            {sma50Points && (
+                              <polyline
+                                points={sma50Points}
+                                fill="none"
+                                stroke="#f59e0b"
+                                strokeWidth="1.5"
+                                opacity="0.7"
+                              />
+                            )}
+                            
+                            {/* SMA 20 */}
+                            {sma20Points && (
+                              <polyline
+                                points={sma20Points}
+                                fill="none"
+                                stroke="#8b5cf6"
+                                strokeWidth="1.5"
+                                opacity="0.7"
+                              />
+                            )}
+                            
+                            {/* Price line */}
+                            <polyline
+                              points={points}
+                              fill="none"
+                              stroke="#111827"
+                              strokeWidth="2"
+                            />
+                            
+                            {/* Price labels */}
+                            <text x={padding - 5} y={padding + 5} textAnchor="end" fontSize="10" fill="#9ca3af">
+                              ${maxPrice.toFixed(0)}
+                            </text>
+                            <text x={padding - 5} y={padding + chartHeight} textAnchor="end" fontSize="10" fill="#9ca3af">
+                              ${minPrice.toFixed(0)}
+                            </text>
+                          </>
+                        );
+                      })()}
+                    </svg>
+                    <div className="flex gap-6 mt-2 text-xs text-gray-400">
+                      <span><span className="inline-block w-3 h-0.5 bg-gray-900 mr-1"></span> Price</span>
+                      <span><span className="inline-block w-3 h-0.5 bg-purple-500 mr-1"></span> SMA 20</span>
+                      <span><span className="inline-block w-3 h-0.5 bg-amber-500 mr-1"></span> SMA 50</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RSI Chart */}
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">RSI (14)</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
+                    <svg viewBox="0 0 800 120" className="w-full h-24">
+                      {/* Overbought/Oversold zones */}
+                      <rect x="20" y="0" width="760" height="30" fill="#fef2f2" opacity="0.5" />
+                      <rect x="20" y="90" width="760" height="30" fill="#ecfdf5" opacity="0.5" />
+                      
+                      {/* RSI line */}
+                      {technicalResult.indicators.rsi_14.length > 1 && (() => {
+                        const rsiData = technicalResult.indicators.rsi_14;
+                        const padding = 20;
+                        const chartWidth = 760;
+                        const chartHeight = 120;
+                        
+                        const points = rsiData.map((r, i) => {
+                          const x = padding + (i / (rsiData.length - 1)) * chartWidth;
+                          const y = chartHeight - (r.value / 100) * chartHeight;
+                          return `${x},${y}`;
+                        }).join(' ');
+                        
+                        return (
+                          <>
+                            {/* 70/30 lines */}
+                            <line x1={padding} y1={30} x2={padding + chartWidth} y2={30} stroke="#ef4444" strokeWidth="1" strokeDasharray="4" />
+                            <line x1={padding} y1={90} x2={padding + chartWidth} y2={90} stroke="#10b981" strokeWidth="1" strokeDasharray="4" />
+                            <line x1={padding} y1={60} x2={padding + chartWidth} y2={60} stroke="#e5e7eb" strokeWidth="1" />
+                            
+                            {/* RSI line */}
+                            <polyline points={points} fill="none" stroke="#6366f1" strokeWidth="2" />
+                            
+                            {/* Labels */}
+                            <text x={padding - 5} y={34} textAnchor="end" fontSize="9" fill="#ef4444">70</text>
+                            <text x={padding - 5} y={94} textAnchor="end" fontSize="9" fill="#10b981">30</text>
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  </div>
+                </div>
+
+                {/* MACD Chart */}
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">MACD</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
+                    <svg viewBox="0 0 800 120" className="w-full h-24">
+                      {technicalResult.indicators.macd.length > 1 && (() => {
+                        const macdData = technicalResult.indicators.macd;
+                        const maxVal = Math.max(...macdData.map(m => Math.max(Math.abs(m.macd), Math.abs(m.signal), Math.abs(m.histogram))));
+                        const padding = 20;
+                        const chartWidth = 760;
+                        const chartHeight = 120;
+                        const midY = chartHeight / 2;
+                        
+                        const macdPoints = macdData.map((m, i) => {
+                          const x = padding + (i / (macdData.length - 1)) * chartWidth;
+                          const y = midY - (m.macd / maxVal) * (midY - 10);
+                          return `${x},${y}`;
+                        }).join(' ');
+                        
+                        const signalPoints = macdData.map((m, i) => {
+                          const x = padding + (i / (macdData.length - 1)) * chartWidth;
+                          const y = midY - (m.signal / maxVal) * (midY - 10);
+                          return `${x},${y}`;
+                        }).join(' ');
+                        
+                        return (
+                          <>
+                            {/* Zero line */}
+                            <line x1={padding} y1={midY} x2={padding + chartWidth} y2={midY} stroke="#e5e7eb" strokeWidth="1" />
+                            
+                            {/* Histogram bars */}
+                            {macdData.map((m, i) => {
+                              const x = padding + (i / (macdData.length - 1)) * chartWidth;
+                              const barHeight = (m.histogram / maxVal) * (midY - 10);
+                              return (
+                                <rect
+                                  key={i}
+                                  x={x - 1}
+                                  y={barHeight > 0 ? midY - barHeight : midY}
+                                  width={2}
+                                  height={Math.abs(barHeight)}
+                                  fill={m.histogram >= 0 ? '#10b981' : '#ef4444'}
+                                  opacity="0.5"
+                                />
+                              );
+                            })}
+                            
+                            {/* MACD line */}
+                            <polyline points={macdPoints} fill="none" stroke="#3b82f6" strokeWidth="1.5" />
+                            
+                            {/* Signal line */}
+                            <polyline points={signalPoints} fill="none" stroke="#f97316" strokeWidth="1.5" />
+                          </>
+                        );
+                      })()}
+                    </svg>
+                    <div className="flex gap-6 mt-2 text-xs text-gray-400">
+                      <span><span className="inline-block w-3 h-0.5 bg-blue-500 mr-1"></span> MACD</span>
+                      <span><span className="inline-block w-3 h-0.5 bg-orange-500 mr-1"></span> Signal</span>
+                      <span><span className="inline-block w-3 h-2 bg-emerald-500 opacity-50 mr-1"></span> Histogram</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Run again button */}
+                <button
+                  onClick={runTechnicalAnalysis}
+                  disabled={technicalLoading}
+                  className="px-6 py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30"
+                >
+                  {technicalLoading ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
