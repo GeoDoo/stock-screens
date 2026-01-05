@@ -92,3 +92,60 @@ class TestDCFCalculator:
         assert result["intrinsic_value_per_share"] < 0
         assert result.get("warning") is not None
 
+    def test_net_debt_adjustment(self):
+        """Equity value should be enterprise value minus net debt."""
+        calculator = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=100,
+        )
+
+        result = calculator.calculate()
+
+        # Net debt = 500 - 100 = 400
+        assert result["net_debt"] == 400
+        # Equity value = Enterprise value - 400
+        assert abs(result["equity_value"] - (result["enterprise_value"] - 400)) < 0.01
+
+    def test_net_cash_position(self):
+        """Company with more cash than debt increases equity value."""
+        calculator = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=100,
+            cash=500,
+        )
+
+        result = calculator.calculate()
+
+        # Net debt = 100 - 500 = -400 (net cash)
+        assert result["net_debt"] == -400
+        # Equity value should be higher than enterprise value
+        assert result["equity_value"] > result["enterprise_value"]
+
+    def test_distressed_company_warning(self):
+        """Warn when net debt exceeds enterprise value."""
+        calculator = DCFCalculator(
+            current_fcf=10,
+            growth_rate=0.05,
+            discount_rate=0.10,
+            terminal_growth_rate=0.02,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=10000,
+            cash=100,
+        )
+
+        result = calculator.calculate()
+
+        assert "distressed" in result.get("warning", "").lower()
+

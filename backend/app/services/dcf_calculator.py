@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -10,6 +10,8 @@ class DCFCalculator:
     terminal_growth_rate: float
     projection_years: int
     shares_outstanding: float
+    total_debt: float = 0.0
+    cash: float = 0.0
 
     def calculate(self) -> dict:
         """
@@ -19,7 +21,9 @@ class DCFCalculator:
         - projected_fcf: list of projected free cash flows
         - terminal_value: terminal value using Gordon growth model
         - enterprise_value: sum of discounted cash flows + discounted terminal value
-        - intrinsic_value_per_share: enterprise value / shares outstanding
+        - net_debt: total debt - cash
+        - equity_value: enterprise value - net debt
+        - intrinsic_value_per_share: equity value / shares outstanding
         - warning: optional warning message
         """
         result = {}
@@ -48,13 +52,26 @@ class DCFCalculator:
         enterprise_value = pv_fcf + pv_terminal
         result["enterprise_value"] = enterprise_value
 
-        # Intrinsic value per share
-        intrinsic_value_per_share = enterprise_value / self.shares_outstanding
+        # Net debt adjustment
+        net_debt = self.total_debt - self.cash
+        result["net_debt"] = net_debt
+
+        # Equity value = Enterprise value - Net debt
+        equity_value = enterprise_value - net_debt
+        result["equity_value"] = equity_value
+
+        # Intrinsic value per share (based on equity value)
+        intrinsic_value_per_share = equity_value / self.shares_outstanding
         result["intrinsic_value_per_share"] = intrinsic_value_per_share
 
-        # Warning for negative FCF
+        # Warnings
+        warnings = []
         if self.current_fcf < 0:
-            result["warning"] = "Negative FCF - intrinsic value may not be meaningful"
+            warnings.append("Negative FCF - intrinsic value may not be meaningful")
+        if net_debt > enterprise_value:
+            warnings.append("Net debt exceeds enterprise value - company may be distressed")
+        
+        if warnings:
+            result["warning"] = "; ".join(warnings)
 
         return result
-
