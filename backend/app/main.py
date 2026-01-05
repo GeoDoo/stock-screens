@@ -13,6 +13,7 @@ from app.services.valuation_service import ValuationService
 from app.services.fcf_projector import FCFProjector
 from app.services.data_validator import DataValidator
 from app.services.wacc_calculator import WACCCalculator
+from app.services.scenario_calculator import ScenarioCalculator, Scenario
 
 load_dotenv()
 
@@ -85,6 +86,23 @@ class ValuationRequest(BaseModel):
     market_risk_premium: float
     projection_years: int
     discount_rate_override: Optional[float] = None  # If set, use this instead of calculated WACC
+
+
+class ScenarioInput(BaseModel):
+    """A single scenario definition."""
+    name: str
+    revenue_growth: float  # e.g., 0.05 for 5%
+    operating_margin: float  # e.g., 0.25 for 25%
+    terminal_growth: float  # e.g., 0.03 for 3%
+    probability: float = 0.0  # 0-1, for weighted average
+    description: str = ""
+
+
+class ScenarioRequest(BaseModel):
+    """Request for scenario analysis."""
+    scenarios: Optional[List[ScenarioInput]] = None  # If None, use defaults
+    projection_years: int = 10
+    market_risk_premium: float = 0.06
 
 
 @app.get("/health")
@@ -222,3 +240,133 @@ async def run_valuation(symbol: str, request: ValuationRequest):
         raise HTTPException(status_code=400, detail=f"Valuation error: {str(e)}")
 
     return result
+
+
+@app.post("/api/stock/{symbol}/scenarios")
+async def run_scenarios(symbol: str, request: ScenarioRequest):
+    """
+    Run scenario analysis (Bear/Base/Bull cases).
+    
+    If no scenarios provided, generates smart defaults based on historical data.
+    Returns intrinsic values for each scenario and probability-weighted average.
+    """
+    client = StockDataClient(fmp_api_key=FMP_API_KEY if FMP_API_KEY else None)
+    
+    try:
+        stock_data = await client.get_stock_data(symbol.upper())
+        risk_free_rate = await client.get_treasury_rate()
+    except TickerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DataNotAvailableError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ProviderError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch stock data: {str(e)}")
+
+    # Convert to legacy format and extract data
+    data = stock_data_to_legacy(stock_data)
+    extractor = DataExtractor(data, market_risk_premium=request.market_risk_premium)
+    
+    # Calculate WACC
+    beta = extractor.beta() or 1.0
+    cost_of_debt = extractor.cost_of_debt() or 0.05
+    tax_rate = extractor.tax_rate() or 0.25
+    market_cap = extractor.market_cap() or 0
+    total_debt = extractor.total_debt() or 0
+    cash = extractor.cash() or 0
+    shares = extractor.shares_outstanding() or 1
+    
+    wacc_calculator = WACCCalculator(
+        risk_free_rate=risk_free_rate,
+        beta=beta,
+        market_risk_premium=request.market_risk_premium,
+        cost_of_debt=cost_of_debt,
+        tax_rate=tax_rate,
+        market_cap=market_cap,
+        total_debt=total_debt,
+    )
+    base_wacc = wacc_calculator.calculate()
+    
+    # Get current price
+    current_price = stock_data.profile.price
+    
+    # Historical hints for default scenarios
+    fcf_projector = FCFProjector(
+        historical_revenue=extractor.revenue_history() or [0],
+        historical_ebit=extractor.ebit_history() or [0],
+        historical_da=extractor.da_history() or [0],
+        historical_capex=extractor.capex_history() or [0],
+        historical_working_capital=extractor.working_capital_history() or [0],
+        tax_rate=tax_rate,
+    )
+    hints = {
+        "revenue_growth": fcf_projector.revenue_cagr(),
+        "operating_margin": fcf_projector.operating_margin(),
+    }
+    
+    # Initialize calculator
+    calculator = ScenarioCalculator(
+        historical_revenue=extractor.revenue_history() or [0],
+        historical_ebit=extractor.ebit_history() or [0],
+        historical_da=extractor.da_history() or [0],
+        historical_capex=extractor.capex_history() or [0],
+        historical_working_capital=extractor.working_capital_history() or [0],
+        tax_rate=tax_rate,
+        shares_outstanding=shares,
+        total_debt=total_debt,
+        cash=cash,
+        base_wacc=base_wacc,
+        projection_years=request.projection_years,
+        current_price=current_price,
+    )
+    
+    # Build scenarios
+    if request.scenarios:
+        scenarios = [
+            Scenario(
+                name=s.name,
+                revenue_growth=s.revenue_growth,
+                operating_margin=s.operating_margin,
+                terminal_growth=s.terminal_growth,
+                probability=s.probability,
+                description=s.description,
+            )
+            for s in request.scenarios
+        ]
+    else:
+        scenarios = calculator.get_default_scenarios(hints)
+    
+    # Run analysis
+    result = calculator.run_analysis(scenarios)
+    result.symbol = symbol.upper()
+    
+    return {
+        "symbol": result.symbol,
+        "current_price": result.current_price,
+        "wacc": base_wacc,
+        "projection_years": request.projection_years,
+        "scenarios": [
+            {
+                "name": s.name,
+                "intrinsic_value": s.intrinsic_value,
+                "upside_percent": ((s.intrinsic_value - result.current_price) / result.current_price * 100) if result.current_price else None,
+                "enterprise_value": s.enterprise_value,
+                "equity_value": s.equity_value,
+                "probability": s.probability,
+                "assumptions": {
+                    "revenue_growth": s.revenue_growth,
+                    "operating_margin": s.operating_margin,
+                    "terminal_growth": s.terminal_growth,
+                    "discount_rate": s.discount_rate,
+                },
+                "description": s.description,
+            }
+            for s in result.scenarios
+        ],
+        "probability_weighted_value": result.probability_weighted_value,
+        "upside_range": {
+            "min_percent": result.upside_range[0],
+            "max_percent": result.upside_range[1],
+        },
+    }
