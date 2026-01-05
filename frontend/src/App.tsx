@@ -483,11 +483,10 @@ export default function App() {
                 {loading ? 'Calculating...' : hasValidationErrors ? 'Fix Errors Above' : 'Run Valuation'}
               </button>
             </section>
-          </>
-        )}
 
-        {result && (
-          <section className="pt-8 border-t border-gray-100">
+            {/* Valuation Result */}
+            {result && (
+              <section className="pt-8 border-t border-gray-100">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-600 mb-8">Valuation Result</h2>
             
             {/* Main Result */}
@@ -659,13 +658,13 @@ export default function App() {
                   <span><span className="inline-block w-3 h-3 ring-2 ring-emerald-500 rounded mr-1"></span> Current assumptions</span>
                 </div>
               </div>
+              )}
+            </section>
             )}
-          </section>
-        )}
 
             {/* Scenario Analysis Section */}
             <section className="pt-12 border-t border-gray-100">
-            <div className="mb-8">
+              <div className="mb-8">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Scenario Analysis</h2>
               <p className="text-sm text-gray-400 mb-6">Bear / Base / Bull case valuations with probability weighting</p>
               <button
