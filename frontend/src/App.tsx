@@ -533,107 +533,73 @@ export default function App() {
         {stockData && (
           <section className="mt-16 pt-8 border-t border-gray-100">
             <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Scenario Analysis</h2>
-                <p className="text-sm text-gray-400">Bear / Base / Bull cases based on historical performance</p>
-              </div>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Scenario Analysis</h2>
               <button
                 onClick={runScenarios}
                 disabled={scenarioLoading || hasValidationErrors}
-                className="px-6 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg transition-colors hover:bg-indigo-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-6 py-2 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {scenarioLoading ? 'Analyzing...' : 'Run Scenarios'}
               </button>
             </div>
 
             {scenarioResult && (
-              <div className="space-y-12">
-                {/* Summary Row */}
-                {(() => {
-                  const currentPrice = scenarioResult.current_price || 0;
-                  const fairValue = scenarioResult.probability_weighted_value || 0;
-                  const isOvervalued = currentPrice > fairValue;
-                  const diff = ((fairValue - currentPrice) / currentPrice) * 100;
-                  
-                  return (
-                    <div className="flex items-baseline gap-6">
-                      <div>
-                        <span className="text-sm text-gray-500">Fair Value (weighted)</span>
-                        <span className="text-4xl font-bold font-mono ml-3">${fairValue.toFixed(2)}</span>
-                      </div>
-                      <div className="text-sm text-gray-400">vs</div>
-                      <div>
-                        <span className="text-sm text-gray-500">Current</span>
-                        <span className="text-2xl font-mono ml-3">${currentPrice.toFixed(2)}</span>
-                      </div>
-                      <span className={`text-sm font-semibold px-3 py-1 rounded-md ${
-                        isOvervalued 
-                          ? 'text-red-600 bg-red-50' 
-                          : 'text-emerald-600 bg-emerald-50'
-                      }`}>
-                        {diff >= 0 ? '+' : ''}{diff.toFixed(0)}% {isOvervalued ? 'overvalued' : 'undervalued'}
+              <div className="space-y-8">
+                {/* Summary */}
+                <div className="flex items-baseline gap-4">
+                  <span className="text-4xl font-bold font-mono">${scenarioResult.probability_weighted_value?.toFixed(2)}</span>
+                  <span className="text-sm text-gray-400">weighted fair value</span>
+                  {(() => {
+                    const current = scenarioResult.current_price || 0;
+                    const fair = scenarioResult.probability_weighted_value || 0;
+                    const diff = ((fair - current) / current) * 100;
+                    return (
+                      <span className={`text-sm font-medium ${diff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {diff >= 0 ? '+' : ''}{diff.toFixed(0)}%
                       </span>
-                    </div>
-                  );
-                })()}
-
-                {/* Scenarios Table */}
-                <div>
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Scenario</th>
-                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Intrinsic Value</th>
-                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">vs Current</th>
-                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Rev Growth</th>
-                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Op Margin</th>
-                        <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Probability</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {scenarioResult.scenarios.map((scenario) => {
-                        const isBear = scenario.name.toLowerCase() === 'bear';
-                        const isBull = scenario.name.toLowerCase() === 'bull';
-                        
-                        return (
-                          <tr key={scenario.name} className="border-b border-gray-100">
-                            <td className="py-4">
-                              <div className="flex items-center gap-2">
-                                <span className={`w-2 h-2 rounded-full ${
-                                  isBear ? 'bg-red-400' : isBull ? 'bg-emerald-400' : 'bg-gray-400'
-                                }`}></span>
-                                <span className="font-medium">{scenario.name}</span>
-                              </div>
-                              <p className="text-xs text-gray-400 mt-1 ml-4">{scenario.description}</p>
-                            </td>
-                            <td className="py-4 text-right font-mono font-medium">
-                              ${scenario.intrinsic_value.toFixed(2)}
-                            </td>
-                            <td className={`py-4 text-right font-mono font-medium ${
-                              scenario.upside_percent !== null && scenario.upside_percent >= 0 
-                                ? 'text-emerald-600' 
-                                : 'text-red-600'
-                            }`}>
-                              {scenario.upside_percent !== null 
-                                ? `${scenario.upside_percent >= 0 ? '+' : ''}${scenario.upside_percent.toFixed(0)}%`
-                                : '—'}
-                            </td>
-                            <td className="py-4 text-right font-mono text-gray-500">
-                              {(scenario.assumptions.revenue_growth * 100).toFixed(1)}%
-                            </td>
-                            <td className="py-4 text-right font-mono text-gray-500">
-                              {(scenario.assumptions.operating_margin * 100).toFixed(1)}%
-                            </td>
-                            <td className="py-4 text-right font-mono text-gray-400">
-                              {(scenario.probability * 100).toFixed(0)}%
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                    );
+                  })()}
                 </div>
 
+                {/* Table */}
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Scenario</th>
+                      <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Value</th>
+                      <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">vs Current</th>
+                      <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Growth</th>
+                      <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Margin</th>
+                      <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Weight</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scenarioResult.scenarios.map((scenario) => (
+                      <tr key={scenario.name} className="border-b border-gray-100">
+                        <td className="py-3 text-sm font-medium">{scenario.name}</td>
+                        <td className="py-3 text-right font-mono text-sm">${scenario.intrinsic_value.toFixed(2)}</td>
+                        <td className={`py-3 text-right font-mono text-sm ${
+                          scenario.upside_percent !== null && scenario.upside_percent >= 0 
+                            ? 'text-emerald-600' 
+                            : 'text-red-600'
+                        }`}>
+                          {scenario.upside_percent !== null 
+                            ? `${scenario.upside_percent >= 0 ? '+' : ''}${scenario.upside_percent.toFixed(0)}%`
+                            : '—'}
+                        </td>
+                        <td className="py-3 text-right font-mono text-sm text-gray-500">
+                          {(scenario.assumptions.revenue_growth * 100).toFixed(1)}%
+                        </td>
+                        <td className="py-3 text-right font-mono text-sm text-gray-500">
+                          {(scenario.assumptions.operating_margin * 100).toFixed(1)}%
+                        </td>
+                        <td className="py-3 text-right font-mono text-sm text-gray-400">
+                          {(scenario.probability * 100).toFixed(0)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </section>
