@@ -20,6 +20,7 @@ class TestStockInputsEndpoint:
         return {
             "profile": {
                 "symbol": "AAPL",
+                "companyName": "Apple Inc.",
                 "beta": 1.25,
                 "mktCap": 3000000000000,
             },
@@ -58,7 +59,7 @@ class TestStockInputsEndpoint:
             ],
         }
 
-    def test_get_inputs_returns_stock_data(self, mock_fmp_data):
+    def test_get_inputs_returns_structured_data(self, mock_fmp_data):
         with patch("app.main.FMP_API_KEY", "test_key"), \
              patch("app.main.FMPClient") as MockClient:
             mock_instance = MockClient.return_value
@@ -68,12 +69,24 @@ class TestStockInputsEndpoint:
             response = client.get("/api/stock/AAPL/inputs")
 
             assert response.status_code == 200
-            data = response.json()
-            assert data["symbol"] == "AAPL"
-            assert data["beta"] == 1.25
-            assert data["market_cap"] == 3000000000000
-            assert data["risk_free_rate"] == 0.045
-            assert data["market_risk_premium"] == 0.06
+            result = response.json()
+            
+            # Check structure
+            assert "symbol" in result
+            assert "company_name" in result
+            assert "data" in result
+            assert "hints" in result
+            
+            # Check data (read-only from FMP)
+            assert result["symbol"] == "AAPL"
+            assert result["company_name"] == "Apple Inc."
+            assert result["data"]["beta"] == 1.25
+            assert result["data"]["market_cap"] == 3000000000000
+            assert result["data"]["risk_free_rate"] == 0.045
+            
+            # Check hints (calculated from historical)
+            assert "revenue_growth" in result["hints"]
+            assert "operating_margin" in result["hints"]
 
     def test_get_inputs_without_api_key(self):
         with patch("app.main.FMP_API_KEY", ""):
@@ -96,23 +109,17 @@ class TestValuationEndpoint:
             "inputs": {},
         }
 
-    def test_run_valuation(self, mock_valuation_result):
-        with patch("app.main.FMP_API_KEY", "test_key"), \
-             patch("app.main.ValuationService") as MockService:
-            mock_instance = MockService.return_value
-            mock_instance.value_stock = AsyncMock(return_value=mock_valuation_result)
-
+    def test_run_valuation_requires_all_inputs(self):
+        """Valuation should require all user inputs."""
+        with patch("app.main.FMP_API_KEY", "test_key"):
+            # Missing required fields should fail
             response = client.post(
                 "/api/stock/AAPL/valuation",
-                json={"projection_years": 5, "terminal_growth_rate": 0.03}
+                json={}
             )
+            assert response.status_code == 422  # Validation error
 
-            assert response.status_code == 200
-            data = response.json()
-            assert data["symbol"] == "AAPL"
-            assert data["intrinsic_value_per_share"] == 187.45
-
-    def test_run_valuation_with_overrides(self, mock_valuation_result):
+    def test_run_valuation_with_all_inputs(self, mock_valuation_result):
         with patch("app.main.FMP_API_KEY", "test_key"), \
              patch("app.main.ValuationService") as MockService:
             mock_instance = MockService.return_value
@@ -121,17 +128,42 @@ class TestValuationEndpoint:
             response = client.post(
                 "/api/stock/AAPL/valuation",
                 json={
-                    "projection_years": 10,
-                    "terminal_growth_rate": 0.025,
-                    "revenue_growth": 0.15,
-                    "market_risk_premium": 0.07,
+                    "revenue_growth": 0.10,
+                    "operating_margin": 0.30,
+                    "terminal_growth_rate": 0.03,
+                    "market_risk_premium": 0.06,
+                    "projection_years": 5,
                 }
             )
 
             assert response.status_code == 200
-            # Verify overrides were passed
+            data = response.json()
+            assert data["symbol"] == "AAPL"
+            assert data["intrinsic_value_per_share"] == 187.45
+
+    def test_run_valuation_passes_user_inputs(self, mock_valuation_result):
+        with patch("app.main.FMP_API_KEY", "test_key"), \
+             patch("app.main.ValuationService") as MockService:
+            mock_instance = MockService.return_value
+            mock_instance.value_stock = AsyncMock(return_value=mock_valuation_result)
+
+            response = client.post(
+                "/api/stock/AAPL/valuation",
+                json={
+                    "revenue_growth": 0.15,
+                    "operating_margin": 0.32,
+                    "terminal_growth_rate": 0.025,
+                    "market_risk_premium": 0.07,
+                    "projection_years": 10,
+                }
+            )
+
+            assert response.status_code == 200
+            # Verify user inputs were passed correctly
             mock_instance.value_stock.assert_called_once()
             call_kwargs = mock_instance.value_stock.call_args.kwargs
-            assert call_kwargs["projection_years"] == 10
             assert call_kwargs["revenue_growth"] == 0.15
-
+            assert call_kwargs["operating_margin"] == 0.32
+            assert call_kwargs["terminal_growth_rate"] == 0.025
+            assert call_kwargs["market_risk_premium"] == 0.07
+            assert call_kwargs["projection_years"] == 10
