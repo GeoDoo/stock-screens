@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult } from './types';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -50,6 +50,10 @@ export default function App() {
   // Advanced: custom discount rate
   const [useCustomDiscountRate, setUseCustomDiscountRate] = useState(false);
   const [customDiscountRate, setCustomDiscountRate] = useState('');
+  
+  // Scenario Analysis
+  const [scenarioResult, setScenarioResult] = useState<ScenarioAnalysisResult | null>(null);
+  const [scenarioLoading, setScenarioLoading] = useState(false);
 
   const fetchStock = async () => {
     if (!ticker.trim()) return;
@@ -115,6 +119,34 @@ export default function App() {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const runScenarios = async () => {
+    if (!stockData) return;
+    
+    setScenarioLoading(true);
+    setScenarioResult(null);
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/scenarios`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projection_years: parseInt(projectionYears) || 10,
+          market_risk_premium: parseFloat(marketRiskPremium) / 100 || 0.06,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Scenario analysis failed');
+      }
+      const data: ScenarioAnalysisResult = await res.json();
+      setScenarioResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setScenarioLoading(false);
     }
   };
 
@@ -224,7 +256,7 @@ export default function App() {
                 </div>
 
                 {/* Historical Hints Card */}
-                <div>
+      <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-600 mb-2">Historical Hints</h3>
                   <p className="text-sm text-gray-400 mb-6">Based on past performance (for reference)</p>
                   <table className="w-full">
@@ -300,12 +332,12 @@ export default function App() {
                         placeholder={stockData.data.wacc !== null ? `WACC: ${(stockData.data.wacc * 100).toFixed(1)}` : 'e.g., 12'}
                         className="px-3 py-2.5 text-base font-mono bg-white border-2 border-emerald-200 rounded-md outline-none transition-colors focus:border-emerald-400"
                       />
-                    </div>
+      </div>
                     <p className="text-xs text-gray-400 max-w-xs">
                       Override the calculated WACC with your personal required return. 
                       Higher rate = lower intrinsic value = more conservative.
-                    </p>
-                  </div>
+        </p>
+      </div>
                 )}
               </div>
 
@@ -491,6 +523,133 @@ export default function App() {
                   <span><span className="inline-block w-3 h-3 bg-emerald-50 border border-emerald-200 rounded mr-1"></span> Undervalued (vs current price)</span>
                   <span><span className="inline-block w-3 h-3 bg-red-50 border border-red-200 rounded mr-1"></span> Overvalued</span>
                   <span><span className="inline-block w-3 h-3 ring-2 ring-emerald-500 rounded mr-1"></span> Current assumptions</span>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Scenario Analysis Section */}
+        {stockData && (
+          <section className="mt-16 pt-8 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Scenario Analysis</h2>
+                <p className="text-sm text-gray-400">Bear / Base / Bull cases based on historical performance</p>
+              </div>
+              <button
+                onClick={runScenarios}
+                disabled={scenarioLoading || hasValidationErrors}
+                className="px-6 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-lg transition-colors hover:bg-indigo-700 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {scenarioLoading ? 'Analyzing...' : 'Run Scenarios'}
+              </button>
+            </div>
+
+            {scenarioResult && (
+              <div className="space-y-8">
+                {/* Scenario Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {scenarioResult.scenarios.map((scenario) => {
+                    const isBear = scenario.name.toLowerCase() === 'bear';
+                    const isBull = scenario.name.toLowerCase() === 'bull';
+                    const isBase = scenario.name.toLowerCase() === 'base';
+                    
+                    let bgClass = 'bg-gray-50 border-gray-200';
+                    let iconClass = '📊';
+                    let textClass = 'text-gray-600';
+                    
+                    if (isBear) {
+                      bgClass = 'bg-red-50 border-red-200';
+                      iconClass = '🐻';
+                      textClass = 'text-red-600';
+                    } else if (isBull) {
+                      bgClass = 'bg-emerald-50 border-emerald-200';
+                      iconClass = '🐂';
+                      textClass = 'text-emerald-600';
+                    } else if (isBase) {
+                      bgClass = 'bg-blue-50 border-blue-200';
+                      iconClass = '📊';
+                      textClass = 'text-blue-600';
+                    }
+                    
+                    return (
+                      <div 
+                        key={scenario.name} 
+                        className={`p-6 rounded-xl border ${bgClass}`}
+                      >
+                        <div className="flex items-center gap-2 mb-4">
+                          <span className="text-2xl">{iconClass}</span>
+                          <h3 className={`text-lg font-semibold ${textClass}`}>{scenario.name} Case</h3>
+                          {scenario.probability > 0 && (
+                            <span className="ml-auto text-xs bg-white/50 px-2 py-1 rounded font-medium">
+                              {(scenario.probability * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="mb-4">
+                          <div className="text-3xl font-bold font-mono">
+                            ${scenario.intrinsic_value.toFixed(2)}
+                          </div>
+                          {scenario.upside_percent !== null && (
+                            <div className={`text-sm font-medium mt-1 ${
+                              scenario.upside_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
+                            }`}>
+                              {scenario.upside_percent >= 0 ? '↑' : '↓'} {Math.abs(scenario.upside_percent).toFixed(1)}% vs current
+                            </div>
+                          )}
+                        </div>
+                        
+                        <p className="text-sm text-gray-500 mb-4">{scenario.description}</p>
+                        
+                        <div className="text-xs text-gray-400 space-y-1">
+                          <div className="flex justify-between">
+                            <span>Revenue Growth</span>
+                            <span className="font-mono">{(scenario.assumptions.revenue_growth * 100).toFixed(1)}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Operating Margin</span>
+                            <span className="font-mono">{(scenario.assumptions.operating_margin * 100).toFixed(1)}%</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Terminal Growth</span>
+                            <span className="font-mono">{(scenario.assumptions.terminal_growth * 100).toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Summary */}
+                <div className="bg-gray-50 p-6 rounded-xl">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div>
+                      <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Current Price</div>
+                      <div className="text-xl font-bold font-mono">
+                        ${scenarioResult.current_price?.toFixed(2) || '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Probability-Weighted Value</div>
+                      <div className="text-xl font-bold font-mono text-indigo-600">
+                        ${scenarioResult.probability_weighted_value?.toFixed(2) || '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Downside Risk</div>
+                      <div className="text-xl font-bold font-mono text-red-600">
+                        {scenarioResult.upside_range.min_percent.toFixed(1)}%
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">Upside Potential</div>
+                      <div className="text-xl font-bold font-mono text-emerald-600">
+                        +{scenarioResult.upside_range.max_percent.toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

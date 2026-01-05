@@ -81,3 +81,48 @@ export interface ValuationResult {
   sensitivity: SensitivityMatrix;
 }
 
+// Scenario Analysis Types
+export interface ScenarioInput {
+  name: string;
+  revenue_growth: number;
+  operating_margin: number;
+  terminal_growth: number;
+  probability: number;
+  description: string;
+}
+
+export interface ScenarioRequest {
+  scenarios?: ScenarioInput[];
+  projection_years: number;
+  market_risk_premium: number;
+}
+
+export interface ScenarioResultItem {
+  name: string;
+  intrinsic_value: number;
+  upside_percent: number | null;
+  enterprise_value: number;
+  equity_value: number;
+  probability: number;
+  assumptions: {
+    revenue_growth: number;
+    operating_margin: number;
+    terminal_growth: number;
+    discount_rate: number;
+  };
+  description: string;
+}
+
+export interface ScenarioAnalysisResult {
+  symbol: string;
+  current_price: number | null;
+  wacc: number;
+  projection_years: number;
+  scenarios: ScenarioResultItem[];
+  probability_weighted_value: number | null;
+  upside_range: {
+    min_percent: number;
+    max_percent: number;
+  };
+}
+
