@@ -1,7 +1,9 @@
+import asyncio
 from dataclasses import dataclass
 from typing import List, Optional
 from statistics import median
-from .fmp_client import FMPClient
+import yfinance as yf
+from .fmp_client import FMPClient, FMPClientError
 
 
 @dataclass
@@ -44,12 +46,13 @@ class ComparableResult:
 class ComparableAnalyzer:
     """Analyzes a stock against its peer group using valuation multiples."""
     
-    def __init__(self, fmp_client: FMPClient):
+    def __init__(self, fmp_client: Optional[FMPClient] = None):
         self.client = fmp_client
     
-    async def analyze(self, symbol: str, max_peers: int = 10) -> ComparableResult:
+    async def analyze(self, symbol: str, max_peers: int = 5) -> ComparableResult:
         """
         Run comparable analysis for a stock.
+        Uses Yahoo Finance for metrics (more reliable rate limits).
         
         Args:
             symbol: Stock ticker
@@ -58,34 +61,25 @@ class ComparableAnalyzer:
         Returns:
             ComparableResult with peer comparison and implied valuations
         """
-        # Get target company data
-        profile = await self.client.get_profile(symbol)
-        metrics_ttm = await self.client.get_key_metrics_ttm(symbol)
-        ratios_ttm = await self.client.get_ratios_ttm(symbol)
+        loop = asyncio.get_event_loop()
         
-        target = self._build_company_metrics(symbol, profile, metrics_ttm, ratios_ttm)
+        # Get target company data from Yahoo
+        target, sector, industry, peer_symbols = await loop.run_in_executor(
+            None, self._get_company_data_yahoo, symbol
+        )
         
-        sector = profile.get("sector", "Unknown")
-        industry = profile.get("industry", "Unknown")
+        peer_symbols = peer_symbols[:max_peers]
         
-        # Get peer companies
-        peer_symbols = await self.client.get_stock_peers(symbol)
-        peer_symbols = peer_symbols[:max_peers]  # Limit peers
-        
-        # Fetch metrics for all peers
+        # Fetch metrics for all peers using Yahoo
         peers = []
         for peer_symbol in peer_symbols:
             try:
-                peer_profile = await self.client.get_profile(peer_symbol)
-                peer_metrics = await self.client.get_key_metrics_ttm(peer_symbol)
-                peer_ratios = await self.client.get_ratios_ttm(peer_symbol)
-                
-                peer = self._build_company_metrics(
-                    peer_symbol, peer_profile, peer_metrics, peer_ratios
+                peer = await loop.run_in_executor(
+                    None, self._get_metrics_yahoo, peer_symbol
                 )
-                peers.append(peer)
+                if peer:
+                    peers.append(peer)
             except Exception:
-                # Skip peers with missing data
                 continue
         
         # Calculate peer medians
@@ -116,6 +110,86 @@ class ComparableAnalyzer:
             average_upside=average_upside,
         )
     
+    # Fallback peer lists by sector
+    SECTOR_PEERS = {
+        "Technology": ["MSFT", "GOOGL", "META", "NVDA", "AAPL", "ORCL", "CRM", "ADBE", "INTC", "AMD"],
+        "Financial Services": ["JPM", "BAC", "WFC", "GS", "MS", "C", "BLK", "SCHW", "AXP", "V"],
+        "Healthcare": ["JNJ", "UNH", "PFE", "ABBV", "MRK", "LLY", "TMO", "ABT", "DHR", "BMY"],
+        "Consumer Cyclical": ["AMZN", "TSLA", "HD", "NKE", "MCD", "SBUX", "TGT", "LOW", "TJX", "BKNG"],
+        "Communication Services": ["GOOGL", "META", "NFLX", "DIS", "CMCSA", "VZ", "T", "TMUS", "CHTR", "EA"],
+        "Consumer Defensive": ["WMT", "PG", "KO", "PEP", "COST", "PM", "MO", "CL", "KHC", "GIS"],
+        "Energy": ["XOM", "CVX", "COP", "SLB", "EOG", "MPC", "PSX", "VLO", "OXY", "HAL"],
+        "Industrials": ["UPS", "HON", "UNP", "BA", "CAT", "GE", "RTX", "LMT", "DE", "MMM"],
+        "Basic Materials": ["LIN", "APD", "SHW", "ECL", "FCX", "NEM", "NUE", "DD", "DOW", "PPG"],
+        "Real Estate": ["AMT", "PLD", "CCI", "EQIX", "PSA", "O", "SPG", "WELL", "DLR", "AVB"],
+        "Utilities": ["NEE", "DUK", "SO", "D", "AEP", "SRE", "EXC", "XEL", "ED", "WEC"],
+    }
+    
+    def _get_company_data_yahoo(self, symbol: str) -> tuple:
+        """Get company data and peers from Yahoo Finance."""
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        
+        if not info or not info.get("regularMarketPrice"):
+            raise ValueError(f"No data available for {symbol}")
+        
+        target = CompanyMetrics(
+            symbol=symbol,
+            name=info.get("longName") or info.get("shortName") or symbol,
+            price=info.get("regularMarketPrice") or info.get("currentPrice"),
+            market_cap=info.get("marketCap"),
+            pe_ratio=info.get("trailingPE"),
+            ev_to_ebitda=info.get("enterpriseToEbitda"),
+            price_to_sales=info.get("priceToSalesTrailing12Months"),
+            price_to_book=info.get("priceToBook"),
+            ev_to_revenue=info.get("enterpriseToRevenue"),
+        )
+        
+        sector = info.get("sector", "Unknown")
+        industry = info.get("industry", "Unknown")
+        
+        # Get peer companies from FMP if available
+        peer_symbols = []
+        if self.client:
+            try:
+                import asyncio
+                loop = asyncio.new_event_loop()
+                peer_symbols = loop.run_until_complete(self.client.get_stock_peers(symbol))
+                loop.close()
+            except Exception:
+                pass
+        
+        # Fallback to sector-based peers if FMP fails or returns empty
+        if not peer_symbols:
+            sector_peers = self.SECTOR_PEERS.get(sector, [])
+            # Exclude the target symbol from peers
+            peer_symbols = [p for p in sector_peers if p != symbol.upper()]
+        
+        return target, sector, industry, peer_symbols
+    
+    def _get_metrics_yahoo(self, symbol: str) -> Optional[CompanyMetrics]:
+        """Get valuation metrics for a single stock from Yahoo."""
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            
+            if not info or not info.get("regularMarketPrice"):
+                return None
+            
+            return CompanyMetrics(
+                symbol=symbol,
+                name=info.get("longName") or info.get("shortName") or symbol,
+                price=info.get("regularMarketPrice") or info.get("currentPrice"),
+                market_cap=info.get("marketCap"),
+                pe_ratio=info.get("trailingPE"),
+                ev_to_ebitda=info.get("enterpriseToEbitda"),
+                price_to_sales=info.get("priceToSalesTrailing12Months"),
+                price_to_book=info.get("priceToBook"),
+                ev_to_revenue=info.get("enterpriseToRevenue"),
+            )
+        except Exception:
+            return None
+    
     def _build_company_metrics(
         self, 
         symbol: str, 
@@ -123,7 +197,7 @@ class ComparableAnalyzer:
         metrics: dict, 
         ratios: dict
     ) -> CompanyMetrics:
-        """Build CompanyMetrics from API responses."""
+        """Build CompanyMetrics from FMP API responses (legacy method)."""
         return CompanyMetrics(
             symbol=symbol,
             name=profile.get("companyName", symbol),
