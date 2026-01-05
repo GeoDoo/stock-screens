@@ -209,7 +209,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
-      <div className="max-w-6xl mx-auto px-6 py-16">
+      <div className="w-full max-w-[1600px] mx-auto px-8 lg:px-16 py-16">
         {/* Header */}
         <header className="mb-16">
           <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Stock Valuation</h1>
@@ -235,7 +235,7 @@ export default function App() {
                     setComparableResult(null);
                   }}
                   disabled={!provider.available}
-                  className={`px-6 py-3 rounded-lg border-2 transition-all ${
+                  className={`px-8 py-4 rounded-lg border-2 transition-all text-left min-w-[220px] ${
                     selectedProvider === provider.id
                       ? 'border-gray-900 bg-gray-900 text-white'
                       : provider.available
@@ -243,8 +243,8 @@ export default function App() {
                       : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
                   }`}
                 >
-                  <span className="font-semibold text-sm">{provider.name}</span>
-                  <span className="block text-xs mt-1 opacity-70">{provider.description}</span>
+                  <span className="font-semibold text-sm block">{provider.name}</span>
+                  <span className="text-xs mt-1 opacity-70 block">{provider.description}</span>
                 </button>
               ))}
             </div>
@@ -253,7 +253,7 @@ export default function App() {
 
         {/* Search */}
         <section className="mb-16">
-          <div className="flex gap-4 max-w-xl">
+          <div className="flex gap-4 max-w-2xl">
             <input
               type="text"
               placeholder={selectedProvider ? "Enter ticker (e.g., AAPL)" : "Select a provider first"}
@@ -261,12 +261,12 @@ export default function App() {
               onChange={(e) => setTicker(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === 'Enter' && fetchStock()}
               disabled={!selectedProvider}
-              className="flex-1 px-4 py-3 text-base font-mono font-medium bg-white border-2 border-gray-200 rounded-lg outline-none transition-colors focus:border-gray-400 placeholder:text-gray-400 placeholder:font-normal disabled:bg-gray-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-4 text-base font-mono font-medium bg-white border-2 border-gray-200 rounded-lg outline-none transition-colors focus:border-gray-400 placeholder:text-gray-400 placeholder:font-normal disabled:bg-gray-50 disabled:cursor-not-allowed"
             />
             <button
               onClick={fetchStock}
               disabled={loading || !ticker.trim() || !selectedProvider}
-              className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-10 py-4 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               {loading ? 'Loading...' : 'Analyze'}
             </button>
@@ -317,7 +317,7 @@ export default function App() {
                 </span>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
                 {/* Company Data Card */}
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Company Data</h3>
@@ -430,10 +430,14 @@ export default function App() {
                 )}
               </div>
 
+            </section>
+            
+            {/* Run Valuation Button - separate section for visual clarity */}
+            <section className="mb-16">
               <button
                 onClick={runValuation}
                 disabled={loading || !canRunValuation}
-                className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-10 py-4 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {loading ? 'Calculating...' : hasValidationErrors ? 'Fix Errors Above' : 'Run Valuation'}
               </button>
@@ -620,13 +624,14 @@ export default function App() {
 
         {/* Scenario Analysis Section */}
         {stockData && (
-          <section className="mt-16 pt-8 border-t border-gray-100">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Scenario Analysis</h2>
+          <section className="pt-12 border-t border-gray-100">
+            <div className="mb-8">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Scenario Analysis</h2>
+              <p className="text-sm text-gray-400 mb-6">Bear / Base / Bull case valuations with probability weighting</p>
               <button
                 onClick={runScenarios}
                 disabled={scenarioLoading || hasValidationErrors}
-                className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-10 py-4 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {scenarioLoading ? 'Analyzing...' : 'Run Scenarios'}
               </button>
@@ -696,13 +701,14 @@ export default function App() {
 
         {/* Comparable Analysis Section */}
         {stockData && (
-          <section className="mt-16 pt-8 border-t border-gray-100">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Comparable Analysis</h2>
+          <section className="pt-12 border-t border-gray-100">
+            <div className="mb-8">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Comparable Analysis</h2>
+              <p className="text-sm text-gray-400 mb-6">Relative valuation vs sector peers using P/E, EV/EBITDA, P/S, P/B</p>
               <button
                 onClick={runComparables}
                 disabled={comparableLoading}
-                className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="px-10 py-4 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {comparableLoading ? 'Loading...' : 'Run Comparables'}
               </button>
