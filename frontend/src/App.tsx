@@ -680,7 +680,7 @@ export default function App() {
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Financial Ratios</h2>
                 <p className="text-sm text-gray-400 mb-8">Comprehensive metrics for analysis</p>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                   {/* Valuation */}
                   <div>
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-4">Valuation</h3>
@@ -709,23 +709,6 @@ export default function App() {
                         <tr className="border-b border-gray-100">
                           <td className="py-2 text-sm text-gray-500">EV/Revenue<GlossaryRef id="ev-revenue" /></td>
                           <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.valuation.ev_to_revenue)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Dividend */}
-                  <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-green-600 mb-4">Dividend</h3>
-                    <table className="w-full">
-                      <tbody>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Dividend Yield<GlossaryRef id="dividend-yield" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.dividend.dividend_yield)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Payout Ratio<GlossaryRef id="payout-ratio" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.dividend.payout_ratio)}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -821,33 +804,40 @@ export default function App() {
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Dividend History<GlossaryRef id="dividend-yield" /></h2>
                 <p className="text-sm text-gray-400 mb-8">Track record of dividend payments</p>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                   {/* Key Metrics */}
-                  <div className="bg-green-50 rounded-lg p-6">
-                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Current Annual Dividend</p>
+                  <div className="bg-green-50 rounded-lg p-5">
+                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Annual Dividend</p>
                     <p className="text-2xl font-semibold text-green-700">
                       {dividendResult.current_annual_dividend ? `$${dividendResult.current_annual_dividend.toFixed(2)}` : '—'}
                     </p>
                   </div>
                   
-                  <div className="bg-green-50 rounded-lg p-6">
-                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Current Yield</p>
+                  <div className="bg-green-50 rounded-lg p-5">
+                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Yield<GlossaryRef id="dividend-yield" /></p>
                     <p className="text-2xl font-semibold text-green-700">
                       {formatPercent(dividendResult.current_yield)}
                     </p>
                   </div>
                   
-                  <div className="bg-green-50 rounded-lg p-6">
-                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Dividend Growth (CAGR)<GlossaryRef id="cagr" /></p>
+                  <div className="bg-green-50 rounded-lg p-5">
+                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Payout Ratio<GlossaryRef id="payout-ratio" /></p>
+                    <p className="text-2xl font-semibold text-green-700">
+                      {formatPercent(dividendResult.payout_ratio)}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-green-50 rounded-lg p-5">
+                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Growth (CAGR)<GlossaryRef id="cagr" /></p>
                     <p className="text-2xl font-semibold text-green-700">
                       {formatPercent(dividendResult.dividend_cagr)}
                     </p>
                   </div>
                   
-                  <div className="bg-green-50 rounded-lg p-6">
+                  <div className="bg-green-50 rounded-lg p-5">
                     <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Consecutive Years</p>
                     <p className="text-2xl font-semibold text-green-700">
-                      {dividendResult.consecutive_years} years
+                      {dividendResult.consecutive_years} yrs
                     </p>
                   </div>
                 </div>

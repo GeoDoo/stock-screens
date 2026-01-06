@@ -22,6 +22,7 @@ class DividendHistory:
     has_dividends: bool
     current_annual_dividend: Optional[float] = None
     current_yield: Optional[float] = None
+    payout_ratio: Optional[float] = None  # Dividends / Net Income
     dividend_cagr: Optional[float] = None
     consecutive_years: int = 0
     annual_dividends: Dict[int, float] = field(default_factory=dict)
@@ -46,6 +47,7 @@ class DividendAnalyzer:
         payments: List[DividendPayment],
         current_price: Optional[float],
         shares_outstanding: Optional[float],
+        net_income: Optional[float] = None,
     ) -> DividendHistory:
         """
         Analyze dividend history.
@@ -54,6 +56,7 @@ class DividendAnalyzer:
             payments: List of historical dividend payments
             current_price: Current stock price (for yield calculation)
             shares_outstanding: Number of shares (for per-share calculations)
+            net_income: Annual net income (for payout ratio calculation)
             
         Returns:
             DividendHistory with all calculated metrics
@@ -81,6 +84,13 @@ class DividendAnalyzer:
         if current_price and current_price > 0 and current_annual:
             current_yield = current_annual / current_price
         
+        # Calculate payout ratio (total dividends / net income)
+        payout_ratio = None
+        if net_income and net_income > 0 and current_annual and shares_outstanding:
+            # current_annual is per-share, multiply by shares to get total
+            total_dividends = current_annual * shares_outstanding
+            payout_ratio = total_dividends / net_income
+        
         # Calculate CAGR
         dividend_cagr = self._calculate_cagr(annual_dividends)
         
@@ -91,6 +101,7 @@ class DividendAnalyzer:
             has_dividends=True,
             current_annual_dividend=current_annual,
             current_yield=current_yield,
+            payout_ratio=payout_ratio,
             dividend_cagr=dividend_cagr,
             consecutive_years=consecutive_years,
             annual_dividends=annual_dividends,
