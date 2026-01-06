@@ -17,10 +17,9 @@ from app.services.base_provider import (
     PriceBar,
 )
 
-logger = logging.getLogger(__name__)
+from app.constants import DEFAULT_TREASURY_RATE
 
-# Default risk-free rate when treasury API fails (4.5%)
-DEFAULT_TREASURY_RATE = 0.045
+logger = logging.getLogger(__name__)
 
 
 class FMPProvider(StockDataProvider):
