@@ -167,3 +167,4 @@ class TestScenarioCalculator:
         assert "revenue" in result.projections[0]
         assert "fcf" in result.projections[0]
 
+

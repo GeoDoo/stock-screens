@@ -231,3 +231,4 @@ class TestEdgeCases:
         assert result.avg_pe_5yr is None
         assert len(result.yearly_metrics) == 0
 
+

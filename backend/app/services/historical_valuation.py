@@ -227,3 +227,4 @@ class HistoricalValuationAnalyzer:
             return "expensive"
         return "fair"
 
+

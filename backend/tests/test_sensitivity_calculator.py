@@ -164,3 +164,4 @@ class TestSensitivityCalculator:
         # More cash should result in higher equity value
         assert value_high_cash > value_high_debt
 
+
