@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { DiscountRateModal } from './components/DiscountRateModal';
 import { formatCurrency, formatPercent, formatNumber, formatShareCount } from './utils';
@@ -13,6 +13,7 @@ export default function App() {
   const [selectedFundamentalProvider, setSelectedFundamentalProvider] = useState<string>('');
   const [selectedTechnicalProvider, setSelectedTechnicalProvider] = useState<string>('');
   const [providersLoading, setProvidersLoading] = useState(true);
+  const [rateLimitStats, setRateLimitStats] = useState<RateLimitStats | null>(null);
   
   const [ticker, setTicker] = useState('');
   const [stockData, setStockData] = useState<StockDataResponse | null>(null);
@@ -153,10 +154,28 @@ export default function App() {
         setPendingAnalysis(data);
         setShowDiscountModal(true);
       }
+      // Fetch rate limit stats after analysis
+      fetchRateLimits();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch rate limit statistics
+  const fetchRateLimits = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/rate-limits`);
+      if (res.ok) {
+        const data = await res.json();
+        // Get stats for the currently selected provider
+        if (selectedFundamentalProvider && data[selectedFundamentalProvider]) {
+          setRateLimitStats(data[selectedFundamentalProvider]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch rate limits:', err);
     }
   };
 
@@ -481,6 +500,17 @@ export default function App() {
                 <p className="text-xs text-gray-400 mt-2">
                   {fundamentalProviders.find(p => p.id === selectedFundamentalProvider)?.description}
                 </p>
+                {/* Rate Limit Display */}
+                {rateLimitStats && (
+                  <div className={`mt-2 text-xs ${
+                    rateLimitStats.percentage >= 80 
+                      ? 'text-amber-600' 
+                      : 'text-gray-400'
+                  }`}>
+                    {rateLimitStats.percentage >= 80 ? '⚠️ ' : ''}
+                    {rateLimitStats.remaining} API calls remaining ({rateLimitStats.percentage.toFixed(0)}% used)
+                  </div>
+                )}
               </div>
 
               {/* Technical Analysis Provider */}
