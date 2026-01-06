@@ -534,3 +534,143 @@ describe('App - Rate Limit Handling', () => {
   })
 })
 
+// CRITICAL: Tests with INCOMPLETE data - real APIs return missing fields!
+describe('App - Handles Incomplete API Data (Regression)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset()
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  // Mock data with MISSING fields - like real APIs return
+  const mockIncompleteHistorical = {
+    symbol: 'TEST',
+    // current is MISSING - this caused the crash!
+    average_5yr: { pe: 28 },
+    premium_discount: {},
+    assessment: {},
+  }
+
+  const mockIncompleteRatios = {
+    valuation: { pe_ratio: null, earnings_yield: undefined },  // Some fields missing
+    // Other sections might be missing entirely
+  }
+
+  const mockIncompleteDividends = {
+    symbol: 'TEST',
+    has_dividends: false,  // No dividend data
+    // Rest is missing
+  }
+
+  const mockBatchWithIncompleteData = {
+    stock: {
+      symbol: 'TEST',
+      company_name: 'Test Company',
+      industry: null,  // Missing
+      sector: null,    // Missing
+      data_provider: 'yahoo',
+      data: {
+        market_cap: null,  // Missing
+        beta: null,        // Missing
+        shares_outstanding: 1000000,
+        total_debt: null,
+        cash: null,
+        tax_rate: null,
+        cost_of_debt: null,
+        wacc: null,        // Missing - triggers modal
+      },
+      hints: {
+        revenue_growth: null,
+        operating_margin: null,
+      },
+      validation: {
+        is_valid: false,
+        has_errors: true,
+        has_warnings: false,
+        issues: [],
+      },
+    },
+    ratios: mockIncompleteRatios,
+    dividends: mockIncompleteDividends,
+    historical_valuation: mockIncompleteHistorical,
+    rate_limit: { provider: 'yahoo', used: 1, limit: 2000, remaining: 1999, percentage: 0.05, reset_schedule: 'daily', api_limited: false, reset_in_seconds: null },
+  }
+
+  it('renders without crashing when historical_valuation.current is missing', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      if (url.includes('/analyze')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchWithIncompleteData) })
+      }
+      if (url.includes('/comparables')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...mockComparables, peers: [], implied_valuations: [] }) })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+
+    // This should NOT crash
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+
+    const input = screen.getByPlaceholderText('AAPL')
+    fireEvent.change(input, { target: { value: 'TEST' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze/i }))
+    
+    // Should show modal (WACC is null) or company name - but NOT crash
+    await waitFor(() => {
+      // Either modal appears (WACC missing) or stock data loads
+      const modalOrCompany = screen.queryByText(/Discount Rate Required/i) || screen.queryByText(/Test Company/i)
+      expect(modalOrCompany).toBeInTheDocument()
+    }, { timeout: 3000 })
+  })
+
+  it('handles completely empty historical_valuation gracefully', async () => {
+    const mockWithNullHistorical = {
+      ...mockBatchWithIncompleteData,
+      historical_valuation: null,  // Completely missing
+    }
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      if (url.includes('/analyze')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockWithNullHistorical) })
+      }
+      if (url.includes('/comparables')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...mockComparables, peers: [], implied_valuations: [] }) })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+
+    const input = screen.getByPlaceholderText('AAPL')
+    fireEvent.change(input, { target: { value: 'TEST' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze/i }))
+    
+    // Should NOT crash - modal or data should appear
+    await waitFor(() => {
+      const modalOrCompany = screen.queryByText(/Discount Rate Required/i) || screen.queryByText(/Test Company/i)
+      expect(modalOrCompany).toBeInTheDocument()
+    }, { timeout: 3000 })
+  })
+})
+
