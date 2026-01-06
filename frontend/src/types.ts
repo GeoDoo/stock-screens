@@ -268,3 +268,61 @@ export interface FinancialRatiosResult {
   };
 }
 
+// Dividend History Types
+export interface DividendPayment {
+  date: string;
+  amount: number;
+}
+
+export interface DividendHistoryResult {
+  symbol: string;
+  has_dividends: boolean;
+  current_annual_dividend: number | null;
+  current_yield: number | null;
+  dividend_cagr: number | null;
+  consecutive_years: number;
+  annual_dividends: Record<string, number>;
+  payments: DividendPayment[];
+}
+
+// Historical Valuation Types
+export interface YearlyMetrics {
+  year: number;
+  revenue: number | null;
+  net_income: number | null;
+  ebitda: number | null;
+  pe: number | null;
+  ps: number | null;
+  pb: number | null;
+  ev_ebitda: number | null;
+}
+
+export interface HistoricalValuationResult {
+  symbol: string;
+  current: {
+    pe: number | null;
+    ps: number | null;
+    pb: number | null;
+    ev_ebitda: number | null;
+  };
+  average_5yr: {
+    pe: number | null;
+    ps: number | null;
+    pb: number | null;
+    ev_ebitda: number | null;
+  };
+  premium_discount: {
+    pe: number | null;
+    ps: number | null;
+    pb: number | null;
+    ev_ebitda: number | null;
+  };
+  assessment: {
+    pe: 'cheap' | 'fair' | 'expensive';
+    ps: 'cheap' | 'fair' | 'expensive';
+    pb: 'cheap' | 'fair' | 'expensive';
+    ev_ebitda: 'cheap' | 'fair' | 'expensive';
+  };
+  yearly_metrics: YearlyMetrics[];
+}
+

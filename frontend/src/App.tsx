@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { formatCurrency, formatPercent, formatNumber, formatShareCount } from './utils';
 
@@ -80,6 +80,14 @@ export default function App() {
   const [ratiosResult, setRatiosResult] = useState<FinancialRatiosResult | null>(null);
   const [ratiosLoading, setRatiosLoading] = useState(false);
   
+  // Dividend History
+  const [dividendResult, setDividendResult] = useState<DividendHistoryResult | null>(null);
+  const [dividendLoading, setDividendLoading] = useState(false);
+  
+  // Historical Valuation
+  const [historicalValuation, setHistoricalValuation] = useState<HistoricalValuationResult | null>(null);
+  const [historicalLoading, setHistoricalLoading] = useState(false);
+  
   // Tab navigation
   const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
 
@@ -93,6 +101,8 @@ export default function App() {
     setScenarioResult(null);
     setComparableResult(null);
     setRatiosResult(null);
+    setDividendResult(null);
+    setHistoricalValuation(null);
     
     try {
       const res = await fetch(`${API_BASE}/api/stock/${ticker.toUpperCase()}?provider=${selectedFundamentalProvider}`);
@@ -111,8 +121,11 @@ export default function App() {
         setOperatingMargin((data.hints.operating_margin * 100).toFixed(2));
       }
       
-      // Auto-fetch financial ratios
-      fetchRatios(ticker.toUpperCase());
+      // Auto-fetch additional data
+      const symbol = ticker.toUpperCase();
+      fetchRatios(symbol);
+      fetchDividends(symbol);
+      fetchHistoricalValuation(symbol);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -134,6 +147,39 @@ export default function App() {
       console.error('Failed to fetch ratios:', err);
     } finally {
       setRatiosLoading(false);
+    }
+  };
+  
+  const fetchDividends = async (symbol: string) => {
+    setDividendLoading(true);
+    try {
+      // Use Yahoo for dividend data (best coverage)
+      const res = await fetch(`${API_BASE}/api/stock/${symbol}/dividends?provider=yahoo`);
+      if (res.ok) {
+        const data: DividendHistoryResult = await res.json();
+        setDividendResult(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch dividends:', err);
+    } finally {
+      setDividendLoading(false);
+    }
+  };
+  
+  const fetchHistoricalValuation = async (symbol: string) => {
+    if (!selectedFundamentalProvider) return;
+    
+    setHistoricalLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/stock/${symbol}/historical-valuation?provider=${selectedFundamentalProvider}`);
+      if (res.ok) {
+        const data: HistoricalValuationResult = await res.json();
+        setHistoricalValuation(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch historical valuation:', err);
+    } finally {
+      setHistoricalLoading(false);
     }
   };
 
@@ -282,7 +328,7 @@ export default function App() {
       <div className="w-full max-w-[1600px] mx-auto px-8 lg:px-16 py-16">
         {/* Header */}
         <header className="mb-12 flex items-start justify-between">
-          <div>
+      <div>
             <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Stock Analysis</h1>
             <p className="text-sm text-gray-400 mt-2">Fundamental & Technical Analysis</p>
           </div>
@@ -331,7 +377,7 @@ export default function App() {
                       {provider.recommended && <span className="ml-1 text-xs">★</span>}
                     </button>
                   ))}
-                </div>
+      </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {fundamentalProviders.find(p => p.id === selectedFundamentalProvider)?.description}
                 </p>
@@ -362,13 +408,13 @@ export default function App() {
                     >
                       <span className="font-semibold text-sm">{provider.name}</span>
                       {provider.recommended && <span className="ml-1 text-xs">★</span>}
-                    </button>
+        </button>
                   ))}
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {technicalProviders.find(p => p.id === selectedTechnicalProvider)?.description}
-                </p>
-              </div>
+        </p>
+      </div>
             </div>
           )}
 
@@ -689,6 +735,123 @@ export default function App() {
             {ratiosLoading && (
               <section className="mb-16 pt-8 border-t border-gray-100">
                 <p className="text-sm text-gray-400">Loading financial ratios...</p>
+              </section>
+            )}
+
+            {/* Dividend History */}
+            {dividendResult && dividendResult.has_dividends && (
+              <section className="mb-16 pt-8 border-t border-gray-100">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Dividend History<GlossaryRef id="dividend-yield" /></h2>
+                <p className="text-sm text-gray-400 mb-8">Track record of dividend payments</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                  {/* Key Metrics */}
+                  <div className="bg-green-50 rounded-lg p-6">
+                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Current Annual Dividend</p>
+                    <p className="text-2xl font-semibold text-green-700">
+                      {dividendResult.current_annual_dividend ? `$${dividendResult.current_annual_dividend.toFixed(2)}` : '—'}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-green-50 rounded-lg p-6">
+                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Current Yield</p>
+                    <p className="text-2xl font-semibold text-green-700">
+                      {formatPercent(dividendResult.current_yield)}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-green-50 rounded-lg p-6">
+                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Dividend Growth (CAGR)<GlossaryRef id="cagr" /></p>
+                    <p className="text-2xl font-semibold text-green-700">
+                      {formatPercent(dividendResult.dividend_cagr)}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-green-50 rounded-lg p-6">
+                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Consecutive Years</p>
+                    <p className="text-2xl font-semibold text-green-700">
+                      {dividendResult.consecutive_years} years
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Annual Dividend History */}
+                {Object.keys(dividendResult.annual_dividends).length > 0 && (
+                  <div className="mt-8">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Annual Dividends</h3>
+                    <div className="flex gap-4 overflow-x-auto pb-2">
+                      {Object.entries(dividendResult.annual_dividends)
+                        .sort(([a], [b]) => Number(b) - Number(a))
+                        .slice(0, 10)
+                        .map(([year, amount]) => (
+                          <div key={year} className="flex-shrink-0 text-center">
+                            <p className="text-xs text-gray-400">{year}</p>
+                            <p className="text-sm font-mono font-medium">${amount.toFixed(2)}</p>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+            
+            {dividendResult && !dividendResult.has_dividends && (
+              <section className="mb-16 pt-8 border-t border-gray-100">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Dividend History</h2>
+                <p className="text-sm text-gray-500">This company does not pay dividends.</p>
+              </section>
+            )}
+            
+            {dividendLoading && (
+              <section className="mb-16 pt-8 border-t border-gray-100">
+                <p className="text-sm text-gray-400">Loading dividend history...</p>
+              </section>
+            )}
+
+            {/* Historical Valuation Context */}
+            {historicalValuation && historicalValuation.average_5yr.pe && (
+              <section className="mb-16 pt-8 border-t border-gray-100">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Historical Valuation Context</h2>
+                <p className="text-sm text-gray-400 mb-8">Current multiples vs. 5-year averages</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {[
+                    { label: 'P/E Ratio', current: historicalValuation.current.pe, avg: historicalValuation.average_5yr.pe, premium: historicalValuation.premium_discount.pe, assessment: historicalValuation.assessment.pe },
+                    { label: 'P/S Ratio', current: historicalValuation.current.ps, avg: historicalValuation.average_5yr.ps, premium: historicalValuation.premium_discount.ps, assessment: historicalValuation.assessment.ps },
+                    { label: 'P/B Ratio', current: historicalValuation.current.pb, avg: historicalValuation.average_5yr.pb, premium: historicalValuation.premium_discount.pb, assessment: historicalValuation.assessment.pb },
+                    { label: 'EV/EBITDA', current: historicalValuation.current.ev_ebitda, avg: historicalValuation.average_5yr.ev_ebitda, premium: historicalValuation.premium_discount.ev_ebitda, assessment: historicalValuation.assessment.ev_ebitda },
+                  ].map(({ label, current, avg, premium, assessment }) => (
+                    <div key={label} className="border border-gray-200 rounded-lg p-4">
+                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">{label}</p>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-500">Current</span>
+                          <span className="text-sm font-mono font-medium">{formatNumber(current)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-500">5yr Avg</span>
+                          <span className="text-sm font-mono font-medium">{formatNumber(avg)}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                          <span className="text-sm text-gray-500">vs. Avg</span>
+                          <span className={`text-sm font-medium px-2 py-0.5 rounded ${
+                            assessment === 'cheap' ? 'bg-green-100 text-green-700' :
+                            assessment === 'expensive' ? 'bg-red-100 text-red-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {premium !== null ? `${premium > 0 ? '+' : ''}${(premium * 100).toFixed(0)}%` : '—'} ({assessment})
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+            
+            {historicalLoading && (
+              <section className="mb-16 pt-8 border-t border-gray-100">
+                <p className="text-sm text-gray-400">Loading historical valuation...</p>
               </section>
             )}
 
