@@ -1024,10 +1024,13 @@ async def batch_analyze(symbol: str, provider: str):
     analyzer = DividendAnalyzer()
     payments = []
     for fin in financials:
-        if fin.dividends_paid is not None and fin.dividends_paid != 0:
+        if fin.dividends_paid is not None and fin.dividends_paid != 0 and shares and shares > 0:
+            # IMPORTANT: dividends_paid is TOTAL company dividends, not per-share
+            # Convert to per-share by dividing by shares outstanding
+            per_share_dividend = abs(fin.dividends_paid) / shares
             payments.append(DividendPayment(
                 date=fin.date,
-                amount=abs(fin.dividends_paid),
+                amount=per_share_dividend,
             ))
     
     net_income = financials[0].net_income if financials else None
