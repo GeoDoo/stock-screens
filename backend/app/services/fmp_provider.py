@@ -1,3 +1,4 @@
+import logging
 import httpx
 from typing import Any, List
 
@@ -15,6 +16,11 @@ from app.services.base_provider import (
     HistoricalPrices,
     PriceBar,
 )
+
+logger = logging.getLogger(__name__)
+
+# Default risk-free rate when treasury API fails (4.5%)
+DEFAULT_TREASURY_RATE = 0.045
 
 
 class FMPProvider(StockDataProvider):
@@ -163,9 +169,9 @@ class FMPProvider(StockDataProvider):
             if result and len(result) > 0:
                 rate = result[0].get("year10", 4.5)
                 return rate / 100
-        except Exception:
-            pass
-        return 0.045  # Default fallback
+        except Exception as e:
+            logger.warning(f"Failed to fetch treasury rate from FMP: {e}")
+        return DEFAULT_TREASURY_RATE
     
     @property
     def supports_fundamentals(self) -> bool:

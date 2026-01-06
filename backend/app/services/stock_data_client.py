@@ -14,6 +14,9 @@ from app.services.yahoo_provider import YahooProvider
 
 logger = logging.getLogger(__name__)
 
+# Default risk-free rate when all providers fail (4.5%)
+DEFAULT_TREASURY_RATE = 0.045
+
 
 class StockDataClient:
     """
@@ -129,10 +132,12 @@ class StockDataClient:
         for provider in self.providers:
             try:
                 return await provider.get_treasury_rate()
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Treasury rate from {provider.name} failed: {e}")
                 continue
         
-        return 0.045  # Default fallback
+        logger.warning("All providers failed to fetch treasury rate, using default")
+        return DEFAULT_TREASURY_RATE
     
     @property
     def provider_names(self) -> List[str]:

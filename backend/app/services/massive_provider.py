@@ -6,6 +6,9 @@ Does NOT support fundamental analysis.
 import httpx
 from datetime import datetime, timedelta
 
+# Default risk-free rate (4.5%) - Massive doesn't provide treasury data
+DEFAULT_TREASURY_RATE = 0.045
+
 from app.services.base_provider import (
     StockDataProvider,
     StockData,
@@ -74,7 +77,7 @@ class MassiveProvider(StockDataProvider):
     
     async def get_treasury_rate(self) -> float:
         """Massive doesn't have treasury data, return default."""
-        return 0.045
+        return DEFAULT_TREASURY_RATE
     
     async def get_historical_prices(self, symbol: str, days: int = 365) -> HistoricalPrices:
         """Fetch historical OHLCV data from Massive (Polygon)."""
