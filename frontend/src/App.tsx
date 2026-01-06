@@ -58,6 +58,37 @@ export default function App() {
     }
   };
 
+  // Auto-switch to available provider when current one hits rate limit
+  useEffect(() => {
+    const checkLimit = (id: string) => {
+      const stats = rateLimits[id?.toLowerCase()];
+      return stats ? (stats.api_limited || stats.remaining === 0) : false;
+    };
+    
+    if (selectedFundamentalProvider && checkLimit(selectedFundamentalProvider) && fundamentalProviders.length > 0) {
+      // Current provider is limited - find an available one
+      const available = fundamentalProviders.find(p => p.available && !checkLimit(p.id));
+      if (available) {
+        setSelectedFundamentalProvider(available.id);
+      }
+    }
+  }, [rateLimits, selectedFundamentalProvider, fundamentalProviders]);
+
+  useEffect(() => {
+    const checkLimit = (id: string) => {
+      const stats = rateLimits[id?.toLowerCase()];
+      return stats ? (stats.api_limited || stats.remaining === 0) : false;
+    };
+    
+    if (selectedTechnicalProvider && checkLimit(selectedTechnicalProvider) && technicalProviders.length > 0) {
+      // Current provider is limited - find an available one
+      const available = technicalProviders.find(p => p.available && !checkLimit(p.id));
+      if (available) {
+        setSelectedTechnicalProvider(available.id);
+      }
+    }
+  }, [rateLimits, selectedTechnicalProvider, technicalProviders]);
+
   // Fetch available providers and rate limits on mount
   useEffect(() => {
     const fetchProviders = async () => {
@@ -70,7 +101,7 @@ export default function App() {
         // Also fetch accurate rate limits
         await fetchRateLimits();
         
-        // Auto-select recommended or first available providers
+        // Auto-select recommended or first available providers (that aren't rate limited)
         const fundRecommended = data.fundamental.find((p: Provider) => p.recommended && p.available);
         const fundAvailable = data.fundamental.find((p: Provider) => p.available);
         if (fundRecommended) {
