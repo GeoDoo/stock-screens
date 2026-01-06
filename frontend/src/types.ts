@@ -35,6 +35,7 @@ export interface HistoricalHints {
 export interface ValidationIssue {
   field: string;
   message: string;
+  impacts: 'wacc' | 'dcf' | 'per_share';
 }
 
 export interface ValidationResult {

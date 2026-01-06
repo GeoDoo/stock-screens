@@ -15,6 +15,7 @@ class ValidationIssue:
     field: str
     message: str
     severity: Severity
+    impacts: str = "dcf"  # What this affects: "wacc", "dcf", "per_share"
 
 
 @dataclass
@@ -48,11 +49,11 @@ class ValidationResult:
             "has_errors": self.has_errors,
             "has_warnings": self.has_warnings,
             "errors": [
-                {"field": i.field, "message": i.message}
+                {"field": i.field, "message": i.message, "impacts": i.impacts}
                 for i in self.errors
             ],
             "warnings": [
-                {"field": i.field, "message": i.message}
+                {"field": i.field, "message": i.message, "impacts": i.impacts}
                 for i in self.warnings
             ],
         }
@@ -113,92 +114,105 @@ class DataValidator:
         if self.market_cap is None or self.market_cap <= 0:
             result.issues.append(ValidationIssue(
                 field="market_cap",
-                message="Market cap is missing or invalid. Cannot calculate WACC.",
+                message="Market cap is missing. Required to calculate equity weight in WACC. Use custom discount rate to bypass.",
                 severity=Severity.ERROR,
+                impacts="wacc",
             ))
         
         if self.beta is None:
             result.issues.append(ValidationIssue(
                 field="beta",
-                message="Beta is missing. Cannot calculate cost of equity.",
+                message="Beta is missing. Required to calculate cost of equity (CAPM). Use custom discount rate to bypass.",
                 severity=Severity.ERROR,
+                impacts="wacc",
             ))
         
         if self.shares_outstanding is None or self.shares_outstanding <= 0:
             result.issues.append(ValidationIssue(
                 field="shares_outstanding",
-                message="Shares outstanding is missing. Cannot calculate per-share value.",
+                message="Shares outstanding is missing. Required to calculate intrinsic value per share.",
                 severity=Severity.ERROR,
+                impacts="per_share",
             ))
         
         if not self.revenue_history or len(self.revenue_history) < 2:
             result.issues.append(ValidationIssue(
                 field="revenue_history",
-                message="Insufficient revenue history. Need at least 2 years for growth calculation.",
+                message="Insufficient revenue history (need 2+ years). Required to project future cash flows.",
                 severity=Severity.ERROR,
+                impacts="dcf",
             ))
         
         if not self.ebit_history:
             result.issues.append(ValidationIssue(
                 field="ebit_history",
-                message="No EBIT/operating income data. Cannot calculate operating margin.",
+                message="No operating income (EBIT) data. Required to calculate operating margin for projections.",
                 severity=Severity.ERROR,
+                impacts="dcf",
             ))
         
         # Warnings - can proceed but may affect accuracy
         if self.total_debt is None:
             result.issues.append(ValidationIssue(
                 field="total_debt",
-                message="Total debt is missing. Assuming all-equity company.",
+                message="Total debt is missing. WACC will assume 100% equity financing (no debt weight).",
                 severity=Severity.WARNING,
+                impacts="wacc",
             ))
         
         if self.cash is None:
             result.issues.append(ValidationIssue(
                 field="cash",
-                message="Cash position is missing. Net debt calculation may be off.",
+                message="Cash position is missing. Net debt adjustment may undervalue equity.",
                 severity=Severity.WARNING,
+                impacts="dcf",
             ))
         
         if self.tax_rate is None:
             result.issues.append(ValidationIssue(
                 field="tax_rate",
-                message="Tax rate unavailable. Using default 25%.",
+                message="Tax rate unavailable. Using default 25% for NOPAT calculation.",
                 severity=Severity.WARNING,
+                impacts="dcf",
             ))
         
         if self.cost_of_debt is None:
             result.issues.append(ValidationIssue(
                 field="cost_of_debt",
-                message="Cost of debt unavailable. Using default 5%.",
+                message="Cost of debt unavailable. WACC will use default 5% interest rate.",
                 severity=Severity.WARNING,
+                impacts="wacc",
             ))
         elif self.cost_of_debt == 0 and self.total_debt and self.total_debt > 0:
             result.issues.append(ValidationIssue(
                 field="cost_of_debt",
                 message="Cost of debt is 0% but company has debt. Interest expense may be unreported.",
                 severity=Severity.WARNING,
+                impacts="wacc",
             ))
         
         if not self.da_history:
             result.issues.append(ValidationIssue(
                 field="da_history",
-                message="No D&A data. FCF projection will estimate from revenue.",
+                message="No D&A data. FCF projections will estimate depreciation from revenue ratio.",
                 severity=Severity.WARNING,
+                impacts="dcf",
             ))
         
         if not self.capex_history:
             result.issues.append(ValidationIssue(
                 field="capex_history",
-                message="No CapEx data. FCF projection will estimate from revenue.",
+                message="No CapEx data. FCF projections will estimate capital expenditure from revenue ratio.",
                 severity=Severity.WARNING,
+                impacts="dcf",
             ))
         
         if not self.working_capital_history:
             result.issues.append(ValidationIssue(
                 field="working_capital_history",
-                message="No working capital data. FCF projection will estimate from revenue.",
+                message="No working capital data. FCF projections will estimate WC changes from revenue ratio.",
                 severity=Severity.WARNING,
+                impacts="dcf",
             ))
         
         return result
