@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse } from './types';
+import { GlossaryRef } from './components/GlossaryRef';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -284,9 +285,17 @@ export default function App() {
     <div className="min-h-screen bg-white text-gray-900">
       <div className="w-full max-w-[1600px] mx-auto px-8 lg:px-16 py-16">
         {/* Header */}
-        <header className="mb-12">
-          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Stock Analysis</h1>
-          <p className="text-sm text-gray-400 mt-2">Fundamental & Technical Analysis</p>
+        <header className="mb-12 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Stock Analysis</h1>
+            <p className="text-sm text-gray-400 mt-2">Fundamental & Technical Analysis</p>
+          </div>
+          <a 
+            href="/glossary" 
+            className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-300 transition-colors"
+          >
+            📖 Glossary
+          </a>
         </header>
 
         {/* Provider Selection + Ticker in one cohesive block */}
@@ -482,22 +491,42 @@ export default function App() {
                   <p className="text-sm text-gray-400 mb-6">From financial statements (read-only)</p>
                   <table className="w-full">
                     <tbody>
-                      {[
-                        ['Market Cap', formatCurrency(stockData.data.market_cap)],
-                        ['Beta', formatNumber(stockData.data.beta)],
-                        ['Total Debt', formatCurrency(stockData.data.total_debt)],
-                        ['Cash', formatCurrency(stockData.data.cash)],
-                        ['Tax Rate', formatPercent(stockData.data.tax_rate)],
-                        ['Cost of Debt', formatPercent(stockData.data.cost_of_debt)],
-                        ['Shares Outstanding', formatShareCount(stockData.data.shares_outstanding)],
-                        ['Risk-Free Rate', formatPercent(stockData.data.risk_free_rate)],
-                        ['WACC (calculated)', formatPercent(stockData.data.wacc)],
-                      ].map(([label, value]) => (
-                        <tr key={label} className="border-b border-gray-100">
-                          <td className="py-3 text-sm text-gray-500">{label}</td>
-                          <td className="py-3 text-sm font-mono font-medium text-right">{value}</td>
-                        </tr>
-                      ))}
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">Market Cap<GlossaryRef id="market-cap" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(stockData.data.market_cap)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">Beta<GlossaryRef id="beta" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatNumber(stockData.data.beta)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">Total Debt</td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(stockData.data.total_debt)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">Cash</td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(stockData.data.cash)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">Tax Rate<GlossaryRef id="tax-rate" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.data.tax_rate)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">Cost of Debt<GlossaryRef id="cost-of-debt" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.data.cost_of_debt)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">Shares Outstanding<GlossaryRef id="shares-outstanding" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatShareCount(stockData.data.shares_outstanding)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">Risk-Free Rate<GlossaryRef id="risk-free-rate" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.data.risk_free_rate)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">WACC (calculated)<GlossaryRef id="wacc" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.data.wacc)}</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -533,13 +562,13 @@ export default function App() {
               
               <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-8">
                 {[
-                  { label: 'Revenue Growth (%)', value: revenueGrowth, setter: setRevenueGrowth, hint: stockData.hints.revenue_growth !== null ? `Historical: ${(stockData.hints.revenue_growth * 100).toFixed(2)}%` : null },
-                  { label: 'Operating Margin (%)', value: operatingMargin, setter: setOperatingMargin, hint: stockData.hints.operating_margin !== null ? `Historical: ${(stockData.hints.operating_margin * 100).toFixed(2)}%` : null },
-                  { label: 'Terminal Growth Rate (%)', value: terminalGrowth, setter: setTerminalGrowth, hint: 'Typically 2-3% (GDP growth)' },
-                  { label: 'Market Risk Premium (%)', value: marketRiskPremium, setter: setMarketRiskPremium, hint: 'Typically 5-7%' },
-                  { label: 'Projection Years', value: projectionYears, setter: setProjectionYears, hint: 'Usually 5-10 years' },
-                ].map(({ label, value, setter, hint }) => (
-                  <div key={label} className="flex flex-col gap-2">
+                  { label: <>Revenue Growth (%)<GlossaryRef id="revenue-growth" /></>, value: revenueGrowth, setter: setRevenueGrowth, hint: stockData.hints.revenue_growth !== null ? `Historical: ${(stockData.hints.revenue_growth * 100).toFixed(2)}%` : null, key: 'revenue' },
+                  { label: <>Operating Margin (%)<GlossaryRef id="operating-margin" /></>, value: operatingMargin, setter: setOperatingMargin, hint: stockData.hints.operating_margin !== null ? `Historical: ${(stockData.hints.operating_margin * 100).toFixed(2)}%` : null, key: 'margin' },
+                  { label: <>Terminal Growth Rate (%)<GlossaryRef id="terminal-growth" /></>, value: terminalGrowth, setter: setTerminalGrowth, hint: 'Typically 2-3% (GDP growth)', key: 'terminal' },
+                  { label: <>Market Risk Premium (%)<GlossaryRef id="market-risk-premium" /></>, value: marketRiskPremium, setter: setMarketRiskPremium, hint: 'Typically 5-7%', key: 'mrp' },
+                  { label: 'Projection Years', value: projectionYears, setter: setProjectionYears, hint: 'Usually 5-10 years', key: 'years' },
+                ].map(({ label, value, setter, hint, key }) => (
+                  <div key={key} className="flex flex-col gap-2">
                     <label className="text-sm font-medium text-gray-600">{label}</label>
                     <input
                       type="number"
@@ -609,7 +638,7 @@ export default function App() {
             {/* Main Result */}
             <div className="mb-12">
               <div className="flex items-baseline gap-4 mb-3">
-                <span className="text-sm text-gray-500">Intrinsic Value</span>
+                <span className="text-sm text-gray-500">Intrinsic Value<GlossaryRef id="intrinsic-value" /></span>
                 <span className="text-5xl font-bold font-mono tracking-tight">${result.intrinsic_value_per_share.toFixed(2)}</span>
                 <span className="text-sm text-gray-400">per share</span>
               </div>
@@ -640,21 +669,28 @@ export default function App() {
             <div className="mb-12">
               <table className="w-full max-w-md">
                 <tbody>
-                  {[
-                    ['Enterprise Value', formatCurrency(result.enterprise_value)],
-                    ['Equity Value', formatCurrency(result.equity_value)],
-                    ['Net Debt', formatCurrency(result.net_debt)],
-                    [
-                      result.using_custom_discount_rate ? 'Discount Rate (custom)' : 'Discount Rate (WACC)',
-                      formatPercent(result.discount_rate)
-                    ],
-                    ['Terminal Value', formatCurrency(result.terminal_value)],
-                  ].map(([label, value]) => (
-                    <tr key={label} className="border-b border-gray-100">
-                      <td className="py-3 text-sm text-gray-500">{label}</td>
-                      <td className="py-3 text-sm font-mono font-medium text-right">{value}</td>
-                    </tr>
-                  ))}
+                  <tr className="border-b border-gray-100">
+                    <td className="py-3 text-sm text-gray-500">Enterprise Value<GlossaryRef id="enterprise-value" /></td>
+                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.enterprise_value)}</td>
+                  </tr>
+                  <tr className="border-b border-gray-100">
+                    <td className="py-3 text-sm text-gray-500">Equity Value<GlossaryRef id="equity-value" /></td>
+                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.equity_value)}</td>
+                  </tr>
+                  <tr className="border-b border-gray-100">
+                    <td className="py-3 text-sm text-gray-500">Net Debt<GlossaryRef id="net-debt" /></td>
+                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.net_debt)}</td>
+                  </tr>
+                  <tr className="border-b border-gray-100">
+                    <td className="py-3 text-sm text-gray-500">
+                      {result.using_custom_discount_rate ? 'Discount Rate (custom)' : 'Discount Rate (WACC)'}<GlossaryRef id="discount-rate" />
+                    </td>
+                    <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(result.discount_rate)}</td>
+                  </tr>
+                  <tr className="border-b border-gray-100">
+                    <td className="py-3 text-sm text-gray-500">Terminal Value<GlossaryRef id="terminal-value" /></td>
+                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.terminal_value)}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -662,7 +698,7 @@ export default function App() {
             {/* Projections */}
             {result.projections.length > 0 && (
               <div className="mb-12">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">FCF Projections</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">FCF<GlossaryRef id="fcf" /> Projections</h3>
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-200">
