@@ -12,6 +12,20 @@ export interface ProvidersResponse {
   technical: Provider[];
 }
 
+// Rate Limit Types
+export interface RateLimitStats {
+  used: number;
+  limit: number;
+  remaining: number;
+  percentage: number;
+}
+
+export interface AllRateLimits {
+  fmp: RateLimitStats;
+  yahoo: RateLimitStats;
+  massive: RateLimitStats;
+}
+
 export interface CompanyData {
   beta: number | null;
   market_cap: number | null;
