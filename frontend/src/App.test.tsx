@@ -103,8 +103,14 @@ const mockRatios = {
   liquidity: { current_ratio: 1.0, quick_ratio: 0.9, debt_to_equity: 1.5, interest_coverage: 25 }, 
   efficiency: { asset_turnover: 1.1, inventory_turnover: 40, receivables_turnover: 15, payables_turnover: 12 } 
 }
-const mockDividends = { current_yield: 0.005, dividend_cagr_5y: 0.08, consecutive_years: 10, annual_dividends: { '2023': 0.96 } }
-const mockHistorical = { metrics: [], data_years: 0 }
+const mockDividends = { symbol: 'AAPL', has_dividends: true, current_annual_dividend: 0.96, current_yield: 0.005, payout_ratio: 0.15, dividend_cagr: 0.08, consecutive_years: 10, annual_dividends: { '2023': 0.96 }, payments: [] }
+const mockHistorical = { 
+  symbol: 'AAPL',
+  current: { pe: 30, ps: 8, pb: 45, ev_ebitda: 25 },
+  average_5yr: { pe: 28, ps: 7, pb: 40, ev_ebitda: 23 },
+  premium_discount: { pe: 0.07, ps: 0.14, pb: 0.125, ev_ebitda: 0.087 },
+  assessment: { pe: 'fair', ps: 'fair', pb: 'fair', ev_ebitda: 'fair' },
+}
 const mockComparables = { target: { symbol: 'AAPL', pe_ratio: 30 }, peers: [], peer_count: 0 }
 const mockScenarios = { bear: { revenue_growth: 0.02, operating_margin: 0.25, intrinsic_value: 150 }, base: { revenue_growth: 0.05, operating_margin: 0.30, intrinsic_value: 185 }, bull: { revenue_growth: 0.10, operating_margin: 0.35, intrinsic_value: 220 }, probability_weighted_value: 180, current_price: 178, upside_range: { low: -10, high: 20 } }
 const mockTechnical = { symbol: 'AAPL', period_days: 365, current_price: 178, price_change: 0.05, signals: [], prices: [], indicators: { sma_20: [], sma_50: [], rsi_14: [], macd: { macd_line: [], signal_line: [], histogram: [] } } }
@@ -384,6 +390,39 @@ describe('App - Unified Analyze Flow', () => {
       )
       expect(comparablesCalls.length).toBeGreaterThan(0)
     }, { timeout: 3000 })
+  })
+})
+
+describe('App - Provider Changes', () => {
+  beforeEach(() => {
+    mockFetch.mockReset()
+    // Default: return providers
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockProviders),
+        })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows "no data" message when stockData is null', async () => {
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+    
+    // Should show no data message (tabs only show after data is loaded)
+    await waitFor(() => {
+      expect(screen.getByText(/No stock data available/i)).toBeInTheDocument()
+    })
   })
 })
 

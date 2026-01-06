@@ -459,6 +459,10 @@ export default function App() {
                         setResult(null);
                         setScenarioResult(null);
                         setComparableResult(null);
+                        setRatiosResult(null);
+                        setDividendResult(null);
+                        setHistoricalValuation(null);
+                        setTechnicalResult(null);  // Clear technical too - it's based on stock data
                       }}
                       disabled={!provider.available}
                       className={`px-4 py-2 rounded-lg border-2 transition-all text-left ${
@@ -568,6 +572,14 @@ export default function App() {
               </button>
             </div>
           </nav>
+        )}
+
+        {/* FUNDAMENTAL TAB - No Data Message */}
+        {!stockData && activeTab === 'fundamental' && !loading && (
+          <div className="text-center py-16">
+            <p className="text-gray-400 mb-2">No stock data available</p>
+            <p className="text-sm text-gray-300">Enter a ticker and click Analyze to get started</p>
+          </div>
         )}
 
         {/* FUNDAMENTAL TAB */}
@@ -1476,6 +1488,14 @@ export default function App() {
             </section>
             )}
           </>
+        )}
+
+        {/* TECHNICAL TAB - No Data Message */}
+        {!stockData && activeTab === 'technical' && (
+          <div className="text-center py-16">
+            <p className="text-gray-400 mb-2">No stock data available</p>
+            <p className="text-sm text-gray-300">Enter a ticker and click Analyze to get started</p>
+          </div>
         )}
 
         {/* TECHNICAL TAB */}
