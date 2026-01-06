@@ -42,6 +42,7 @@ class TestDataAdapter:
                     capital_expenditure=-10959000000,
                     free_cash_flow=99584000000,
                     depreciation_amortization=11519000000,
+                    dividends_paid=-15234000000,  # Negative = cash outflow
                 ),
             ],
             provider="fmp",
@@ -97,6 +98,7 @@ class TestDataAdapter:
         assert cf["freeCashFlow"] == 99584000000
         assert cf["capitalExpenditure"] == -10959000000
         assert cf["operatingCashFlow"] == 110543000000
+        assert cf["dividendsPaid"] == -15234000000  # Preserves negative value
         assert cf["depreciationAndAmortization"] == 11519000000
 
     def test_calculates_income_before_tax(self, sample_stock_data):
