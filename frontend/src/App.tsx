@@ -248,7 +248,20 @@ export default function App() {
   };
 
   const hasInputs = revenueGrowth && operatingMargin && terminalGrowth && marketRiskPremium && projectionYears;
-  const hasValidationErrors = stockData?.validation?.has_errors ?? false;
+  
+  // Smart validation: Beta error can be bypassed with custom discount rate
+  const bypassableErrors = ['beta']; // Errors that custom discount rate makes irrelevant
+  const canBypassWithCustomRate = useCustomDiscountRate && customDiscountRate && parseFloat(customDiscountRate) > 0;
+  
+  const relevantErrors = (stockData?.validation?.errors ?? []).filter(e => {
+    // If using custom discount rate, Beta errors don't matter
+    if (canBypassWithCustomRate && bypassableErrors.includes(e.field.toLowerCase())) {
+      return false;
+    }
+    return true;
+  });
+  
+  const hasValidationErrors = relevantErrors.length > 0;
   const canRunValuation = hasInputs && !hasValidationErrors;
 
   return (
@@ -401,13 +414,13 @@ export default function App() {
         {stockData && activeTab === 'fundamental' && (
           <>
             {/* Validation Alerts */}
-            {(stockData.validation.has_errors || stockData.validation.has_warnings) && (
+            {(relevantErrors.length > 0 || stockData.validation.has_warnings) && (
               <section className="mb-8 space-y-4">
-                {stockData.validation.errors.length > 0 && (
+                {relevantErrors.length > 0 && (
                   <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
                     <h3 className="text-sm font-semibold text-red-600 mb-3">⛔ Cannot Run Valuation</h3>
                     <ul className="space-y-1">
-                      {stockData.validation.errors.map((e, i) => (
+                      {relevantErrors.map((e, i) => (
                         <li key={i} className="text-sm text-red-800">
                           <span className="font-semibold capitalize">{e.field}:</span> {e.message}
                         </li>
