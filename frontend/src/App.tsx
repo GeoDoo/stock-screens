@@ -12,6 +12,19 @@ const API_BASE = 'http://localhost:8000';
 // This prevents "cannot read property of undefined" errors throughout the app.
 // ============================================================
 
+function normalizeStockData(data: StockDataResponse | null): StockDataResponse | null {
+  if (!data) return null;
+  return {
+    ...data,
+    validation: {
+      ...data.validation,
+      errors: data.validation?.errors ?? [],
+      warnings: data.validation?.warnings ?? [],
+      issues: data.validation?.issues ?? [],
+    },
+  };
+}
+
 function normalizeValuationResult(data: ValuationResult | null): ValuationResult | null {
   if (!data) return null;
   // If critical values are missing, don't render partial data
@@ -30,6 +43,8 @@ function normalizeValuationResult(data: ValuationResult | null): ValuationResult
 
 function normalizeScenarioResult(data: ScenarioAnalysisResult | null): ScenarioAnalysisResult | null {
   if (!data) return null;
+  // If critical value is missing, don't render
+  if (data.probability_weighted_value == null) return null;
   return {
     ...data,
     scenarios: data.scenarios ?? [],
@@ -42,6 +57,23 @@ function normalizeComparableResult(data: ComparableResult | null): ComparableRes
     ...data,
     peers: data.peers ?? [],
     implied_valuations: data.implied_valuations ?? [],
+    summary: {
+      ...data.summary,
+      average_implied_price: data.summary?.average_implied_price ?? null,
+      average_upside_percent: data.summary?.average_upside_percent ?? null,
+    },
+    target_metrics: {
+      pe_ratio: data.target_metrics?.pe_ratio ?? null,
+      ev_to_ebitda: data.target_metrics?.ev_to_ebitda ?? null,
+      price_to_sales: data.target_metrics?.price_to_sales ?? null,
+      price_to_book: data.target_metrics?.price_to_book ?? null,
+    },
+    peer_medians: {
+      pe_ratio: data.peer_medians?.pe_ratio ?? null,
+      ev_to_ebitda: data.peer_medians?.ev_to_ebitda ?? null,
+      price_to_sales: data.peer_medians?.price_to_sales ?? null,
+      price_to_book: data.peer_medians?.price_to_book ?? null,
+    },
   };
 }
 
@@ -72,6 +104,12 @@ function normalizeHistoricalValuation(data: HistoricalValuationResult | null): H
     return null; // Incomplete data - don't render partial
   }
   return data;
+}
+
+// Helper for displaying nullable metrics (replaces scattered ?.toFixed() || '—')
+function formatMetric(value: number | null | undefined, decimals: number = 1, suffix: string = ''): string {
+  if (value == null) return '—';
+  return `${value.toFixed(decimals)}${suffix}`;
 }
 
 // ============================================================
@@ -272,7 +310,7 @@ export default function App() {
       await fetchRateLimits();
       
       // Extract data from batch response
-      const stockResponse = batchData.stock as StockDataResponse;
+      const stockResponse = normalizeStockData(batchData.stock as StockDataResponse);
       setStockData(stockResponse);
       setRatiosResult(batchData.ratios);
       setDividendResult(batchData.dividends);
@@ -510,7 +548,7 @@ export default function App() {
   };
   
   // Filter errors - WACC-related errors are irrelevant when using custom discount rate
-  const relevantErrors = (stockData?.validation?.errors ?? []).filter(e => {
+  const relevantErrors = (stockData?.validation.errors ?? []).filter(e => {
     if (canBypassWithCustomRate && isWaccRelated(e)) {
       return false;
     }
@@ -518,7 +556,7 @@ export default function App() {
   });
   
   // Filter warnings - WACC-related warnings are irrelevant when using custom discount rate
-  const relevantWarnings = (stockData?.validation?.warnings ?? []).filter(w => {
+  const relevantWarnings = (stockData?.validation.warnings ?? []).filter(w => {
     if (canBypassWithCustomRate && isWaccRelated(w)) {
       return false;
     }
@@ -1392,7 +1430,7 @@ export default function App() {
               <div className="space-y-8">
                 {/* Summary */}
                 <div className="flex items-baseline gap-4">
-                  <span className="text-4xl font-bold font-mono">${scenarioResult.probability_weighted_value?.toFixed(2)}</span>
+                  <span className="text-4xl font-bold font-mono">${scenarioResult.probability_weighted_value.toFixed(2)}</span>
                   <span className="text-sm text-gray-400">weighted fair value</span>
                   {(() => {
                     const current = scenarioResult.current_price || 0;
@@ -1465,7 +1503,7 @@ export default function App() {
                 {/* Summary */}
                 <div className="flex items-baseline gap-4">
                   <span className="text-4xl font-bold font-mono">
-                    ${comparableResult.summary.average_implied_price?.toFixed(2) || '—'}
+                    ${formatMetric(comparableResult.summary.average_implied_price, 2)}
                   </span>
                   <span className="text-sm text-gray-400">implied fair value (peer median)</span>
                   {comparableResult.summary.average_upside_percent !== null && (
@@ -1554,16 +1592,16 @@ export default function App() {
                             {formatCurrency(stockData.data.market_cap)}
                           </td>
                           <td className="py-3 text-right font-mono">
-                            {comparableResult.target_metrics.pe_ratio?.toFixed(1) || '—'}
+                            {formatMetric(comparableResult.target_metrics.pe_ratio)}
                           </td>
                           <td className="py-3 text-right font-mono">
-                            {comparableResult.target_metrics.ev_to_ebitda?.toFixed(1) || '—'}
+                            {formatMetric(comparableResult.target_metrics.ev_to_ebitda)}
                           </td>
                           <td className="py-3 text-right font-mono">
-                            {comparableResult.target_metrics.price_to_sales?.toFixed(1) || '—'}
+                            {formatMetric(comparableResult.target_metrics.price_to_sales)}
                           </td>
                           <td className="py-3 text-right font-mono">
-                            {comparableResult.target_metrics.price_to_book?.toFixed(1) || '—'}
+                            {formatMetric(comparableResult.target_metrics.price_to_book)}
                           </td>
                         </tr>
                         {/* Peer rows */}
@@ -1579,16 +1617,16 @@ export default function App() {
                               {formatCurrency(peer.market_cap)}
                             </td>
                             <td className="py-3 text-right font-mono text-gray-500">
-                              {peer.pe_ratio?.toFixed(1) || '—'}
+                              {formatMetric(peer.pe_ratio)}
                             </td>
                             <td className="py-3 text-right font-mono text-gray-500">
-                              {peer.ev_to_ebitda?.toFixed(1) || '—'}
+                              {formatMetric(peer.ev_to_ebitda)}
                             </td>
                             <td className="py-3 text-right font-mono text-gray-500">
-                              {peer.price_to_sales?.toFixed(1) || '—'}
+                              {formatMetric(peer.price_to_sales)}
                             </td>
                             <td className="py-3 text-right font-mono text-gray-500">
-                              {peer.price_to_book?.toFixed(1) || '—'}
+                              {formatMetric(peer.price_to_book)}
                             </td>
                           </tr>
                         ))}
@@ -1597,16 +1635,16 @@ export default function App() {
                           <td className="py-3 font-medium text-gray-500">Peer Median</td>
                           <td className="py-3 text-right font-mono">—</td>
                           <td className="py-3 text-right font-mono font-medium">
-                            {comparableResult.peer_medians.pe_ratio?.toFixed(1) || '—'}
+                            {formatMetric(comparableResult.peer_medians.pe_ratio)}
                           </td>
                           <td className="py-3 text-right font-mono font-medium">
-                            {comparableResult.peer_medians.ev_to_ebitda?.toFixed(1) || '—'}
+                            {formatMetric(comparableResult.peer_medians.ev_to_ebitda)}
                           </td>
                           <td className="py-3 text-right font-mono font-medium">
-                            {comparableResult.peer_medians.price_to_sales?.toFixed(1) || '—'}
+                            {formatMetric(comparableResult.peer_medians.price_to_sales)}
                           </td>
                           <td className="py-3 text-right font-mono font-medium">
-                            {comparableResult.peer_medians.price_to_book?.toFixed(1) || '—'}
+                            {formatMetric(comparableResult.peer_medians.price_to_book)}
                           </td>
                         </tr>
                       </tbody>
