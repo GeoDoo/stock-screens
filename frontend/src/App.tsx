@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats, AllRateLimits } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { DiscountRateModal } from './components/DiscountRateModal';
 import { formatCurrency, formatPercent, formatNumber, formatShareCount } from './utils';
@@ -13,7 +13,8 @@ export default function App() {
   const [selectedFundamentalProvider, setSelectedFundamentalProvider] = useState<string>('');
   const [selectedTechnicalProvider, setSelectedTechnicalProvider] = useState<string>('');
   const [providersLoading, setProvidersLoading] = useState(true);
-  const [rateLimits, setRateLimits] = useState<AllRateLimits | null>(null);
+  // Track which providers have actually hit rate limits (from API errors)
+  const [rateLimitedProviders, setRateLimitedProviders] = useState<Set<string>>(new Set());
   
   const [ticker, setTicker] = useState('');
   const [stockData, setStockData] = useState<StockDataResponse | null>(null);
@@ -21,27 +22,17 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ValuationResult | null>(null);
   
-  // Fetch rate limits
-  const fetchRateLimits = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/rate-limits`);
-      if (res.ok) {
-        const data: AllRateLimits = await res.json();
-        setRateLimits(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch rate limits:', err);
-    }
-  };
-
-  // Check if a provider is at its rate limit
+  // Check if a provider hit rate limit (based on actual API errors, not fake counters)
   const isProviderAtLimit = (providerId: string): boolean => {
-    if (!rateLimits) return false;
-    const stats = rateLimits[providerId as keyof AllRateLimits];
-    return stats ? stats.remaining === 0 : false;
+    return rateLimitedProviders.has(providerId);
   };
 
-  // Fetch available providers and rate limits on mount
+  // Mark provider as rate-limited when we get an actual error
+  const markProviderRateLimited = (providerId: string) => {
+    setRateLimitedProviders(prev => new Set(prev).add(providerId));
+  };
+
+  // Fetch available providers on mount
   useEffect(() => {
     const fetchProviders = async () => {
       try {
@@ -49,9 +40,6 @@ export default function App() {
         const data: ProvidersResponse = await res.json();
         setFundamentalProviders(data.fundamental);
         setTechnicalProviders(data.technical);
-        
-        // Also fetch rate limits
-        await fetchRateLimits();
         
         // Auto-select recommended or first available providers
         const fundRecommended = data.fundamental.find((p: Provider) => p.recommended && p.available);
@@ -101,17 +89,14 @@ export default function App() {
   const [technicalResult, setTechnicalResult] = useState<TechnicalAnalysisResult | null>(null);
   const [technicalLoading, setTechnicalLoading] = useState(false);
   
-  // Financial Ratios
+  // Financial Ratios (loaded via batch endpoint)
   const [ratiosResult, setRatiosResult] = useState<FinancialRatiosResult | null>(null);
-  const [ratiosLoading, setRatiosLoading] = useState(false);
   
-  // Dividend History
+  // Dividend History (loaded via batch endpoint)
   const [dividendResult, setDividendResult] = useState<DividendHistoryResult | null>(null);
-  const [dividendLoading, setDividendLoading] = useState(false);
   
-  // Historical Valuation
+  // Historical Valuation (loaded via batch endpoint)
   const [historicalValuation, setHistoricalValuation] = useState<HistoricalValuationResult | null>(null);
-  const [historicalLoading, setHistoricalLoading] = useState(false);
   
   // Discount Rate Modal (for when WACC is missing)
   const [showDiscountModal, setShowDiscountModal] = useState(false);
@@ -146,7 +131,12 @@ export default function App() {
       const res = await fetch(`${API_BASE}/api/stock/${symbol}/analyze?provider=${selectedFundamentalProvider}`);
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.detail || 'Failed to fetch stock data');
+        const errorMsg = errData.detail || 'Failed to fetch stock data';
+        // Check if it's a rate limit error and mark provider as limited
+        if (res.status === 429 || errorMsg.toLowerCase().includes('rate limit')) {
+          markProviderRateLimited(selectedFundamentalProvider);
+        }
+        throw new Error(errorMsg);
       }
       const batchData = await res.json();
       
@@ -156,9 +146,6 @@ export default function App() {
       setRatiosResult(batchData.ratios);
       setDividendResult(batchData.dividends);
       setHistoricalValuation(batchData.historical_valuation);
-      
-      // Update rate limits after API call
-      await fetchRateLimits();
       
       // Pre-fill inputs with hints
       if (stockResponse.hints.revenue_growth !== null) {
@@ -316,17 +303,18 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/technical?provider=${selectedTechnicalProvider}&days=365`);
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || 'Technical analysis failed');
+        const errData = await res.json();
+        const errorMsg = errData.detail || 'Technical analysis failed';
+        // Check if it's a rate limit error and mark provider as limited
+        if (res.status === 429 || errorMsg.toLowerCase().includes('rate limit')) {
+          markProviderRateLimited(selectedTechnicalProvider);
+        }
+        throw new Error(errorMsg);
       }
       const data: TechnicalAnalysisResult = await res.json();
       setTechnicalResult(data);
-      // Update rate limits after API call
-      await fetchRateLimits();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
-      // Update rate limits even on error (we still made a call)
-      await fetchRateLimits();
     } finally {
       setTechnicalLoading(false);
     }
@@ -473,14 +461,8 @@ export default function App() {
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {fundamentalProviders.find(p => p.id === selectedFundamentalProvider)?.description}
-                  {selectedFundamentalProvider && rateLimits?.[selectedFundamentalProvider as keyof AllRateLimits] && (
-                    <span className={`ml-2 ${
-                      rateLimits[selectedFundamentalProvider as keyof AllRateLimits].percentage >= 80 
-                        ? 'text-amber-600' 
-                        : ''
-                    }`}>
-                      ({rateLimits[selectedFundamentalProvider as keyof AllRateLimits].remaining} calls left)
-                    </span>
+                  {isProviderAtLimit(selectedFundamentalProvider) && (
+                    <span className="ml-2 text-red-500">— Rate limit exceeded</span>
                   )}
                 </p>
               </div>
@@ -518,14 +500,8 @@ export default function App() {
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {technicalProviders.find(p => p.id === selectedTechnicalProvider)?.description}
-                  {selectedTechnicalProvider && rateLimits?.[selectedTechnicalProvider as keyof AllRateLimits] && (
-                    <span className={`ml-2 ${
-                      rateLimits[selectedTechnicalProvider as keyof AllRateLimits].percentage >= 80 
-                        ? 'text-amber-600' 
-                        : ''
-                    }`}>
-                      ({rateLimits[selectedTechnicalProvider as keyof AllRateLimits].remaining} calls left)
-                    </span>
+                  {isProviderAtLimit(selectedTechnicalProvider) && (
+                    <span className="ml-2 text-red-500">— Rate limit exceeded</span>
                   )}
                 </p>
               </div>
@@ -844,12 +820,6 @@ export default function App() {
                 </div>
               </section>
             )}
-            
-            {ratiosLoading && (
-              <section className="mb-16 pt-8 border-t border-gray-100">
-                <p className="text-sm text-gray-400">Loading financial ratios...</p>
-              </section>
-            )}
 
             {/* Dividend History */}
             {dividendResult && dividendResult.has_dividends && (
@@ -967,12 +937,6 @@ export default function App() {
                 <p className="text-sm text-gray-500">This company does not pay dividends.</p>
               </section>
             )}
-            
-            {dividendLoading && (
-              <section className="mb-16 pt-8 border-t border-gray-100">
-                <p className="text-sm text-gray-400">Loading dividend history...</p>
-              </section>
-            )}
 
             {/* Historical Valuation Context */}
             {historicalValuation && historicalValuation.average_5yr.pe && (
@@ -1012,12 +976,6 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-              </section>
-            )}
-            
-            {historicalLoading && (
-              <section className="mb-16 pt-8 border-t border-gray-100">
-                <p className="text-sm text-gray-400">Loading historical valuation...</p>
               </section>
             )}
 
