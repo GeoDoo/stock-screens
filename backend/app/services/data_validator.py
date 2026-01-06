@@ -186,7 +186,7 @@ class DataValidator:
         elif self.cost_of_debt == 0 and self.total_debt and self.total_debt > 0:
             result.issues.append(ValidationIssue(
                 field="cost_of_debt",
-                message="Cost of debt is 0% but company has debt. Interest expense may be unreported.",
+                message="Cost of debt is 0%. Company may have interest income exceeding expense or strategic low-cost financing.",
                 severity=Severity.WARNING,
                 impacts="wacc",
             ))

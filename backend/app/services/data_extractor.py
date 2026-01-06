@@ -64,13 +64,21 @@ class DataExtractor:
         """
         Cost of debt calculated from interest expense and total debt.
         cost_of_debt = interest_expense / total_debt
+        
+        For companies with no interest expense reported (e.g., Apple has more 
+        interest income than expense), returns 0.0 if they have debt.
         """
         interest_expense = self._get_latest(self.income_statement, "interestExpense")
         total_debt = self.total_debt()
 
-        if interest_expense is None or total_debt is None:
+        if total_debt is None:
             return None
         if total_debt == 0:
+            return 0.0  # No debt, no cost
+        if interest_expense is None:
+            # Company has debt but no interest expense reported
+            # (e.g., interest income exceeds expense, or data is missing)
+            # Return 0.0 as they effectively have no net borrowing cost
             return 0.0
 
         return interest_expense / total_debt

@@ -118,6 +118,21 @@ class TestDataExtractor:
         extractor = DataExtractor(data)
         assert extractor.cost_of_debt() == 0.0
 
+    def test_handles_missing_interest_expense_with_debt(self):
+        """Cost of debt should be 0 if company has debt but no interest expense reported.
+        
+        This happens for companies like Apple where interest income exceeds expense.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{}],  # No interestExpense field
+            "balance_sheet": [{"totalDebt": 100000000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        # Company has debt but no interest expense - assume 0% effective cost
+        assert extractor.cost_of_debt() == 0.0
+
     def test_market_risk_premium_default(self):
         """Market risk premium defaults to 6%."""
         data = {
