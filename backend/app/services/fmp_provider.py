@@ -150,7 +150,7 @@ class FMPProvider(StockDataProvider):
                 capital_expenditure=cf.get("capitalExpenditure"),
                 free_cash_flow=cf.get("freeCashFlow"),
                 depreciation_amortization=cf.get("depreciationAndAmortization"),
-                dividends_paid=cf.get("dividendsPaid"),
+                dividends_paid=cf.get("commonDividendsPaid") or cf.get("netDividendsPaid"),
             )
             financials.append(stmt)
         
