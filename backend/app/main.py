@@ -690,19 +690,21 @@ async def get_dividends(symbol: str, provider: str):
                     amount=float(amount),
                 ))
         
-        # Get current price and shares
+        # Get current price, shares, and net income
         current_price = info.get("regularMarketPrice") or info.get("currentPrice")
         shares = info.get("sharesOutstanding")
+        net_income = info.get("netIncomeToCommon")  # For payout ratio
         
         # Analyze
         analyzer = DividendAnalyzer()
-        result = analyzer.analyze(payments, current_price, shares)
+        result = analyzer.analyze(payments, current_price, shares, net_income)
         
         return {
             "symbol": symbol.upper(),
             "has_dividends": result.has_dividends,
             "current_annual_dividend": result.current_annual_dividend,
             "current_yield": result.current_yield,
+            "payout_ratio": result.payout_ratio,
             "dividend_cagr": result.dividend_cagr,
             "consecutive_years": result.consecutive_years,
             "annual_dividends": result.annual_dividends,

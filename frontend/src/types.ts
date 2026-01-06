@@ -279,6 +279,7 @@ export interface DividendHistoryResult {
   has_dividends: boolean;
   current_annual_dividend: number | null;
   current_yield: number | null;
+  payout_ratio: number | null;
   dividend_cagr: number | null;
   consecutive_years: number;
   annual_dividends: Record<string, number>;

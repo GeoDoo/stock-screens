@@ -161,6 +161,58 @@ class TestDividendAnalysis:
         assert len(result.annual_dividends) > 0
 
 
+class TestPayoutRatio:
+    """Tests for payout ratio calculation."""
+
+    def test_payout_ratio_calculation(self, analyzer, sample_dividends):
+        """Calculate payout ratio = Total Dividends / Net Income."""
+        result = analyzer.analyze(
+            payments=sample_dividends,
+            current_price=100.0,
+            shares_outstanding=1000000000,  # 1B shares
+            net_income=10000000000,  # $10B net income
+        )
+        
+        # Annual dividend ~$1.12/share * 1B shares = $1.12B total dividends
+        # Payout ratio = $1.12B / $10B = 11.2%
+        assert result.payout_ratio is not None
+        assert result.payout_ratio == pytest.approx(0.112, rel=0.1)
+
+    def test_payout_ratio_no_net_income(self, analyzer, sample_dividends):
+        """Handle missing net income."""
+        result = analyzer.analyze(
+            payments=sample_dividends,
+            current_price=100.0,
+            shares_outstanding=1000000000,
+            net_income=None,
+        )
+        
+        assert result.payout_ratio is None
+
+    def test_payout_ratio_negative_net_income(self, analyzer, sample_dividends):
+        """Handle negative net income (loss)."""
+        result = analyzer.analyze(
+            payments=sample_dividends,
+            current_price=100.0,
+            shares_outstanding=1000000000,
+            net_income=-5000000000,  # Loss
+        )
+        
+        # Can't calculate meaningful payout ratio with negative income
+        assert result.payout_ratio is None
+
+    def test_payout_ratio_no_dividends(self, analyzer):
+        """Payout ratio is None when no dividends."""
+        result = analyzer.analyze(
+            payments=[],
+            current_price=100.0,
+            shares_outstanding=1000000000,
+            net_income=10000000000,
+        )
+        
+        assert result.payout_ratio is None
+
+
 class TestEdgeCases:
     """Tests for edge cases."""
 
