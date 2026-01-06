@@ -47,6 +47,7 @@ class FinancialStatement:
     capital_expenditure: Optional[float] = None
     free_cash_flow: Optional[float] = None
     depreciation_amortization: Optional[float] = None
+    dividends_paid: Optional[float] = None
 
 
 @dataclass
