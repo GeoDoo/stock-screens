@@ -69,6 +69,8 @@ export function DiscountRateModal({ isOpen, onClose, onSubmit, onSkip }: Discoun
           <input
             id="discount-rate"
             type="number"
+            min="0"
+            step="0.1"
             value={rate}
             onChange={(e) => setRate(e.target.value)}
             placeholder="e.g., 10"
