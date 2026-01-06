@@ -1043,12 +1043,17 @@ export default function App() {
             {/* Technical Analysis Results */}
             {technicalResult && (
               <div className="space-y-8">
-                {/* Price Summary */}
-                <div className="mb-2">
-                  <span className="text-xs text-gray-400">
-                    Data from <span className="font-semibold text-gray-600">{technicalProviders.find(p => p.id === technicalResult.provider)?.name || technicalResult.provider}</span>
+                {/* Company Header - same style as Fundamental */}
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-semibold">
+                    {stockData?.symbol} {stockData?.company_name && `— ${stockData.company_name}`}
+                  </h2>
+                  <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500 uppercase tracking-wide">
+                    via {technicalProviders.find(p => p.id === technicalResult.provider)?.name || technicalResult.provider}
                   </span>
                 </div>
+
+                {/* Price Summary */}
                 <div className="space-y-2">
                   <div className="flex items-baseline gap-3">
                     <span className="text-sm text-gray-500">Current Price</span>
