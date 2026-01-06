@@ -1106,10 +1106,10 @@ export default function App() {
                 {/* Price Chart */}
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Price Chart</h3>
-                  <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
-                    <svg viewBox="0 0 800 300" className="w-full h-64">
+                  <div className="bg-gray-50 rounded-lg p-6 overflow-hidden">
+                    <svg viewBox="0 0 800 400" className="w-full h-96">
                       {/* Chart background */}
-                      <rect x="0" y="0" width="800" height="300" fill="#fafafa" />
+                      <rect x="0" y="0" width="800" height="400" fill="#fafafa" />
                       
                       {/* Price line */}
                       {technicalResult.prices.length > 1 && (() => {
@@ -1118,7 +1118,7 @@ export default function App() {
                         const maxPrice = Math.max(...prices.map(p => p.high));
                         const priceRange = maxPrice - minPrice || 1;
                         const padding = 20;
-                        const chartHeight = 260;
+                        const chartHeight = 360;
                         const chartWidth = 760;
                         
                         const points = prices.map((p, i) => {
@@ -1213,17 +1213,17 @@ export default function App() {
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum (RSI)</h3>
                   {technicalResult.indicators.rsi_14.length > 1 ? (
-                    <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
-                      <svg viewBox="0 0 800 120" className="w-full h-24">
+                    <div className="bg-gray-50 rounded-lg p-6 overflow-hidden">
+                      <svg viewBox="0 0 800 200" className="w-full h-48">
                         {/* Overbought/Oversold zones */}
-                        <rect x="20" y="0" width="760" height="30" fill="#fef2f2" opacity="0.5" />
-                        <rect x="20" y="90" width="760" height="30" fill="#ecfdf5" opacity="0.5" />
+                        <rect x="20" y="0" width="760" height="60" fill="#fef2f2" opacity="0.5" />
+                        <rect x="20" y="140" width="760" height="60" fill="#ecfdf5" opacity="0.5" />
                         
                         {(() => {
                           const rsiData = technicalResult.indicators.rsi_14;
                           const padding = 20;
                           const chartWidth = 760;
-                          const chartHeight = 120;
+                          const chartHeight = 200;
                           
                           const points = rsiData.map((r, i) => {
                             const x = padding + (i / (rsiData.length - 1)) * chartWidth;
@@ -1233,17 +1233,17 @@ export default function App() {
                           
                           return (
                             <>
-                              {/* 70/30 lines */}
-                              <line x1={padding} y1={30} x2={padding + chartWidth} y2={30} stroke="#ef4444" strokeWidth="1" strokeDasharray="4" />
-                              <line x1={padding} y1={90} x2={padding + chartWidth} y2={90} stroke="#10b981" strokeWidth="1" strokeDasharray="4" />
-                              <line x1={padding} y1={60} x2={padding + chartWidth} y2={60} stroke="#e5e7eb" strokeWidth="1" />
+                              {/* 70/30/50 lines */}
+                              <line x1={padding} y1={60} x2={padding + chartWidth} y2={60} stroke="#ef4444" strokeWidth="1" strokeDasharray="4" />
+                              <line x1={padding} y1={140} x2={padding + chartWidth} y2={140} stroke="#10b981" strokeWidth="1" strokeDasharray="4" />
+                              <line x1={padding} y1={100} x2={padding + chartWidth} y2={100} stroke="#e5e7eb" strokeWidth="1" />
                               
                               {/* RSI line */}
                               <polyline points={points} fill="none" stroke="#6366f1" strokeWidth="2" />
                               
                               {/* Labels */}
-                              <text x={padding - 5} y={34} textAnchor="end" fontSize="9" fill="#ef4444">70</text>
-                              <text x={padding - 5} y={94} textAnchor="end" fontSize="9" fill="#10b981">30</text>
+                              <text x={padding - 5} y={64} textAnchor="end" fontSize="10" fill="#ef4444">70</text>
+                              <text x={padding - 5} y={144} textAnchor="end" fontSize="10" fill="#10b981">30</text>
                             </>
                           );
                         })()}
@@ -1260,14 +1260,14 @@ export default function App() {
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum Trend (MACD)</h3>
                   {technicalResult.indicators.macd.length > 1 ? (
-                    <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
-                      <svg viewBox="0 0 800 120" className="w-full h-24">
+                    <div className="bg-gray-50 rounded-lg p-6 overflow-hidden">
+                      <svg viewBox="0 0 800 200" className="w-full h-48">
                         {(() => {
                           const macdData = technicalResult.indicators.macd;
                           const maxVal = Math.max(...macdData.map(m => Math.max(Math.abs(m.macd), Math.abs(m.signal), Math.abs(m.histogram))));
                           const padding = 20;
                           const chartWidth = 760;
-                          const chartHeight = 120;
+                          const chartHeight = 200;
                           const midY = chartHeight / 2;
                           
                           const macdPoints = macdData.map((m, i) => {
