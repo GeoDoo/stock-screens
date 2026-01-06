@@ -100,7 +100,7 @@ export default function App() {
   // Ref to prevent duplicate technical analysis calls
   const technicalFetchRef = useRef<{ inProgress: boolean; provider: string | null }>({ inProgress: false, provider: null });
 
-  // Unified analyze function - runs all analyses automatically
+  // Unified analyze function - uses batch endpoint for efficiency (DRY/KISS)
   const analyzeStock = async () => {
     if (!ticker.trim() || !selectedFundamentalProvider) return;
     
@@ -116,66 +116,56 @@ export default function App() {
     setShowDiscountModal(false);
     setPendingAnalysis(null);
     
+    const symbol = ticker.toUpperCase();
+    
     try {
-      // Step 1: Fetch stock data
-      const res = await fetch(`${API_BASE}/api/stock/${ticker.toUpperCase()}?provider=${selectedFundamentalProvider}`);
+      // Step 1: Use batch endpoint - ONE call for stock + ratios + dividends + historical
+      const res = await fetch(`${API_BASE}/api/stock/${symbol}/analyze?provider=${selectedFundamentalProvider}`);
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || 'Failed to fetch stock data');
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Failed to fetch stock data');
       }
-      const data: StockDataResponse = await res.json();
-      setStockData(data);
+      const batchData = await res.json();
+      
+      // Extract data from batch response
+      const stockResponse = batchData.stock as StockDataResponse;
+      setStockData(stockResponse);
+      setRatiosResult(batchData.ratios);
+      setDividendResult(batchData.dividends);
+      setHistoricalValuation(batchData.historical_valuation);
+      
+      // Update rate limit stats from batch response
+      if (batchData.rate_limit) {
+        setRateLimitStats(batchData.rate_limit);
+      }
       
       // Pre-fill inputs with hints
-      if (data.hints.revenue_growth !== null) {
-        setRevenueGrowth((data.hints.revenue_growth * 100).toFixed(2));
+      if (stockResponse.hints.revenue_growth !== null) {
+        setRevenueGrowth((stockResponse.hints.revenue_growth * 100).toFixed(2));
       }
-      if (data.hints.operating_margin !== null) {
-        setOperatingMargin((data.hints.operating_margin * 100).toFixed(2));
+      if (stockResponse.hints.operating_margin !== null) {
+        setOperatingMargin((stockResponse.hints.operating_margin * 100).toFixed(2));
       }
       
-      const symbol = ticker.toUpperCase();
-      
-      // Step 2: Auto-fetch all supporting analyses in parallel
-      fetchRatios(symbol);
-      fetchDividends(symbol);
-      fetchHistoricalValuation(symbol);
+      // Step 2: Fetch comparables separately (requires peer data fetching)
       fetchComparables(symbol);
       
       // Step 3: Check if WACC is available for DCF
-      const hasWACC = data.data.wacc !== null;
+      const hasWACC = stockResponse.data.wacc !== null;
       
       if (hasWACC) {
         // WACC available - auto-run valuation and scenarios
-        await runValuationWithData(data);
-        await runScenariosWithData(data);
+        await runValuationWithData(stockResponse);
+        await runScenariosWithData(stockResponse);
       } else {
         // WACC missing - show modal to prompt for custom discount rate
-        setPendingAnalysis(data);
+        setPendingAnalysis(stockResponse);
         setShowDiscountModal(true);
       }
-      // Fetch rate limit stats after analysis
-      fetchRateLimits();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Fetch rate limit statistics
-  const fetchRateLimits = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/rate-limits`);
-      if (res.ok) {
-        const data = await res.json();
-        // Get stats for the currently selected provider
-        if (selectedFundamentalProvider && data[selectedFundamentalProvider]) {
-          setRateLimitStats(data[selectedFundamentalProvider]);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch rate limits:', err);
     }
   };
 
@@ -222,55 +212,8 @@ export default function App() {
     }
   };
   
-  const fetchRatios = async (symbol: string) => {
-    if (!selectedFundamentalProvider) return;
-    
-    setRatiosLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/stock/${symbol}/ratios?provider=${selectedFundamentalProvider}`);
-      if (res.ok) {
-        const data: FinancialRatiosResult = await res.json();
-        setRatiosResult(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch ratios:', err);
-    } finally {
-      setRatiosLoading(false);
-    }
-  };
-  
-  const fetchDividends = async (symbol: string) => {
-    setDividendLoading(true);
-    try {
-      // Use Yahoo for dividend data (best coverage)
-      const res = await fetch(`${API_BASE}/api/stock/${symbol}/dividends?provider=yahoo`);
-      if (res.ok) {
-        const data: DividendHistoryResult = await res.json();
-        setDividendResult(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch dividends:', err);
-    } finally {
-      setDividendLoading(false);
-    }
-  };
-  
-  const fetchHistoricalValuation = async (symbol: string) => {
-    if (!selectedFundamentalProvider) return;
-    
-    setHistoricalLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/stock/${symbol}/historical-valuation?provider=${selectedFundamentalProvider}`);
-      if (res.ok) {
-        const data: HistoricalValuationResult = await res.json();
-        setHistoricalValuation(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch historical valuation:', err);
-    } finally {
-      setHistoricalLoading(false);
-    }
-  };
+  // NOTE: fetchRatios, fetchDividends, fetchHistoricalValuation removed (DRY)
+  // These are now fetched via the batch /analyze endpoint
 
   // Run valuation with provided stock data and optional custom discount rate
   const runValuationWithData = async (data: StockDataResponse, discountRateOverride?: number) => {
