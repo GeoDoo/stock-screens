@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import App from './App'
+import type { ComparableResult } from './types'
 
 // Mock fetch
 const mockFetch = vi.fn()
@@ -111,9 +112,37 @@ const mockHistorical = {
   premium_discount: { pe: 0.07, ps: 0.14, pb: 0.125, ev_ebitda: 0.087 },
   assessment: { pe: 'fair', ps: 'fair', pb: 'fair', ev_ebitda: 'fair' },
 }
-const mockComparables = { target: { symbol: 'AAPL', pe_ratio: 30 }, peers: [], peer_count: 0 }
+const mockComparables: ComparableResult = { 
+  symbol: 'AAPL',
+  company_name: 'Apple Inc.',
+  current_price: 178,
+  sector: 'Technology',
+  industry: 'Consumer Electronics',
+  target_metrics: { pe_ratio: 30, ev_to_ebitda: 25, price_to_sales: 8, price_to_book: 45 },
+  peer_medians: { pe_ratio: 25, ev_to_ebitda: 20, price_to_sales: 7, price_to_book: 40 },
+  peers: [],
+  implied_valuations: [],
+  summary: { average_implied_price: 182.5, average_upside_percent: 2.5 },
+}
 const mockScenarios = { bear: { revenue_growth: 0.02, operating_margin: 0.25, intrinsic_value: 150 }, base: { revenue_growth: 0.05, operating_margin: 0.30, intrinsic_value: 185 }, bull: { revenue_growth: 0.10, operating_margin: 0.35, intrinsic_value: 220 }, probability_weighted_value: 180, current_price: 178, upside_range: { low: -10, high: 20 } }
 const mockTechnical = { symbol: 'AAPL', period_days: 365, current_price: 178, price_change: 0.05, signals: [], prices: [], indicators: { sma_20: [], sma_50: [], rsi_14: [], macd: { macd_line: [], signal_line: [], histogram: [] } } }
+
+// Batch analyze response combines multiple data sources
+const mockBatchAnalyzeResponse = {
+  stock: mockStockDataWithWACC,
+  ratios: mockRatios,
+  dividends: mockDividends,
+  historical_valuation: mockHistorical,
+  rate_limit: { used: 1, limit: 250, remaining: 249, percentage: 0.4 },
+}
+
+const mockBatchAnalyzeWithoutWACC = {
+  stock: mockStockDataWithoutWACC,
+  ratios: mockRatios,
+  dividends: mockDividends,
+  historical_valuation: mockHistorical,
+  rate_limit: { used: 1, limit: 250, remaining: 249, percentage: 0.4 },
+}
 
 describe('App - Unified Analyze Flow', () => {
   beforeEach(() => {
@@ -152,17 +181,9 @@ describe('App - Unified Analyze Flow', () => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
       }
-      if (url.includes('/api/stock/AAPL') && !url.includes('/valuation') && !url.includes('/ratios') && !url.includes('/dividends') && !url.includes('/historical') && !url.includes('/comparables') && !url.includes('/scenarios') && !url.includes('/technical')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStockDataWithWACC) })
-      }
-      if (url.includes('/ratios')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRatios) })
-      }
-      if (url.includes('/dividends')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockDividends) })
-      }
-      if (url.includes('/historical-valuation')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockHistorical) })
+      // Batch analyze endpoint - DRY: one call for stock + ratios + dividends + historical
+      if (url.includes('/api/stock/AAPL/analyze')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeResponse) })
       }
       if (url.includes('/comparables')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparables) })
@@ -204,17 +225,16 @@ describe('App - Unified Analyze Flow', () => {
   })
 
   it('shows discount rate modal when WACC is missing', async () => {
-    // Mock fetch to return "not found" for supporting data to prevent crashes
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
       }
-      if (url.includes('/api/stock/VSNTV') && !url.includes('/valuation') && !url.includes('/ratios') && !url.includes('/dividends') && !url.includes('/historical') && !url.includes('/comparables') && !url.includes('/scenarios')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStockDataWithoutWACC) })
+      // Batch analyze returns data without WACC
+      if (url.includes('/analyze')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeWithoutWACC) })
       }
-      // Return empty/error for supporting analyses to keep test focused
-      if (url.includes('/ratios') || url.includes('/dividends') || url.includes('/historical') || url.includes('/comparables')) {
-        return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: 'Not found' }) })
+      if (url.includes('/comparables')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparables) })
       }
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
@@ -244,12 +264,12 @@ describe('App - Unified Analyze Flow', () => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
       }
-      if (url.includes('/api/stock/VSNTV') && !url.includes('/valuation') && !url.includes('/ratios') && !url.includes('/dividends') && !url.includes('/historical') && !url.includes('/comparables') && !url.includes('/scenarios')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStockDataWithoutWACC) })
+      // Batch analyze returns data without WACC
+      if (url.includes('/api/stock/VSNTV/analyze')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeWithoutWACC) })
       }
-      // Return 404 for supporting analyses to keep test focused
-      if (url.includes('/ratios') || url.includes('/dividends') || url.includes('/historical') || url.includes('/comparables')) {
-        return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: 'Not found' }) })
+      if (url.includes('/comparables')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparables) })
       }
       if (url.includes('/valuation') && options?.method === 'POST') {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...mockValuationResult, using_custom_discount_rate: true }) })
@@ -300,12 +320,12 @@ describe('App - Unified Analyze Flow', () => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
       }
-      if (url.includes('/api/stock/VSNTV') && !url.includes('/valuation') && !url.includes('/ratios') && !url.includes('/dividends') && !url.includes('/historical') && !url.includes('/comparables') && !url.includes('/scenarios')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStockDataWithoutWACC) })
+      // Batch analyze returns data without WACC
+      if (url.includes('/api/stock/VSNTV/analyze')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeWithoutWACC) })
       }
-      // Return 404 for supporting analyses to keep test focused
-      if (url.includes('/ratios') || url.includes('/dividends') || url.includes('/historical') || url.includes('/comparables')) {
-        return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: 'Not found' }) })
+      if (url.includes('/comparables')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparables) })
       }
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
@@ -346,17 +366,9 @@ describe('App - Unified Analyze Flow', () => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
       }
-      if (url.includes('/api/stock/AAPL') && !url.includes('/valuation') && !url.includes('/ratios') && !url.includes('/dividends') && !url.includes('/historical') && !url.includes('/comparables') && !url.includes('/scenarios') && !url.includes('/technical')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStockDataWithWACC) })
-      }
-      if (url.includes('/ratios')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRatios) })
-      }
-      if (url.includes('/dividends')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockDividends) })
-      }
-      if (url.includes('/historical-valuation')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockHistorical) })
+      // Batch analyze - DRY: one call for stock + ratios + dividends + historical
+      if (url.includes('/api/stock/AAPL/analyze')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeResponse) })
       }
       if (url.includes('/comparables')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparables) })
