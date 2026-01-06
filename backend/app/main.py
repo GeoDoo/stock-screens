@@ -890,8 +890,8 @@ async def batch_analyze(symbol: str, provider: str):
     """
     client = get_client_for_provider(provider)
     
-    # Increment rate limit counter
-    rate_limiter.increment(provider)
+    # Record API call for accurate rate limiting
+    rate_limiter.record_call(provider)
     
     try:
         stock_data = await client.get_stock_data(symbol.upper())
@@ -899,6 +899,8 @@ async def batch_analyze(symbol: str, provider: str):
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RateLimitError as e:
+        # Mark provider as rate-limited (source of truth from actual API)
+        rate_limiter.mark_api_limited(provider)
         raise HTTPException(status_code=429, detail=str(e))
     except DataNotAvailableError as e:
         raise HTTPException(status_code=400, detail=str(e))

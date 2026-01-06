@@ -1,100 +1,202 @@
-"""Rate limiting service to track API calls per provider."""
-from dataclasses import dataclass
-from typing import Dict
-from enum import IntEnum
+"""
+Accurate rate limiting service to track API calls per provider.
+
+Each provider has different limits and reset schedules:
+- FMP: 250 calls/day (resets at midnight UTC)
+- Yahoo: ~2000 calls/day (resets at midnight UTC)
+- Massive/Polygon: 5 calls/minute (rolling window)
+"""
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Dict, List
+from enum import Enum
 
 
-class ProviderLimits(IntEnum):
-    """Daily API call limits per provider (free tier)."""
-    FMP = 250       # FMP free tier: 250/day
-    YAHOO = 2000    # Yahoo is more lenient
-    MASSIVE = 5     # Polygon free tier: 5 calls/minute (very limited)
+class ResetSchedule(Enum):
+    """When the rate limit resets."""
+    DAILY = "daily"        # Resets at midnight UTC
+    PER_MINUTE = "minute"  # Rolling 1-minute window
+
+
+@dataclass
+class ProviderConfig:
+    """Configuration for a provider's rate limits."""
+    limit: int
+    reset_schedule: ResetSchedule
+    
+
+# Provider configurations
+PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
+    "fmp": ProviderConfig(limit=250, reset_schedule=ResetSchedule.DAILY),
+    "yahoo": ProviderConfig(limit=2000, reset_schedule=ResetSchedule.DAILY),
+    "massive": ProviderConfig(limit=5, reset_schedule=ResetSchedule.PER_MINUTE),
+}
 
 
 # Warning threshold (percentage of limit)
 WARNING_THRESHOLD = 0.8  # Warn at 80%
 
 
+@dataclass
+class CallRecord:
+    """Record of API calls with timestamps for accurate tracking."""
+    timestamps: List[datetime] = field(default_factory=list)
+    
+    def add_call(self, timestamp: datetime = None):
+        """Record a new API call."""
+        if timestamp is None:
+            timestamp = datetime.now(timezone.utc)
+        self.timestamps.append(timestamp)
+    
+    def get_count_since(self, since: datetime) -> int:
+        """Get number of calls since a given time."""
+        return sum(1 for ts in self.timestamps if ts >= since)
+    
+    def cleanup_old(self, before: datetime):
+        """Remove timestamps older than a given time to save memory."""
+        self.timestamps = [ts for ts in self.timestamps if ts >= before]
+
+
 class RateLimiter:
     """
-    Tracks API calls per provider and warns when approaching limits.
+    Accurately tracks API calls per provider with proper reset logic.
     
     Usage:
         limiter = RateLimiter()
-        limiter.increment("fmp")
-        if limiter.is_approaching_limit("fmp"):
-            # Show warning to user
+        limiter.record_call("fmp")
+        stats = limiter.get_usage_stats("fmp")
         if limiter.is_at_limit("fmp"):
             # Block request or show error
     """
     
     def __init__(self):
-        self._counts: Dict[str, int] = {}
+        self._records: Dict[str, CallRecord] = {}
+        # Track if provider hit actual API rate limit (from error response)
+        self._api_limited: Dict[str, bool] = {}
+    
+    def _get_record(self, provider: str) -> CallRecord:
+        """Get or create call record for provider."""
+        provider = provider.lower()
+        if provider not in self._records:
+            self._records[provider] = CallRecord()
+        return self._records[provider]
+    
+    def _get_config(self, provider: str) -> ProviderConfig:
+        """Get configuration for a provider."""
+        provider = provider.lower()
+        return PROVIDER_CONFIGS.get(
+            provider, 
+            ProviderConfig(limit=100, reset_schedule=ResetSchedule.DAILY)
+        )
+    
+    def _get_window_start(self, provider: str) -> datetime:
+        """Get the start of the current rate limit window."""
+        config = self._get_config(provider)
+        now = datetime.now(timezone.utc)
+        
+        if config.reset_schedule == ResetSchedule.DAILY:
+            # Start of today (midnight UTC)
+            return now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif config.reset_schedule == ResetSchedule.PER_MINUTE:
+            # 1 minute ago (rolling window)
+            from datetime import timedelta
+            return now - timedelta(minutes=1)
+        else:
+            return now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    def record_call(self, provider: str) -> int:
+        """
+        Record an API call for a provider.
+        Returns the current count in this window.
+        """
+        provider = provider.lower()
+        record = self._get_record(provider)
+        record.add_call()
+        
+        # Cleanup old timestamps to save memory (keep last 24 hours)
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        record.cleanup_old(cutoff)
+        
+        return self.get_count(provider)
     
     def get_count(self, provider: str) -> int:
-        """Get current call count for a provider."""
-        return self._counts.get(provider.lower(), 0)
-    
-    def increment(self, provider: str) -> int:
-        """Increment call count for a provider. Returns new count."""
+        """Get current call count in the active window."""
         provider = provider.lower()
-        self._counts[provider] = self._counts.get(provider, 0) + 1
-        return self._counts[provider]
+        record = self._get_record(provider)
+        window_start = self._get_window_start(provider)
+        return record.get_count_since(window_start)
     
-    def reset(self, provider: str) -> None:
-        """Reset call count for a provider."""
-        provider = provider.lower()
-        self._counts[provider] = 0
-    
-    def reset_all(self) -> None:
-        """Reset all provider counts."""
-        self._counts.clear()
-    
-    def _get_limit(self, provider: str) -> int:
-        """Get the limit for a provider."""
-        provider = provider.lower()
-        limits = {
-            "fmp": ProviderLimits.FMP,
-            "yahoo": ProviderLimits.YAHOO,
-            "massive": ProviderLimits.MASSIVE,
-        }
-        return limits.get(provider, 100)  # Default to 100 for unknown
+    def get_remaining(self, provider: str) -> int:
+        """Get remaining calls in the current window."""
+        # If API told us we're limited, return 0
+        if self._api_limited.get(provider.lower(), False):
+            return 0
+        
+        config = self._get_config(provider)
+        count = self.get_count(provider)
+        return max(0, config.limit - count)
     
     def is_approaching_limit(self, provider: str) -> bool:
         """Check if usage is approaching the limit (>80%)."""
+        config = self._get_config(provider)
         count = self.get_count(provider)
-        limit = self._get_limit(provider)
-        return count >= (limit * WARNING_THRESHOLD)
+        return count >= (config.limit * WARNING_THRESHOLD)
     
     def is_at_limit(self, provider: str) -> bool:
         """Check if at or over the limit."""
+        # If API told us we're limited, we're definitely at limit
+        if self._api_limited.get(provider.lower(), False):
+            return True
+        
+        config = self._get_config(provider)
         count = self.get_count(provider)
-        limit = self._get_limit(provider)
-        return count >= limit
+        return count >= config.limit
     
-    def get_remaining(self, provider: str) -> int:
-        """Get remaining calls for a provider."""
-        count = self.get_count(provider)
-        limit = self._get_limit(provider)
-        return max(0, limit - count)
+    def mark_api_limited(self, provider: str):
+        """
+        Mark provider as rate-limited based on actual API error.
+        This is the source of truth when API returns 429.
+        """
+        self._api_limited[provider.lower()] = True
+    
+    def clear_api_limited(self, provider: str):
+        """Clear the API-limited flag (e.g., after window resets)."""
+        self._api_limited[provider.lower()] = False
     
     def get_usage_stats(self, provider: str) -> Dict:
-        """Get usage statistics for a provider."""
+        """Get accurate usage statistics for a provider."""
+        provider = provider.lower()
+        config = self._get_config(provider)
         count = self.get_count(provider)
-        limit = self._get_limit(provider)
+        remaining = self.get_remaining(provider)
+        api_limited = self._api_limited.get(provider, False)
+        
         return {
+            "provider": provider,
             "used": count,
-            "limit": limit,
-            "remaining": max(0, limit - count),
-            "percentage": round((count / limit) * 100, 1) if limit > 0 else 0,
+            "limit": config.limit,
+            "remaining": remaining,
+            "percentage": round((count / config.limit) * 100, 1) if config.limit > 0 else 0,
+            "reset_schedule": config.reset_schedule.value,
+            "api_limited": api_limited,  # True if provider returned 429
         }
     
     def get_all_stats(self) -> Dict[str, Dict]:
-        """Get usage statistics for all tracked providers."""
-        providers = ["fmp", "yahoo", "massive"]
-        return {p: self.get_usage_stats(p) for p in providers}
+        """Get usage statistics for all providers."""
+        return {p: self.get_usage_stats(p) for p in PROVIDER_CONFIGS.keys()}
+    
+    def reset(self, provider: str) -> None:
+        """Manually reset a provider's count (for testing or admin)."""
+        provider = provider.lower()
+        self._records[provider] = CallRecord()
+        self._api_limited[provider] = False
+    
+    def reset_all(self) -> None:
+        """Reset all provider counts."""
+        self._records.clear()
+        self._api_limited.clear()
 
 
 # Global instance for the application
 rate_limiter = RateLimiter()
-

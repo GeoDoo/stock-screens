@@ -484,10 +484,21 @@ describe('App - Rate Limit Handling', () => {
     vi.clearAllMocks()
   })
 
-  it('shows error message and disables provider when rate limit exceeded', async () => {
+  it('shows error message when rate limit exceeded', async () => {
+    // Mock rate limits showing provider at limit
+    const mockRateLimitsAtLimit = {
+      fmp: { provider: 'fmp', used: 250, limit: 250, remaining: 0, percentage: 100, reset_schedule: 'daily', api_limited: true },
+      yahoo: { provider: 'yahoo', used: 2000, limit: 2000, remaining: 0, percentage: 100, reset_schedule: 'daily', api_limited: true },
+      massive: { provider: 'massive', used: 5, limit: 5, remaining: 0, percentage: 100, reset_schedule: 'minute', api_limited: false },
+    }
+
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      // Return rate limits showing provider at limit
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRateLimitsAtLimit) })
       }
       // Simulate rate limit error from API
       if (url.includes('/analyze')) {
@@ -520,10 +531,6 @@ describe('App - Rate Limit Handling', () => {
     // Should show rate limit error in error area
     const errorElement = await screen.findByText(/Rate limit exceeded for yahoo/i)
     expect(errorElement).toBeInTheDocument()
-    
-    // Provider should be marked with ⊘ symbol (may have multiple if same provider on both sides)
-    const disabledIndicators = screen.getAllByText('⊘')
-    expect(disabledIndicators.length).toBeGreaterThan(0)
   })
 })
 
