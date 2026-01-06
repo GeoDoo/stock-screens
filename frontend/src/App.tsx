@@ -219,7 +219,10 @@ export default function App() {
             if (altProvider) {
               const success = await tryProvider(altProvider, true);
               if (success) {
-                setFallbackNotice(`${provider} unavailable for ${symbol}. Using ${altProvider} instead.`);
+                // Use display names for better UX
+                const providerName = fundamentalProviders.find(p => p.id === provider)?.name || provider;
+                const altProviderName = fundamentalProviders.find(p => p.id === altProvider)?.name || altProvider;
+                setFallbackNotice(`${providerName} unavailable for ${symbol}. Using ${altProviderName} instead.`);
                 setSelectedFundamentalProvider(altProvider);
                 return true;
               }
