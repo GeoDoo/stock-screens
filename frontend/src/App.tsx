@@ -1049,12 +1049,17 @@ export default function App() {
                     Data from <span className="font-semibold text-gray-600">{technicalProviders.find(p => p.id === technicalResult.provider)?.name || technicalResult.provider}</span>
                   </span>
                 </div>
-                <div className="flex items-baseline gap-4">
-                  <span className="text-4xl font-bold font-mono">${technicalResult.current_price.toFixed(2)}</span>
-                  <span className={`text-lg font-semibold ${technicalResult.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {technicalResult.price_change_pct >= 0 ? '+' : ''}{technicalResult.price_change_pct.toFixed(2)}%
-                  </span>
-                  <span className="text-sm text-gray-400">{technicalResult.period_days} days</span>
+                <div className="space-y-2">
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-sm text-gray-500">Current Price</span>
+                    <span className="text-3xl font-bold font-mono">${technicalResult.current_price.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-sm text-gray-500">Change (past {technicalResult.period_days} days)</span>
+                    <span className={`text-lg font-semibold ${technicalResult.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {technicalResult.price_change_pct >= 0 ? '+' : ''}{technicalResult.price_change_pct.toFixed(2)}%
+                    </span>
+                  </div>
                 </div>
 
                 {/* Limited data warning */}
