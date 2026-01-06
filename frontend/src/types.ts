@@ -20,7 +20,8 @@ export interface RateLimitStats {
   remaining: number;
   percentage: number;
   reset_schedule: 'daily' | 'minute';  // When limit resets
-  api_limited: boolean;  // True if API returned 429
+  api_limited: boolean;  // True if API returned 429 (auto-clears when window resets)
+  reset_in_seconds: number | null;  // Seconds until can try again (null if not limited)
 }
 
 export interface CompanyData {
