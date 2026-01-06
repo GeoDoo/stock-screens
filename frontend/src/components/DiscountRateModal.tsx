@@ -57,7 +57,7 @@ export function DiscountRateModal({ isOpen, onClose, onSubmit, onSkip }: Discoun
           Discount Rate Required
         </h2>
         
-        <p className="text-gray-600 mb-6">
+        <p className="text-red-600 mb-6">
           WACC cannot be calculated due to missing data (e.g., Beta, Cost of Debt). 
           Please provide your own discount rate to continue with DCF valuation, or skip DCF analysis.
         </p>
