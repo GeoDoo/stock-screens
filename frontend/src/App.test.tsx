@@ -426,3 +426,7 @@ describe('App - Provider Changes', () => {
   })
 })
 
+// Provider switching behavior tests are in:
+// - src/hooks/useProviderState.test.ts (logic documentation)
+// - The "shows 'no data' message" test above (integration)
+
