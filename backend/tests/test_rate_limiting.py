@@ -58,13 +58,13 @@ class TestRateLimiter:
     
     def test_initial_count_is_zero(self):
         """New rate limiter should have zero calls."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         assert limiter.get_count("fmp") == 0
         assert limiter.get_count("yahoo") == 0
     
     def test_record_call_increases_count(self):
         """Recording a call should increase the count."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         limiter.record_call("fmp")
         assert limiter.get_count("fmp") == 1
         
@@ -74,7 +74,7 @@ class TestRateLimiter:
     
     def test_different_providers_tracked_separately(self):
         """Each provider should have its own counter."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         limiter.record_call("fmp")
         limiter.record_call("fmp")
         limiter.record_call("yahoo")
@@ -84,7 +84,7 @@ class TestRateLimiter:
     
     def test_reset_clears_count(self):
         """Reset should clear the count for a provider."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         limiter.record_call("fmp")
         limiter.record_call("fmp")
         limiter.reset("fmp")
@@ -93,7 +93,7 @@ class TestRateLimiter:
     
     def test_reset_all_clears_all_counts(self):
         """Reset all should clear all provider counts."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         limiter.record_call("fmp")
         limiter.record_call("yahoo")
         limiter.reset_all()
@@ -103,7 +103,7 @@ class TestRateLimiter:
     
     def test_is_approaching_limit(self):
         """Should detect when approaching the limit (80%)."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         
         # FMP: 250/day, warn at 200 (80%)
         for _ in range(200):
@@ -113,7 +113,7 @@ class TestRateLimiter:
     
     def test_not_approaching_limit_when_low(self):
         """Should not warn when usage is low."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         
         for _ in range(50):
             limiter.record_call("fmp")
@@ -122,7 +122,7 @@ class TestRateLimiter:
     
     def test_is_at_limit(self):
         """Should detect when at the limit."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         
         # FMP: 250/day
         for _ in range(250):
@@ -132,7 +132,7 @@ class TestRateLimiter:
     
     def test_get_remaining(self):
         """Should return remaining calls."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         
         for _ in range(100):
             limiter.record_call("fmp")
@@ -141,7 +141,7 @@ class TestRateLimiter:
     
     def test_get_usage_stats(self):
         """Should return comprehensive usage statistics."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         
         for _ in range(100):
             limiter.record_call("fmp")
@@ -158,7 +158,7 @@ class TestRateLimiter:
     
     def test_mark_api_limited(self):
         """Marking as API-limited should affect remaining and is_at_limit."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         
         # Record only 10 calls (well under limit)
         for _ in range(10):
@@ -173,7 +173,7 @@ class TestRateLimiter:
     
     def test_clear_api_limited(self):
         """Clearing API-limited flag should restore normal behavior."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         limiter.mark_api_limited("fmp")
         assert limiter.is_at_limit("fmp") == True
         
@@ -182,7 +182,7 @@ class TestRateLimiter:
     
     def test_daily_reset_window(self):
         """Daily limit providers should reset at midnight UTC."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         
         # Mock time to be 11:59 PM UTC
         yesterday = datetime.now(timezone.utc).replace(hour=23, minute=59) - timedelta(days=1)
@@ -196,7 +196,7 @@ class TestRateLimiter:
     
     def test_minute_window_for_massive(self):
         """Massive/Polygon should use per-minute rolling window."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         
         # Add a call 2 minutes ago
         record = limiter._get_record("massive")
@@ -208,7 +208,7 @@ class TestRateLimiter:
     
     def test_case_insensitive_provider_names(self):
         """Provider names should be case-insensitive."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         
         limiter.record_call("FMP")
         limiter.record_call("fmp")
@@ -276,7 +276,7 @@ class TestRateLimiterAutoClear:
     
     def test_api_limited_auto_clears_for_massive(self):
         """Massive provider should auto-clear after 60 seconds."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         
         # Mark as limited
         limiter.mark_api_limited("massive")
@@ -291,7 +291,7 @@ class TestRateLimiterAutoClear:
     
     def test_reset_in_seconds_returns_value_when_limited(self):
         """Should return seconds until reset when limited."""
-        limiter = RateLimiter()
+        limiter = RateLimiter(persist=False)
         limiter.mark_api_limited("massive")
         
         stats = limiter.get_usage_stats("massive")

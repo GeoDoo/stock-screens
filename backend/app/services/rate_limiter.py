@@ -5,11 +5,16 @@ Each provider has different limits and reset schedules:
 - FMP: 250 calls/day (resets at midnight UTC)
 - Yahoo: ~2000 calls/day (resets at midnight UTC)
 - Massive/Polygon: 5 calls/minute (rolling window)
+
+Persists call history to survive server restarts.
 """
+import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 from enum import Enum
+from pathlib import Path
 
 
 class ResetSchedule(Enum):
@@ -101,6 +106,7 @@ class RateLimiter:
     """
     Accurately tracks API calls per provider with proper reset logic.
     Auto-clears api_limited flag when the reset window passes.
+    Persists state to survive server restarts.
     
     Usage:
         limiter = RateLimiter()
@@ -110,10 +116,95 @@ class RateLimiter:
             # Block request or show error
     """
     
-    def __init__(self):
+    # File path for persistence (relative to backend directory)
+    PERSISTENCE_FILE = Path(__file__).parent.parent.parent / ".rate_limits.json"
+    
+    def __init__(self, persist: bool = True):
+        """
+        Initialize rate limiter.
+        
+        Args:
+            persist: If True, load/save state from/to file. Set False for testing.
+        """
+        self._persist = persist
         self._records: Dict[str, CallRecord] = {}
         # Track when provider hit actual API rate limit (with timestamp for auto-clear)
         self._api_limited: Dict[str, ApiLimitedRecord] = {}
+        # Load persisted state on startup (unless disabled for testing)
+        if self._persist:
+            self._load_from_file()
+    
+    def _load_from_file(self):
+        """Load persisted rate limit state from file."""
+        try:
+            if self.PERSISTENCE_FILE.exists():
+                with open(self.PERSISTENCE_FILE, "r") as f:
+                    data = json.load(f)
+                
+                # Load call records
+                for provider, timestamps in data.get("records", {}).items():
+                    record = CallRecord()
+                    for ts_str in timestamps:
+                        try:
+                            ts = datetime.fromisoformat(ts_str)
+                            record.timestamps.append(ts)
+                        except (ValueError, TypeError):
+                            continue
+                    self._records[provider] = record
+                
+                # Load api_limited records
+                for provider, limited_data in data.get("api_limited", {}).items():
+                    try:
+                        limited_at = datetime.fromisoformat(limited_data["limited_at"])
+                        reset_schedule = ResetSchedule(limited_data["reset_schedule"])
+                        self._api_limited[provider] = ApiLimitedRecord(
+                            limited_at=limited_at,
+                            reset_schedule=reset_schedule
+                        )
+                    except (ValueError, KeyError, TypeError):
+                        continue
+                        
+                # Cleanup old data
+                cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+                for record in self._records.values():
+                    record.cleanup_old(cutoff)
+        except (json.JSONDecodeError, IOError):
+            # If file is corrupt or unreadable, start fresh
+            pass
+    
+    def _save_to_file(self):
+        """Persist rate limit state to file."""
+        if not self._persist:
+            return
+        try:
+            data = {
+                "records": {},
+                "api_limited": {},
+                "saved_at": datetime.now(timezone.utc).isoformat()
+            }
+            
+            # Save call records (only timestamps from last 24 hours)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+            for provider, record in self._records.items():
+                recent_timestamps = [
+                    ts.isoformat() for ts in record.timestamps 
+                    if ts >= cutoff
+                ]
+                if recent_timestamps:
+                    data["records"][provider] = recent_timestamps
+            
+            # Save api_limited records
+            for provider, limited_record in self._api_limited.items():
+                data["api_limited"][provider] = {
+                    "limited_at": limited_record.limited_at.isoformat(),
+                    "reset_schedule": limited_record.reset_schedule.value
+                }
+            
+            with open(self.PERSISTENCE_FILE, "w") as f:
+                json.dump(data, f, indent=2)
+        except IOError:
+            # If we can't save, continue without persistence
+            pass
     
     def _get_record(self, provider: str) -> CallRecord:
         """Get or create call record for provider."""
@@ -156,6 +247,9 @@ class RateLimiter:
         # Cleanup old timestamps to save memory (keep last 24 hours)
         cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         record.cleanup_old(cutoff)
+        
+        # Persist to file
+        self._save_to_file()
         
         return self.get_count(provider)
     
@@ -219,12 +313,16 @@ class RateLimiter:
             limited_at=datetime.now(timezone.utc),
             reset_schedule=config.reset_schedule
         )
+        # Persist to file
+        self._save_to_file()
     
     def clear_api_limited(self, provider: str):
         """Clear the API-limited flag (e.g., manual override)."""
         provider = provider.lower()
         if provider in self._api_limited:
             del self._api_limited[provider]
+            # Persist to file
+            self._save_to_file()
     
     def get_time_until_reset(self, provider: str) -> Optional[int]:
         """Get seconds until rate limit resets (None if not limited)."""
@@ -265,11 +363,15 @@ class RateLimiter:
         self._records[provider] = CallRecord()
         if provider in self._api_limited:
             del self._api_limited[provider]
+        # Persist to file
+        self._save_to_file()
     
     def reset_all(self) -> None:
         """Reset all provider counts."""
         self._records.clear()
         self._api_limited.clear()
+        # Persist to file (removes or empties the file)
+        self._save_to_file()
 
 
 # Global instance for the application
