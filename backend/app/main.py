@@ -79,6 +79,8 @@ class StockDataResponse(BaseModel):
     """Response for /api/stock endpoint."""
     symbol: str
     company_name: Optional[str]
+    industry: Optional[str]
+    sector: Optional[str]
     data_provider: str  # Which provider supplied the data (fmp, yahoo, etc.)
     data: CompanyData
     hints: HistoricalHints
@@ -300,6 +302,8 @@ async def get_stock(symbol: str, provider: str):
     return StockDataResponse(
         symbol=symbol.upper(),
         company_name=data.get("profile", {}).get("companyName"),
+        industry=data.get("profile", {}).get("industry"),
+        sector=data.get("profile", {}).get("sector"),
         data_provider=stock_data.provider,
         data=CompanyData(
             beta=extractor.beta(),

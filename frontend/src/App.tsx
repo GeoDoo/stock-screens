@@ -461,13 +461,18 @@ export default function App() {
 
             {/* Company Data */}
             <section className="mb-16">
-              <div className="flex items-center gap-3 mb-8">
-                <h2 className="text-xl font-semibold">
-                  {stockData.symbol} {stockData.company_name && `— ${stockData.company_name}`}
-                </h2>
-                <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500 uppercase tracking-wide">
-                  via {stockData.data_provider}
-                </span>
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-1">
+                  <h2 className="text-xl font-semibold">
+                    {stockData.symbol} {stockData.company_name && `— ${stockData.company_name}`}
+                  </h2>
+                  <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500 uppercase tracking-wide">
+                    via {stockData.data_provider}
+                  </span>
+                </div>
+                {stockData.industry && (
+                  <p className="text-sm text-gray-500">{stockData.industry}{stockData.sector && ` · ${stockData.sector}`}</p>
+                )}
               </div>
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
@@ -1023,15 +1028,20 @@ export default function App() {
         {stockData && activeTab === 'technical' && (
           <div className="space-y-8">
             {/* Company Header - always visible, same as Fundamental */}
-            <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold">
-                {stockData.symbol} {stockData.company_name && `— ${stockData.company_name}`}
-              </h2>
-              <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500 uppercase tracking-wide">
-                via {technicalResult 
-                  ? (technicalProviders.find(p => p.id === technicalResult.provider)?.name || technicalResult.provider)
-                  : (technicalProviders.find(p => p.id === selectedTechnicalProvider)?.name || selectedTechnicalProvider)}
-              </span>
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h2 className="text-xl font-semibold">
+                  {stockData.symbol} {stockData.company_name && `— ${stockData.company_name}`}
+                </h2>
+                <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500 uppercase tracking-wide">
+                  via {technicalResult 
+                    ? (technicalProviders.find(p => p.id === technicalResult.provider)?.name || technicalResult.provider)
+                    : (technicalProviders.find(p => p.id === selectedTechnicalProvider)?.name || selectedTechnicalProvider)}
+                </span>
+              </div>
+              {stockData.industry && (
+                <p className="text-sm text-gray-500">{stockData.industry}{stockData.sector && ` · ${stockData.sector}`}</p>
+              )}
             </div>
 
             {/* Run Technical Analysis */}
