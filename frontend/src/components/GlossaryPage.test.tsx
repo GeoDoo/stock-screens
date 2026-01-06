@@ -62,21 +62,31 @@ describe('GlossaryPage', () => {
     render(<GlossaryPage />)
     
     const terms = screen.getAllByRole('heading', { level: 3 })
-    const termTexts = terms.map(t => t.textContent?.split(' ')[0] || '')
+    // Extract just the term name (before the dash)
+    const termTexts = terms.map(t => {
+      const text = t.textContent || ''
+      return text.split('—')[0].trim()
+    })
     
     // Beta should come before DCF alphabetically
     const betaIndex = termTexts.findIndex(t => t === 'Beta')
     const dcfIndex = termTexts.findIndex(t => t === 'DCF')
     
+    expect(betaIndex).toBeGreaterThan(-1) // Beta exists
+    expect(dcfIndex).toBeGreaterThan(-1)  // DCF exists
     expect(betaIndex).toBeLessThan(dcfIndex)
   })
 
   it('includes a back to app link', () => {
     render(<GlossaryPage />)
     
-    const backLink = screen.getByText(/Back to App/i)
-    expect(backLink).toBeInTheDocument()
-    expect(backLink.closest('a')).toHaveAttribute('href', '/')
+    // There are two "Back to App" links (header and footer)
+    const backLinks = screen.getAllByText(/Back to App/i)
+    expect(backLinks.length).toBeGreaterThanOrEqual(1)
+    
+    // Check the first one has correct href
+    const firstBackLink = backLinks[0].closest('a')
+    expect(firstBackLink).toHaveAttribute('href', '/')
   })
 })
 
