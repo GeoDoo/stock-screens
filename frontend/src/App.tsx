@@ -12,6 +12,7 @@ import {
   normalizeHistoricalValuation,
   formatMetric,
 } from './normalizers';
+import { shouldFallback, getAlternativeProvider } from './providerFallback';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -183,26 +184,6 @@ export default function App() {
   // Ref to prevent duplicate technical analysis calls
   const technicalFetchRef = useRef<{ inProgress: boolean; provider: string | null }>({ inProgress: false, provider: null });
 
-  // Errors that should trigger auto-fallback to another provider
-  const shouldFallback = (errorMsg: string): boolean => {
-    const fallbackTriggers = [
-      'premium',
-      'subscription',
-      'not found',
-      'ticker not found',
-      'no data available',
-    ];
-    const lowerMsg = errorMsg.toLowerCase();
-    return fallbackTriggers.some(trigger => lowerMsg.includes(trigger));
-  };
-
-  // Get alternative fundamental provider
-  const getAlternativeProvider = (currentProvider: string): string | null => {
-    if (!fundamentalProviders || fundamentalProviders.length === 0) return null;
-    const alternatives = fundamentalProviders.filter(p => p.id !== currentProvider && p.available);
-    return alternatives.length > 0 ? alternatives[0].id : null;
-  };
-
   // Unified analyze function - uses batch endpoint for efficiency (DRY/KISS)
   const analyzeStock = async () => {
     if (!ticker.trim() || !selectedFundamentalProvider) return;
@@ -234,7 +215,7 @@ export default function App() {
           
           // If this is the primary provider and error is fallback-worthy, try alternative
           if (!isFallback && shouldFallback(errorMsg)) {
-            const altProvider = getAlternativeProvider(provider);
+            const altProvider = getAlternativeProvider(provider, fundamentalProviders);
             if (altProvider) {
               const success = await tryProvider(altProvider, true);
               if (success) {
