@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { glossaryTerms, glossaryMap, getGlossaryTerm } from './glossary'
-import type { GlossaryTerm } from './glossary'
 
 describe('glossaryTerms', () => {
   it('contains multiple terms', () => {
