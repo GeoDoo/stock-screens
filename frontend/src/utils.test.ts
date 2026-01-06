@@ -6,6 +6,10 @@ describe('formatCurrency', () => {
     expect(formatCurrency(null)).toBe('—')
   })
 
+  it('returns em dash for undefined', () => {
+    expect(formatCurrency(undefined as unknown as number | null)).toBe('—')
+  })
+
   it('formats trillions correctly', () => {
     expect(formatCurrency(1500000000000)).toBe('$1.50T')
     expect(formatCurrency(3000000000000)).toBe('$3.00T')
@@ -46,6 +50,10 @@ describe('formatPercent', () => {
     expect(formatPercent(null)).toBe('—')
   })
 
+  it('returns em dash for undefined', () => {
+    expect(formatPercent(undefined as unknown as number | null)).toBe('—')
+  })
+
   it('converts decimal to percentage', () => {
     expect(formatPercent(0.10)).toBe('10.00%')
     expect(formatPercent(0.0523)).toBe('5.23%')
@@ -67,6 +75,10 @@ describe('formatPercent', () => {
 describe('formatNumber', () => {
   it('returns em dash for null', () => {
     expect(formatNumber(null)).toBe('—')
+  })
+
+  it('returns em dash for undefined', () => {
+    expect(formatNumber(undefined as unknown as number | null)).toBe('—')
   })
 
   it('formats with default 2 decimals', () => {
@@ -91,6 +103,10 @@ describe('formatNumber', () => {
 describe('formatShareCount', () => {
   it('returns em dash for null', () => {
     expect(formatShareCount(null)).toBe('—')
+  })
+
+  it('returns em dash for undefined', () => {
+    expect(formatShareCount(undefined as unknown as number | null)).toBe('—')
   })
 
   it('formats billions correctly', () => {
