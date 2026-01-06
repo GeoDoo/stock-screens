@@ -252,9 +252,18 @@ export default function App() {
   // Smart validation: WACC-related issues can be bypassed with custom discount rate
   const canBypassWithCustomRate = useCustomDiscountRate && customDiscountRate && parseFloat(customDiscountRate) > 0;
   
+  // Fields that are WACC-related (can be bypassed with custom discount rate)
+  const waccFields = ['beta', 'market_cap', 'total_debt', 'cost_of_debt'];
+  
+  const isWaccRelated = (issue: { field: string; impacts?: string }) => {
+    // Check impacts field if available, otherwise fall back to field name
+    if (issue.impacts) return issue.impacts === 'wacc';
+    return waccFields.includes(issue.field.toLowerCase());
+  };
+  
   // Filter errors - WACC-related errors are irrelevant when using custom discount rate
   const relevantErrors = (stockData?.validation?.errors ?? []).filter(e => {
-    if (canBypassWithCustomRate && e.impacts === 'wacc') {
+    if (canBypassWithCustomRate && isWaccRelated(e)) {
       return false;
     }
     return true;
@@ -262,7 +271,7 @@ export default function App() {
   
   // Filter warnings - WACC-related warnings are irrelevant when using custom discount rate
   const relevantWarnings = (stockData?.validation?.warnings ?? []).filter(w => {
-    if (canBypassWithCustomRate && w.impacts === 'wacc') {
+    if (canBypassWithCustomRate && isWaccRelated(w)) {
       return false;
     }
     return true;
@@ -630,17 +639,14 @@ export default function App() {
                     ['Enterprise Value', formatCurrency(result.enterprise_value)],
                     ['Equity Value', formatCurrency(result.equity_value)],
                     ['Net Debt', formatCurrency(result.net_debt)],
-                    ['Calculated WACC', formatPercent(result.wacc)],
-                    ['Discount Rate Used', formatPercent(result.discount_rate)],
+                    [
+                      result.using_custom_discount_rate ? 'Discount Rate (custom)' : 'Discount Rate (WACC)',
+                      formatPercent(result.discount_rate)
+                    ],
                     ['Terminal Value', formatCurrency(result.terminal_value)],
                   ].map(([label, value]) => (
                     <tr key={label} className="border-b border-gray-100">
-                      <td className="py-3 text-sm text-gray-500">
-                        {label}
-                        {label === 'Discount Rate Used' && result.using_custom_discount_rate && (
-                          <span className="ml-2 text-xs text-emerald-600">(custom)</span>
-                        )}
-                      </td>
+                      <td className="py-3 text-sm text-gray-500">{label}</td>
                       <td className="py-3 text-sm font-mono font-medium text-right">{value}</td>
                     </tr>
                   ))}
