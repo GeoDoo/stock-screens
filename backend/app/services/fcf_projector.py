@@ -2,6 +2,10 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 
+# Default tax rate when company data is missing
+DEFAULT_TAX_RATE = 0.25
+
+
 @dataclass
 class FCFProjector:
     """
@@ -20,7 +24,12 @@ class FCFProjector:
     historical_da: List[float]
     historical_capex: List[float]
     historical_working_capital: List[float]
-    tax_rate: float
+    tax_rate: Optional[float] = None  # Will use DEFAULT_TAX_RATE if None
+    
+    @property
+    def effective_tax_rate(self) -> float:
+        """Return tax rate or default if not available."""
+        return self.tax_rate if self.tax_rate is not None else DEFAULT_TAX_RATE
 
     def revenue_cagr(self) -> float:
         """
@@ -117,7 +126,7 @@ class FCFProjector:
         ebit = revenue * operating_margin
         
         # Calculate NOPAT (Net Operating Profit After Tax)
-        nopat = ebit * (1 - self.tax_rate)
+        nopat = ebit * (1 - self.effective_tax_rate)
         
         # D&A as % of revenue
         da = revenue * da_ratio

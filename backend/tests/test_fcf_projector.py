@@ -158,5 +158,37 @@ class TestFCFProjector:
         assert fcf["delta_wc"] < 0
         # FCF should be higher due to WC release
 
+    def test_handles_none_tax_rate_with_default(self):
+        """Uses default 25% tax rate when tax_rate is None (regression test)."""
+        from app.services.fcf_projector import DEFAULT_TAX_RATE
+        
+        projector = FCFProjector(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[10],
+            historical_working_capital=[15],
+            tax_rate=None,  # Missing tax data
+        )
+
+        # Should use default tax rate
+        assert projector.effective_tax_rate == DEFAULT_TAX_RATE
+        assert projector.effective_tax_rate == 0.25
+
+        # Should not crash when projecting
+        fcf = projector.project_fcf_year(
+            prior_revenue=100,
+            prior_working_capital=15,
+            revenue_growth=0.10,
+            operating_margin=0.20,
+            da_ratio=0.05,
+            capex_ratio=0.10,
+            wc_ratio=0.15,
+        )
+
+        # NOPAT should be calculated with default tax rate
+        # Revenue = 110, EBIT = 22, NOPAT = 22 * 0.75 = 16.5
+        assert abs(fcf["nopat"] - 16.5) < 0.01
+
 
 
