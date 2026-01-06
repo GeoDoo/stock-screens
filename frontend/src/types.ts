@@ -232,3 +232,39 @@ export interface TechnicalAnalysisResult {
   };
 }
 
+// Financial Ratios Types
+export interface FinancialRatiosResult {
+  symbol: string;
+  company_name: string | null;
+  valuation: {
+    pe_ratio: number | null;
+    earnings_yield: number | null;
+    ps_ratio: number | null;
+    pb_ratio: number | null;
+    ev_to_ebitda: number | null;
+    ev_to_revenue: number | null;
+  };
+  dividend: {
+    dividend_yield: number | null;
+    payout_ratio: number | null;
+  };
+  profitability: {
+    gross_margin: number | null;
+    operating_margin: number | null;
+    net_margin: number | null;
+    roe: number | null;
+    roa: number | null;
+    roic: number | null;
+  };
+  liquidity: {
+    current_ratio: number | null;
+    quick_ratio: number | null;
+    debt_to_equity: number | null;
+    interest_coverage: number | null;
+  };
+  efficiency: {
+    asset_turnover: number | null;
+    inventory_turnover: number | null;
+  };
+}
+

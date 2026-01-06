@@ -15,6 +15,7 @@ from app.services.data_validator import DataValidator
 from app.services.wacc_calculator import WACCCalculator
 from app.services.scenario_calculator import ScenarioCalculator, Scenario
 from app.services.comparable_analyzer import ComparableAnalyzer
+from app.services.ratio_calculator import RatioCalculator
 from app.services.fmp_client import FMPClient
 from app.services.technical_service import TechnicalService
 from app.services.fmp_provider import FMPProvider
@@ -563,6 +564,75 @@ async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
         "summary": {
             "average_implied_price": result.average_implied_price,
             "average_upside_percent": result.average_upside,
+        },
+    }
+
+
+@app.get("/api/stock/{symbol}/ratios")
+async def get_ratios(symbol: str, provider: str):
+    """
+    Get comprehensive financial ratios for a stock.
+    
+    Args:
+        symbol: Stock ticker symbol
+        provider: Data provider to use (fmp or yahoo) - REQUIRED
+    
+    Returns ratios organized by category:
+    - Valuation: P/E, Earnings Yield, P/S, P/B, EV/EBITDA, EV/Revenue
+    - Dividend: Dividend Yield, Payout Ratio
+    - Profitability: Gross/Operating/Net Margins, ROE, ROA, ROIC
+    - Liquidity: Current Ratio, Quick Ratio, Debt/Equity, Interest Coverage
+    - Efficiency: Asset Turnover, Inventory Turnover
+    """
+    client = get_client_for_provider(provider)
+    
+    try:
+        stock_data = await client.get_stock_data(symbol.upper())
+        data = stock_data_to_legacy(stock_data)
+    except RateLimitError as e:
+        raise HTTPException(status_code=429, detail=str(e))
+    except TickerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ProviderError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching data: {str(e)}")
+    
+    calculator = RatioCalculator()
+    ratios = calculator.calculate(data)
+    
+    return {
+        "symbol": symbol.upper(),
+        "company_name": data.get("profile", {}).get("companyName"),
+        "valuation": {
+            "pe_ratio": ratios.valuation.pe_ratio,
+            "earnings_yield": ratios.valuation.earnings_yield,
+            "ps_ratio": ratios.valuation.ps_ratio,
+            "pb_ratio": ratios.valuation.pb_ratio,
+            "ev_to_ebitda": ratios.valuation.ev_to_ebitda,
+            "ev_to_revenue": ratios.valuation.ev_to_revenue,
+        },
+        "dividend": {
+            "dividend_yield": ratios.dividend.dividend_yield,
+            "payout_ratio": ratios.dividend.payout_ratio,
+        },
+        "profitability": {
+            "gross_margin": ratios.profitability.gross_margin,
+            "operating_margin": ratios.profitability.operating_margin,
+            "net_margin": ratios.profitability.net_margin,
+            "roe": ratios.profitability.roe,
+            "roa": ratios.profitability.roa,
+            "roic": ratios.profitability.roic,
+        },
+        "liquidity": {
+            "current_ratio": ratios.liquidity.current_ratio,
+            "quick_ratio": ratios.liquidity.quick_ratio,
+            "debt_to_equity": ratios.liquidity.debt_to_equity,
+            "interest_coverage": ratios.liquidity.interest_coverage,
+        },
+        "efficiency": {
+            "asset_turnover": ratios.efficiency.asset_turnover,
+            "inventory_turnover": ratios.efficiency.inventory_turnover,
         },
     }
 
