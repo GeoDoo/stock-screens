@@ -1057,6 +1057,16 @@ export default function App() {
                   <span className="text-sm text-gray-400">{technicalResult.period_days} days</span>
                 </div>
 
+                {/* Limited data warning */}
+                {technicalResult.prices.length < 50 && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-800">
+                      <span className="font-semibold">Limited data:</span> Only {technicalResult.prices.length} trading days available. 
+                      Some indicators need more data to calculate.
+                    </p>
+                  </div>
+                )}
+
                 {/* Signal Summary */}
                 <div className="grid grid-cols-3 gap-6 max-w-xl">
                   <div className="p-4 rounded-lg border border-gray-100">
@@ -1113,7 +1123,7 @@ export default function App() {
                         }).join(' ');
                         
                         // SMA 20 line
-                        const sma20Points = technicalResult.indicators.sma_20.map((s, i) => {
+                        const sma20Points = technicalResult.indicators.sma_20.map((s) => {
                           const priceIdx = prices.findIndex(p => p.timestamp === s.timestamp);
                           if (priceIdx === -1) return null;
                           const x = padding + (priceIdx / (prices.length - 1)) * chartWidth;
@@ -1122,7 +1132,7 @@ export default function App() {
                         }).filter(Boolean).join(' ');
                         
                         // SMA 50 line
-                        const sma50Points = technicalResult.indicators.sma_50.map((s, i) => {
+                        const sma50Points = technicalResult.indicators.sma_50.map((s) => {
                           const priceIdx = prices.findIndex(p => p.timestamp === s.timestamp);
                           if (priceIdx === -1) return null;
                           const x = padding + (priceIdx / (prices.length - 1)) * chartWidth;
@@ -1197,107 +1207,118 @@ export default function App() {
                 {/* RSI Chart */}
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">RSI (14)</h3>
-                  <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
-                    <svg viewBox="0 0 800 120" className="w-full h-24">
-                      {/* Overbought/Oversold zones */}
-                      <rect x="20" y="0" width="760" height="30" fill="#fef2f2" opacity="0.5" />
-                      <rect x="20" y="90" width="760" height="30" fill="#ecfdf5" opacity="0.5" />
-                      
-                      {/* RSI line */}
-                      {technicalResult.indicators.rsi_14.length > 1 && (() => {
-                        const rsiData = technicalResult.indicators.rsi_14;
-                        const padding = 20;
-                        const chartWidth = 760;
-                        const chartHeight = 120;
+                  {technicalResult.indicators.rsi_14.length > 1 ? (
+                    <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
+                      <svg viewBox="0 0 800 120" className="w-full h-24">
+                        {/* Overbought/Oversold zones */}
+                        <rect x="20" y="0" width="760" height="30" fill="#fef2f2" opacity="0.5" />
+                        <rect x="20" y="90" width="760" height="30" fill="#ecfdf5" opacity="0.5" />
                         
-                        const points = rsiData.map((r, i) => {
-                          const x = padding + (i / (rsiData.length - 1)) * chartWidth;
-                          const y = chartHeight - (r.value / 100) * chartHeight;
-                          return `${x},${y}`;
-                        }).join(' ');
-                        
-                        return (
-                          <>
-                            {/* 70/30 lines */}
-                            <line x1={padding} y1={30} x2={padding + chartWidth} y2={30} stroke="#ef4444" strokeWidth="1" strokeDasharray="4" />
-                            <line x1={padding} y1={90} x2={padding + chartWidth} y2={90} stroke="#10b981" strokeWidth="1" strokeDasharray="4" />
-                            <line x1={padding} y1={60} x2={padding + chartWidth} y2={60} stroke="#e5e7eb" strokeWidth="1" />
-                            
-                            {/* RSI line */}
-                            <polyline points={points} fill="none" stroke="#6366f1" strokeWidth="2" />
-                            
-                            {/* Labels */}
-                            <text x={padding - 5} y={34} textAnchor="end" fontSize="9" fill="#ef4444">70</text>
-                            <text x={padding - 5} y={94} textAnchor="end" fontSize="9" fill="#10b981">30</text>
-                          </>
-                        );
-                      })()}
-                    </svg>
-                  </div>
+                        {(() => {
+                          const rsiData = technicalResult.indicators.rsi_14;
+                          const padding = 20;
+                          const chartWidth = 760;
+                          const chartHeight = 120;
+                          
+                          const points = rsiData.map((r, i) => {
+                            const x = padding + (i / (rsiData.length - 1)) * chartWidth;
+                            const y = chartHeight - (r.value / 100) * chartHeight;
+                            return `${x},${y}`;
+                          }).join(' ');
+                          
+                          return (
+                            <>
+                              {/* 70/30 lines */}
+                              <line x1={padding} y1={30} x2={padding + chartWidth} y2={30} stroke="#ef4444" strokeWidth="1" strokeDasharray="4" />
+                              <line x1={padding} y1={90} x2={padding + chartWidth} y2={90} stroke="#10b981" strokeWidth="1" strokeDasharray="4" />
+                              <line x1={padding} y1={60} x2={padding + chartWidth} y2={60} stroke="#e5e7eb" strokeWidth="1" />
+                              
+                              {/* RSI line */}
+                              <polyline points={points} fill="none" stroke="#6366f1" strokeWidth="2" />
+                              
+                              {/* Labels */}
+                              <text x={padding - 5} y={34} textAnchor="end" fontSize="9" fill="#ef4444">70</text>
+                              <text x={padding - 5} y={94} textAnchor="end" fontSize="9" fill="#10b981">30</text>
+                            </>
+                          );
+                        })()}
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-6 text-center">
+                      <p className="text-sm text-gray-500">Not enough data. RSI needs at least 14 trading days.</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* MACD Chart */}
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">MACD</h3>
-                  <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
-                    <svg viewBox="0 0 800 120" className="w-full h-24">
-                      {technicalResult.indicators.macd.length > 1 && (() => {
-                        const macdData = technicalResult.indicators.macd;
-                        const maxVal = Math.max(...macdData.map(m => Math.max(Math.abs(m.macd), Math.abs(m.signal), Math.abs(m.histogram))));
-                        const padding = 20;
-                        const chartWidth = 760;
-                        const chartHeight = 120;
-                        const midY = chartHeight / 2;
-                        
-                        const macdPoints = macdData.map((m, i) => {
-                          const x = padding + (i / (macdData.length - 1)) * chartWidth;
-                          const y = midY - (m.macd / maxVal) * (midY - 10);
-                          return `${x},${y}`;
-                        }).join(' ');
-                        
-                        const signalPoints = macdData.map((m, i) => {
-                          const x = padding + (i / (macdData.length - 1)) * chartWidth;
-                          const y = midY - (m.signal / maxVal) * (midY - 10);
-                          return `${x},${y}`;
-                        }).join(' ');
-                        
-                        return (
-                          <>
-                            {/* Zero line */}
-                            <line x1={padding} y1={midY} x2={padding + chartWidth} y2={midY} stroke="#e5e7eb" strokeWidth="1" />
-                            
-                            {/* Histogram bars */}
-                            {macdData.map((m, i) => {
-                              const x = padding + (i / (macdData.length - 1)) * chartWidth;
-                              const barHeight = (m.histogram / maxVal) * (midY - 10);
-                              return (
-                                <rect
-                                  key={i}
-                                  x={x - 1}
-                                  y={barHeight > 0 ? midY - barHeight : midY}
-                                  width={2}
-                                  height={Math.abs(barHeight)}
-                                  fill={m.histogram >= 0 ? '#10b981' : '#ef4444'}
-                                  opacity="0.5"
-                                />
-                              );
-                            })}
-                            
-                            {/* MACD line */}
-                            <polyline points={macdPoints} fill="none" stroke="#3b82f6" strokeWidth="1.5" />
-                            
-                            {/* Signal line */}
-                            <polyline points={signalPoints} fill="none" stroke="#f97316" strokeWidth="1.5" />
-                          </>
-                        );
-                      })()}
-                    </svg>
-                    <div className="flex gap-6 mt-2 text-xs text-gray-400">
-                      <span><span className="inline-block w-3 h-0.5 bg-blue-500 mr-1"></span> MACD</span>
-                      <span><span className="inline-block w-3 h-0.5 bg-orange-500 mr-1"></span> Signal</span>
-                      <span><span className="inline-block w-3 h-2 bg-emerald-500 opacity-50 mr-1"></span> Histogram</span>
+                  {technicalResult.indicators.macd.length > 1 ? (
+                    <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
+                      <svg viewBox="0 0 800 120" className="w-full h-24">
+                        {(() => {
+                          const macdData = technicalResult.indicators.macd;
+                          const maxVal = Math.max(...macdData.map(m => Math.max(Math.abs(m.macd), Math.abs(m.signal), Math.abs(m.histogram))));
+                          const padding = 20;
+                          const chartWidth = 760;
+                          const chartHeight = 120;
+                          const midY = chartHeight / 2;
+                          
+                          const macdPoints = macdData.map((m, i) => {
+                            const x = padding + (i / (macdData.length - 1)) * chartWidth;
+                            const y = midY - (m.macd / maxVal) * (midY - 10);
+                            return `${x},${y}`;
+                          }).join(' ');
+                          
+                          const signalPoints = macdData.map((m, i) => {
+                            const x = padding + (i / (macdData.length - 1)) * chartWidth;
+                            const y = midY - (m.signal / maxVal) * (midY - 10);
+                            return `${x},${y}`;
+                          }).join(' ');
+                          
+                          return (
+                            <>
+                              {/* Zero line */}
+                              <line x1={padding} y1={midY} x2={padding + chartWidth} y2={midY} stroke="#e5e7eb" strokeWidth="1" />
+                              
+                              {/* Histogram bars */}
+                              {macdData.map((m, i) => {
+                                const x = padding + (i / (macdData.length - 1)) * chartWidth;
+                                const barHeight = (m.histogram / maxVal) * (midY - 10);
+                                return (
+                                  <rect
+                                    key={i}
+                                    x={x - 1}
+                                    y={barHeight > 0 ? midY - barHeight : midY}
+                                    width={2}
+                                    height={Math.abs(barHeight)}
+                                    fill={m.histogram >= 0 ? '#10b981' : '#ef4444'}
+                                    opacity="0.5"
+                                  />
+                                );
+                              })}
+                              
+                              {/* MACD line */}
+                              <polyline points={macdPoints} fill="none" stroke="#3b82f6" strokeWidth="1.5" />
+                              
+                              {/* Signal line */}
+                              <polyline points={signalPoints} fill="none" stroke="#f97316" strokeWidth="1.5" />
+                            </>
+                          );
+                        })()}
+                      </svg>
+                      <div className="flex gap-6 mt-2 text-xs text-gray-400">
+                        <span><span className="inline-block w-3 h-0.5 bg-blue-500 mr-1"></span> MACD</span>
+                        <span><span className="inline-block w-3 h-0.5 bg-orange-500 mr-1"></span> Signal</span>
+                        <span><span className="inline-block w-3 h-2 bg-emerald-500 opacity-50 mr-1"></span> Histogram</span>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-6 text-center">
+                      <p className="text-sm text-gray-500">Not enough data. MACD needs at least 26 trading days.</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Run again button */}
