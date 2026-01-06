@@ -1,4 +1,5 @@
-import { glossaryTerms, GlossaryTerm } from '../glossary'
+import { glossaryTerms } from '../glossary'
+import type { GlossaryTerm } from '../glossary'
 
 // Sort terms alphabetically by term name
 const sortedTerms = [...glossaryTerms].sort((a, b) => 
