@@ -179,8 +179,8 @@ class DataValidator:
         if self.cost_of_debt is None:
             result.issues.append(ValidationIssue(
                 field="cost_of_debt",
-                message="Cost of debt unavailable. WACC will use default 5% interest rate.",
-                severity=Severity.WARNING,
+                message="Cost of debt is missing. WACC cannot be calculated. Use custom discount rate to run valuation.",
+                severity=Severity.ERROR,
                 impacts="wacc",
             ))
         elif self.cost_of_debt == 0 and self.total_debt and self.total_debt > 0:
