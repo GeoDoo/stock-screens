@@ -1,5 +1,11 @@
+import logging
 import httpx
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+# Default risk-free rate when treasury API fails (4.5%)
+DEFAULT_TREASURY_RATE = 0.045
 
 
 class FMPClientError(Exception):
@@ -77,9 +83,9 @@ class FMPClient:
             if result and len(result) > 0:
                 rate = result[0].get("year10", 4.5)
                 return rate / 100
-        except Exception:
-            pass
-        return 0.045  # Default fallback
+        except Exception as e:
+            logger.warning(f"Failed to fetch treasury rate: {e}")
+        return DEFAULT_TREASURY_RATE
 
     async def get_stock_data(self, symbol: str) -> dict:
         """Fetch all data needed for DCF valuation."""
@@ -102,8 +108,8 @@ class FMPClient:
             result = await self._request("/stock_peers", symbol=symbol)
             if result and len(result) > 0:
                 return result[0].get("peersList", [])
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to fetch peers for {symbol}: {e}")
         return []
 
     async def get_key_metrics_ttm(self, symbol: str) -> dict:
@@ -112,8 +118,8 @@ class FMPClient:
             result = await self._request("/key-metrics-ttm", symbol=symbol)
             if result and len(result) > 0:
                 return result[0]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to fetch key metrics for {symbol}: {e}")
         return {}
 
     async def get_ratios_ttm(self, symbol: str) -> dict:
@@ -122,6 +128,6 @@ class FMPClient:
             result = await self._request("/ratios-ttm", symbol=symbol)
             if result and len(result) > 0:
                 return result[0]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to fetch ratios for {symbol}: {e}")
         return {}

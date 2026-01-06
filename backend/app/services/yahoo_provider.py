@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import List
 import yfinance as yf
 
@@ -13,6 +14,11 @@ from app.services.base_provider import (
     HistoricalPrices,
     PriceBar,
 )
+
+logger = logging.getLogger(__name__)
+
+# Default risk-free rate when treasury API fails (4.5%)
+DEFAULT_TREASURY_RATE = 0.045
 
 
 class YahooProvider(StockDataProvider):
@@ -141,8 +147,9 @@ class YahooProvider(StockDataProvider):
         try:
             loop = asyncio.get_event_loop()
             return await loop.run_in_executor(None, self._get_treasury_sync)
-        except Exception:
-            return 0.045  # Default fallback
+        except Exception as e:
+            logger.warning(f"Failed to fetch treasury rate from Yahoo: {e}")
+            return DEFAULT_TREASURY_RATE
     
     def _get_treasury_sync(self) -> float:
         """Synchronous treasury rate fetch."""
