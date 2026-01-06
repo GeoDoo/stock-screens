@@ -634,6 +634,52 @@ describe('App - Handles Incomplete API Data (Regression)', () => {
     }, { timeout: 3000 })
   })
 
+  it('handles historical_valuation with missing premium_discount and assessment', async () => {
+    // REGRESSION: Bug at App.tsx:1032 - guard checked current/average_5yr but not premium_discount/assessment
+    const mockHistoricalMissingPremiumAssessment = {
+      ...mockBatchWithIncompleteData,
+      historical_valuation: {
+        symbol: 'TEST',
+        current: { pe: 25, ps: 5, pb: 3, ev_ebitda: 12 },      // Present
+        average_5yr: { pe: 28, ps: 6, pb: 4, ev_ebitda: 14 },  // Present
+        // premium_discount: MISSING - this crashed!
+        // assessment: MISSING - this crashed!
+      },
+    }
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      if (url.includes('/analyze')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockHistoricalMissingPremiumAssessment) })
+      }
+      if (url.includes('/comparables')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ ...mockComparables, peers: [], implied_valuations: [] }) })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+
+    const input = screen.getByPlaceholderText('AAPL')
+    fireEvent.change(input, { target: { value: 'TEST' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze/i }))
+    
+    // Should NOT crash - would have thrown "Cannot read properties of undefined (reading 'pe')"
+    await waitFor(() => {
+      const modalOrCompany = screen.queryByText(/Discount Rate Required/i) || screen.queryByText(/Test Company/i)
+      expect(modalOrCompany).toBeInTheDocument()
+    }, { timeout: 3000 })
+  })
+
   it('handles completely empty historical_valuation gracefully', async () => {
     const mockWithNullHistorical = {
       ...mockBatchWithIncompleteData,
