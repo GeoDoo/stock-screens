@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shouldFallback, getAlternativeProvider } from './providerFallback';
+import { shouldFallback, getAlternativeProvider, getProviderDisplayName } from './providerFallback';
 import type { Provider } from './types';
 
 describe('shouldFallback', () => {
@@ -73,3 +73,22 @@ describe('getAlternativeProvider', () => {
   });
 });
 
+describe('getProviderDisplayName', () => {
+  const mockProviders: Provider[] = [
+    { id: 'fmp', name: 'FMP', available: true, recommended: true },
+    { id: 'yahoo', name: 'Yahoo Finance', available: true, recommended: false },
+  ];
+
+  it('returns display name for known provider', () => {
+    expect(getProviderDisplayName('fmp', mockProviders)).toBe('FMP');
+    expect(getProviderDisplayName('yahoo', mockProviders)).toBe('Yahoo Finance');
+  });
+
+  it('returns provider ID when not found', () => {
+    expect(getProviderDisplayName('unknown', mockProviders)).toBe('unknown');
+  });
+
+  it('returns provider ID when providers array is empty', () => {
+    expect(getProviderDisplayName('fmp', [])).toBe('fmp');
+  });
+});
