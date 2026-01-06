@@ -1022,7 +1022,7 @@ export default function App() {
             )}
 
             {/* Historical Valuation Context */}
-            {historicalValuation && historicalValuation.current && historicalValuation.average_5yr && historicalValuation.average_5yr.pe && (
+            {historicalValuation && historicalValuation.current && historicalValuation.average_5yr && historicalValuation.premium_discount && historicalValuation.assessment && historicalValuation.average_5yr.pe && (
               <section className="mb-16 pt-8 border-t border-gray-100">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Historical Valuation Context</h2>
                 <p className="text-sm text-gray-400 mb-8">Current multiples vs. 5-year averages</p>

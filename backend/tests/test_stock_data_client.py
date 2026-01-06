@@ -180,3 +180,4 @@ class TestStockDataClient:
         
         mock_provider_success.get_stock_data.assert_called_with("AAPL")
 
+

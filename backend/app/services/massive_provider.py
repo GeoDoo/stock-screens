@@ -123,3 +123,4 @@ class MassiveProvider(StockDataProvider):
             provider=self.name,
         )
 
+

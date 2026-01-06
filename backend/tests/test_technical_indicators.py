@@ -255,3 +255,4 @@ class TestMACDAnalysis:
         result = TechnicalIndicators.analyze_macd(macd_line, signal_line)
         assert result == "neutral"
 
+

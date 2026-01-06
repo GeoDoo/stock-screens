@@ -179,3 +179,4 @@ class TestRateLimitEndpoint:
         data = response.json()
         assert data["fmp"]["used"] == 0
 
+

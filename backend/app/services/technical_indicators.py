@@ -254,3 +254,4 @@ class TechnicalIndicators:
         else:
             return "neutral"
 
+
