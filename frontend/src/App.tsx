@@ -401,6 +401,13 @@ export default function App() {
 
 
 
+  // Helper to get alternative technical provider
+  const getAlternativeTechnicalProvider = (currentProvider: string): string | null => {
+    if (!technicalProviders || technicalProviders.length === 0) return null;
+    const alternatives = technicalProviders.filter(p => p.id !== currentProvider && p.available);
+    return alternatives.length > 0 ? alternatives[0].id : null;
+  };
+
   const runTechnicalAnalysis = async () => {
     if (!stockData || !selectedTechnicalProvider) return;
     
@@ -408,19 +415,44 @@ export default function App() {
     setTechnicalResult(null);
     setError(null);
     
-    try {
-      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/technical?provider=${selectedTechnicalProvider}&days=365`);
-      if (!res.ok) {
-        const errData = await res.json();
-        const errorMsg = errData.detail || 'Technical analysis failed';
-        // Refresh rate limits (backend marks provider as limited on 429)
+    // Try provider with fallback
+    const tryTechnicalProvider = async (provider: string, isFallback: boolean = false): Promise<boolean> => {
+      try {
+        const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/technical?provider=${provider}&days=365`);
+        if (!res.ok) {
+          const errData = await res.json();
+          const errorMsg = errData.detail || 'Technical analysis failed';
+          await fetchRateLimits();
+          
+          // If this is the primary provider and error is fallback-worthy, try alternative
+          if (!isFallback && shouldFallback(errorMsg)) {
+            const altProvider = getAlternativeTechnicalProvider(provider);
+            if (altProvider) {
+              const success = await tryTechnicalProvider(altProvider, true);
+              if (success) {
+                // Use display names for better UX
+                const providerName = technicalProviders.find(p => p.id === provider)?.name || provider;
+                const altProviderName = technicalProviders.find(p => p.id === altProvider)?.name || altProvider;
+                setFallbackNotice(`${providerName} unavailable for technical data. Using ${altProviderName} instead.`);
+                setSelectedTechnicalProvider(altProvider);
+                return true;
+              }
+            }
+          }
+          throw new Error(errorMsg);
+        }
+        const data: TechnicalAnalysisResult = await res.json();
+        setTechnicalResult(normalizeTechnicalResult(data));
         await fetchRateLimits();
-        throw new Error(errorMsg);
+        return true;
+      } catch (err) {
+        if (isFallback) throw err;
+        throw err;
       }
-      const data: TechnicalAnalysisResult = await res.json();
-      setTechnicalResult(normalizeTechnicalResult(data));
-      // Refresh rate limits after successful call
-      await fetchRateLimits();
+    };
+
+    try {
+      await tryTechnicalProvider(selectedTechnicalProvider);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -444,14 +476,41 @@ export default function App() {
       setTechnicalLoading(true);
       setError(null);
       
-      try {
-        const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/technical?provider=${selectedTechnicalProvider}&days=365`);
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.detail || 'Technical analysis failed');
+      // Try provider with fallback (similar to runTechnicalAnalysis)
+      const tryProvider = async (provider: string, isFallback: boolean = false): Promise<boolean> => {
+        try {
+          const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/technical?provider=${provider}&days=365`);
+          if (!res.ok) {
+            const errData = await res.json();
+            const errorMsg = errData.detail || 'Technical analysis failed';
+            
+            // Try fallback if error is provider-specific
+            if (!isFallback && shouldFallback(errorMsg)) {
+              const altProvider = getAlternativeTechnicalProvider(provider);
+              if (altProvider) {
+                const success = await tryProvider(altProvider, true);
+                if (success) {
+                  const providerName = technicalProviders.find(p => p.id === provider)?.name || provider;
+                  const altProviderName = technicalProviders.find(p => p.id === altProvider)?.name || altProvider;
+                  setFallbackNotice(`${providerName} unavailable for technical data. Using ${altProviderName} instead.`);
+                  setSelectedTechnicalProvider(altProvider);
+                  return true;
+                }
+              }
+            }
+            throw new Error(errorMsg);
+          }
+          const data: TechnicalAnalysisResult = await res.json();
+          setTechnicalResult(normalizeTechnicalResult(data));
+          return true;
+        } catch (err) {
+          if (isFallback) throw err;
+          throw err;
         }
-        const data: TechnicalAnalysisResult = await res.json();
-        setTechnicalResult(normalizeTechnicalResult(data));
+      };
+
+      try {
+        await tryProvider(selectedTechnicalProvider);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
