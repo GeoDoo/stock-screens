@@ -12,7 +12,7 @@ import {
   normalizeHistoricalValuation,
   formatMetric,
 } from './normalizers';
-import { shouldFallback, getAlternativeProvider } from './providerFallback';
+import { shouldFallback, getAlternativeProvider, getProviderDisplayName } from './providerFallback';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -219,10 +219,7 @@ export default function App() {
             if (altProvider) {
               const success = await tryProvider(altProvider, true);
               if (success) {
-                // Use display names for better UX
-                const providerName = fundamentalProviders.find(p => p.id === provider)?.name || provider;
-                const altProviderName = fundamentalProviders.find(p => p.id === altProvider)?.name || altProvider;
-                setFallbackNotice(`${providerName} unavailable for ${symbol}. Using ${altProviderName} instead.`);
+                setFallbackNotice(`${getProviderDisplayName(provider, fundamentalProviders)} unavailable for ${symbol}. Using ${getProviderDisplayName(altProvider, fundamentalProviders)} instead.`);
                 setSelectedFundamentalProvider(altProvider);
                 return true;
               }
@@ -236,6 +233,10 @@ export default function App() {
         
         // Extract data from batch response
         const stockResponse = normalizeStockData(batchData.stock as StockDataResponse);
+        if (!stockResponse) {
+          throw new Error('Failed to parse stock data');
+        }
+        
         setStockData(stockResponse);
         setRatiosResult(batchData.ratios);
         setDividendResult(batchData.dividends);
@@ -401,13 +402,6 @@ export default function App() {
 
 
 
-  // Helper to get alternative technical provider
-  const getAlternativeTechnicalProvider = (currentProvider: string): string | null => {
-    if (!technicalProviders || technicalProviders.length === 0) return null;
-    const alternatives = technicalProviders.filter(p => p.id !== currentProvider && p.available);
-    return alternatives.length > 0 ? alternatives[0].id : null;
-  };
-
   const runTechnicalAnalysis = async () => {
     if (!stockData || !selectedTechnicalProvider) return;
     
@@ -426,14 +420,11 @@ export default function App() {
           
           // If this is the primary provider and error is fallback-worthy, try alternative
           if (!isFallback && shouldFallback(errorMsg)) {
-            const altProvider = getAlternativeTechnicalProvider(provider);
+            const altProvider = getAlternativeProvider(provider, technicalProviders);
             if (altProvider) {
               const success = await tryTechnicalProvider(altProvider, true);
               if (success) {
-                // Use display names for better UX
-                const providerName = technicalProviders.find(p => p.id === provider)?.name || provider;
-                const altProviderName = technicalProviders.find(p => p.id === altProvider)?.name || altProvider;
-                setFallbackNotice(`${providerName} unavailable for technical data. Using ${altProviderName} instead.`);
+                setFallbackNotice(`${getProviderDisplayName(provider, technicalProviders)} unavailable for technical data. Using ${getProviderDisplayName(altProvider, technicalProviders)} instead.`);
                 setSelectedTechnicalProvider(altProvider);
                 return true;
               }
@@ -486,13 +477,11 @@ export default function App() {
             
             // Try fallback if error is provider-specific
             if (!isFallback && shouldFallback(errorMsg)) {
-              const altProvider = getAlternativeTechnicalProvider(provider);
+              const altProvider = getAlternativeProvider(provider, technicalProviders);
               if (altProvider) {
                 const success = await tryProvider(altProvider, true);
                 if (success) {
-                  const providerName = technicalProviders.find(p => p.id === provider)?.name || provider;
-                  const altProviderName = technicalProviders.find(p => p.id === altProvider)?.name || altProvider;
-                  setFallbackNotice(`${providerName} unavailable for technical data. Using ${altProviderName} instead.`);
+                  setFallbackNotice(`${getProviderDisplayName(provider, technicalProviders)} unavailable for technical data. Using ${getProviderDisplayName(altProvider, technicalProviders)} instead.`);
                   setSelectedTechnicalProvider(altProvider);
                   return true;
                 }
@@ -1438,7 +1427,7 @@ export default function App() {
               {scenarioLoading && <p className="text-sm text-gray-400 mt-2">Analyzing scenarios...</p>}
             </div>
 
-            {scenarioResult && (
+            {scenarioResult && scenarioResult.probability_weighted_value !== null && (
               <div className="space-y-8">
                 {/* Summary */}
                 <div className="flex items-baseline gap-4">

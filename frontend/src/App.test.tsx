@@ -125,7 +125,7 @@ const mockComparables: ComparableResult = {
   summary: { average_implied_price: 182.5, average_upside_percent: 2.5 },
 }
 const mockScenarios = { bear: { revenue_growth: 0.02, operating_margin: 0.25, intrinsic_value: 150 }, base: { revenue_growth: 0.05, operating_margin: 0.30, intrinsic_value: 185 }, bull: { revenue_growth: 0.10, operating_margin: 0.35, intrinsic_value: 220 }, probability_weighted_value: 180, current_price: 178, upside_range: { low: -10, high: 20 } }
-const mockTechnical = { symbol: 'AAPL', period_days: 365, current_price: 178, price_change: 0.05, signals: [], prices: [], indicators: { sma_20: [], sma_50: [], rsi_14: [], macd: { macd_line: [], signal_line: [], histogram: [] } } }
+const mockTechnical = { symbol: 'AAPL', period_days: 365, current_price: 178, price_change_pct: 5.0, signals: [], prices: [], indicators: { sma_20: [], sma_50: [], rsi_14: [], macd: { macd_line: [], signal_line: [], histogram: [] } } }
 
 // Batch analyze response combines multiple data sources
 const mockBatchAnalyzeResponse = {
@@ -763,7 +763,7 @@ describe('Provider Auto-Fallback', () => {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockValuationResult) })
       }
       if (url.includes('/scenarios')) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockScenarioResult) })
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockScenarios) })
       }
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
@@ -884,3 +884,136 @@ describe('Provider Auto-Fallback', () => {
   })
 })
 
+// Technical Data Auto-Fallback tests
+describe('Technical Provider Auto-Fallback', () => {
+  beforeEach(() => {
+    mockFetch.mockReset()
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('auto-falls back to Yahoo for technical data when Massive returns premium error', async () => {
+    let massiveTechnicalCallCount = 0
+    let yahooTechnicalCallCount = 0
+
+    // Custom providers with FMP in technical list for this test
+    const providersWithFmpTechnical = {
+      fundamental: [
+        { id: 'yahoo', name: 'Yahoo Finance', available: true, recommended: true },
+        { id: 'fmp', name: 'FMP', available: true, recommended: false },
+      ],
+      technical: [
+        { id: 'massive', name: 'Massive/Polygon', available: true, recommended: true }, // Massive first
+        { id: 'yahoo', name: 'Yahoo Finance', available: true, recommended: false },
+      ],
+    }
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(providersWithFmpTechnical) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      // Fundamental analyze succeeds
+      if (url.includes('/analyze') && !url.includes('/technical')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeResponse) })
+      }
+      // Technical data
+      if (url.includes('/technical')) {
+        if (url.includes('provider=massive')) {
+          massiveTechnicalCallCount++
+          // Massive returns premium error for technical data
+          return Promise.resolve({ 
+            ok: false, 
+            json: () => Promise.resolve({ detail: 'Data requires premium subscription' }) 
+          })
+        }
+        if (url.includes('provider=yahoo')) {
+          yahooTechnicalCallCount++
+          // Yahoo works
+          return Promise.resolve({ 
+            ok: true, 
+            json: () => Promise.resolve({
+              symbol: 'AAPL',
+              period_days: 365,
+              current_price: 178,
+              price_change_pct: 5.0,
+              signals: [],
+              prices: [],
+              indicators: {
+                sma_20: [],
+                sma_50: [],
+                rsi_14: [],
+                macd: []
+              },
+              provider: 'yahoo'
+            }) 
+          })
+        }
+      }
+      if (url.includes('/comparables')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparables) })
+      }
+      if (url.includes('/valuation')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockValuationResult) })
+      }
+      if (url.includes('/scenarios')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockScenarios) })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+
+    // First analyze stock to get fundamental data
+    const input = screen.getByPlaceholderText('AAPL')
+    fireEvent.change(input, { target: { value: 'AAPL' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze/i }))
+    
+    // Wait for fundamental data to load - use the header which contains symbol and company name
+    await waitFor(() => {
+      expect(screen.getByText(/Apple Inc\./i)).toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // Now switch to Technical tab to trigger technical fallback
+    const technicalTab = screen.getByRole('button', { name: /Technical/i })
+    fireEvent.click(technicalTab)
+
+    // Should show technical fallback notice
+    await waitFor(() => {
+      expect(screen.getByText(/unavailable for technical data/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // Verify both providers were tried for technical
+    expect(massiveTechnicalCallCount).toBeGreaterThan(0)
+    expect(yahooTechnicalCallCount).toBeGreaterThan(0)
+  })
+
+  it('uses shared getAlternativeProvider for both fundamental and technical', async () => {
+    // This test verifies DRY principle - both use same function
+    const { getAlternativeProvider } = await import('./providerFallback')
+    
+    const fundamentalProviders = [
+      { id: 'fmp', name: 'FMP', available: true, recommended: true },
+      { id: 'yahoo', name: 'Yahoo', available: true, recommended: false },
+    ]
+    
+    const technicalProviders = [
+      { id: 'fmp', name: 'FMP', available: true, recommended: true },
+      { id: 'yahoo', name: 'Yahoo', available: true, recommended: false },
+      { id: 'massive', name: 'Massive', available: true, recommended: false },
+    ]
+    
+    // Same function works for both
+    expect(getAlternativeProvider('fmp', fundamentalProviders)).toBe('yahoo')
+    expect(getAlternativeProvider('fmp', technicalProviders)).toBe('yahoo')
+    expect(getAlternativeProvider('yahoo', technicalProviders)).toBe('fmp')
+  })
+})

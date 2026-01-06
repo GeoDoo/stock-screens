@@ -35,6 +35,7 @@ export function shouldFallback(errorMsg: string): boolean {
 /**
  * Get an alternative provider when the current one fails.
  * Returns null if no alternative is available.
+ * Works for both Fundamental and Technical providers.
  */
 export function getAlternativeProvider(
   currentProvider: string,
@@ -45,5 +46,15 @@ export function getAlternativeProvider(
     p => p.id !== currentProvider && p.available
   );
   return alternatives.length > 0 ? alternatives[0].id : null;
+}
+
+/**
+ * Get display name for a provider ID.
+ */
+export function getProviderDisplayName(
+  providerId: string,
+  providers: Provider[]
+): string {
+  return providers.find(p => p.id === providerId)?.name || providerId;
 }
 
