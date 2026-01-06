@@ -1,4 +1,4 @@
-export interface GlossaryTerm {
+export type GlossaryTerm = {
   id: string;
   term: string;
   fullName?: string;
