@@ -25,5 +25,8 @@ Thumbs.db
 *.db
 *.sqlite
 
+# Rate limit persistence (contains call timestamps)
+.rate_limits.json
+
 
 

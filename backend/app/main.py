@@ -239,12 +239,16 @@ async def get_stock(symbol: str, provider: str):
     """
     client = get_client_for_provider(provider)
     
+    # Record API call for rate limiting
+    rate_limiter.record_call(provider)
+    
     try:
         stock_data = await client.get_stock_data(symbol.upper())
         risk_free_rate = await client.get_treasury_rate()
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RateLimitError as e:
+        rate_limiter.mark_api_limited(provider)
         raise HTTPException(status_code=429, detail=str(e))
     except DataNotAvailableError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -377,12 +381,16 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
     """
     client = get_client_for_provider(provider)
     
+    # Record API call for rate limiting
+    rate_limiter.record_call(provider)
+    
     try:
         stock_data = await client.get_stock_data(symbol.upper())
         risk_free_rate = await client.get_treasury_rate()
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RateLimitError as e:
+        rate_limiter.mark_api_limited(provider)
         raise HTTPException(status_code=429, detail=str(e))
     except DataNotAvailableError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -530,9 +538,13 @@ async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
     client = get_client_for_provider(provider)
     analyzer = ComparableAnalyzer(client, provider)
     
+    # Record API call for rate limiting
+    rate_limiter.record_call(provider)
+    
     try:
         result = await analyzer.analyze(symbol.upper(), max_peers=max_peers)
     except RateLimitError as e:
+        rate_limiter.mark_api_limited(provider)
         raise HTTPException(status_code=429, detail=str(e))
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -830,11 +842,15 @@ async def get_technical_analysis(symbol: str, provider: str = "massive", days: i
     tech_provider = get_technical_provider(provider)
     service = TechnicalService(tech_provider)
     
+    # Record API call for rate limiting
+    rate_limiter.record_call(provider)
+    
     try:
         result = await service.analyze(symbol.upper(), days=days)
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RateLimitError as e:
+        rate_limiter.mark_api_limited(provider)
         raise HTTPException(status_code=429, detail=str(e))
     except DataNotAvailableError as e:
         raise HTTPException(status_code=400, detail=str(e))
