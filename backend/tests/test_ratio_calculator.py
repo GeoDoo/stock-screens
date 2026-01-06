@@ -122,6 +122,21 @@ class TestDividendMetrics:
         assert ratios.dividend.dividend_yield == 0.0
         assert ratios.dividend.payout_ratio == 0.0
 
+    def test_negative_dividends_paid(self, calculator):
+        """Handle negative dividendsPaid (cash outflow as reported by FMP)."""
+        data = {
+            "profile": {"price": 150, "marketCap": 2400000000000, "sharesOutstanding": 16000000000},
+            "income_statement": [{"netIncome": 100000000000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{"dividendsPaid": -15000000000}],  # Negative = outflow
+        }
+        ratios = calculator.calculate(data)
+        # abs(-15B) / 16B shares = 0.9375 DPS
+        # 0.9375 / 150 = 0.00625 (0.625%)
+        assert ratios.dividend.dividend_yield == pytest.approx(0.00625, rel=0.01)
+        # Payout = 15B / 100B = 15%
+        assert ratios.dividend.payout_ratio == pytest.approx(0.15, rel=0.01)
+
 
 class TestProfitabilityRatios:
     """Tests for profitability ratios."""
