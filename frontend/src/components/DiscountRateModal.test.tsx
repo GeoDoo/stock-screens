@@ -122,5 +122,32 @@ describe('DiscountRateModal', () => {
     const newInput = screen.getByLabelText(/Your Discount Rate/i)
     expect(newInput).toHaveValue(null)
   })
+
+  it('displays error message in red for visibility', () => {
+    render(<DiscountRateModal {...defaultProps} />)
+    const errorMsg = screen.getByText(/WACC cannot be calculated/i)
+    expect(errorMsg).toHaveClass('text-red-600')
+  })
+
+  it('prevents negative input with min attribute', () => {
+    render(<DiscountRateModal {...defaultProps} />)
+    const input = screen.getByLabelText(/Your Discount Rate/i)
+    expect(input).toHaveAttribute('min', '0')
+  })
+
+  it('allows decimal input with step attribute', () => {
+    render(<DiscountRateModal {...defaultProps} />)
+    const input = screen.getByLabelText(/Your Discount Rate/i)
+    expect(input).toHaveAttribute('step', '0.1')
+  })
+
+  it('disables Continue for zero rate', () => {
+    render(<DiscountRateModal {...defaultProps} />)
+    const input = screen.getByLabelText(/Your Discount Rate/i)
+    fireEvent.change(input, { target: { value: '0' } })
+    
+    const continueBtn = screen.getByRole('button', { name: /Continue/i })
+    expect(continueBtn).toBeDisabled()
+  })
 })
 

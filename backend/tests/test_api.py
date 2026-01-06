@@ -238,3 +238,70 @@ class TestValuationEndpoint:
             assert call_kwargs["terminal_growth_rate"] == 0.025
             assert call_kwargs["market_risk_premium"] == 0.07
             assert call_kwargs["projection_years"] == 10
+
+
+class TestScenarioEndpoint:
+    def test_scenarios_with_custom_discount_rate(self):
+        """Scenario analysis should accept custom discount rate override."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/scenarios?provider=fmp",
+                json={
+                    "projection_years": 10,
+                    "market_risk_premium": 0.06,
+                    "discount_rate_override": 0.10,  # Custom 10% rate
+                }
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert "scenarios" in data
+            assert data["wacc"] == 0.10  # Should use our custom rate
+
+    def test_scenarios_without_wacc_requires_custom_rate(self):
+        """Scenario analysis should fail if WACC unavailable and no custom rate."""
+        # Create stock data with missing beta (WACC can't be calculated)
+        mock_stock_data = create_mock_stock_data(beta=None)
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/scenarios?provider=fmp",
+                json={
+                    "projection_years": 10,
+                    "market_risk_premium": 0.06,
+                    # No discount_rate_override provided
+                }
+            )
+            
+            assert response.status_code == 400
+            assert "Cannot calculate WACC" in response.json()["detail"]
+
+    def test_scenarios_with_missing_beta_and_custom_rate_succeeds(self):
+        """Scenario analysis should work with custom rate even if beta missing."""
+        # Create stock data with missing beta
+        mock_stock_data = create_mock_stock_data(beta=None)
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/scenarios?provider=fmp",
+                json={
+                    "projection_years": 10,
+                    "market_risk_premium": 0.06,
+                    "discount_rate_override": 0.12,  # Custom rate bypasses WACC
+                }
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert data["wacc"] == 0.12  # Uses our custom rate
