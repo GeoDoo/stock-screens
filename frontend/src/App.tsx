@@ -1135,17 +1135,18 @@ export default function App() {
             <div className="mb-12">
               <div className="flex items-baseline gap-4 mb-3">
                 <span className="text-sm text-gray-500">Intrinsic Value<GlossaryRef id="intrinsic-value" /></span>
-                <span className="text-5xl font-bold font-mono tracking-tight">${result.intrinsic_value_per_share.toFixed(2)}</span>
+                <span className="text-5xl font-bold font-mono tracking-tight">${result.intrinsic_value_per_share?.toFixed(2) ?? '—'}</span>
                 <span className="text-sm text-gray-400">per share</span>
               </div>
               
-              {result.market_cap && stockData && stockData.data.shares_outstanding && (
+              {result.market_cap && stockData && stockData.data.shares_outstanding && result.intrinsic_value_per_share && (
                 <div className="flex items-center gap-6 mt-4">
                   <span className="text-sm text-gray-500">
                     Current: ~${(result.market_cap / stockData.data.shares_outstanding).toFixed(2)}
                   </span>
                   {(() => {
                     const currentPrice = result.market_cap / stockData.data.shares_outstanding;
+                    if (currentPrice === 0) return null;
                     const upside = ((result.intrinsic_value_per_share - currentPrice) / currentPrice) * 100;
                     return (
                       <span className={`text-sm font-semibold px-3 py-1 rounded-md ${
@@ -1192,7 +1193,7 @@ export default function App() {
             </div>
 
             {/* Projections */}
-            {result.projections.length > 0 && (
+            {result.projections && result.projections.length > 0 && (
               <div className="mb-12">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">FCF<GlossaryRef id="fcf" /> Projections</h3>
                 <table className="w-full text-sm">
@@ -1219,7 +1220,7 @@ export default function App() {
             )}
 
             {/* Sensitivity Analysis */}
-            {result.sensitivity && (
+            {result.sensitivity && result.sensitivity.terminal_growth_rates && result.sensitivity.matrix && (
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Sensitivity Analysis</h3>
                 <p className="text-sm text-gray-400 mb-6">Intrinsic value per share at different discount rates & terminal growth rates</p>
@@ -1326,6 +1327,7 @@ export default function App() {
                   {(() => {
                     const current = scenarioResult.current_price || 0;
                     const fair = scenarioResult.probability_weighted_value || 0;
+                    if (current === 0) return null;
                     const diff = ((fair - current) / current) * 100;
                     return (
                       <span className={`text-sm font-medium ${diff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
@@ -1348,7 +1350,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {scenarioResult.scenarios.map((scenario) => (
+                    {scenarioResult.scenarios?.map((scenario) => (
                       <tr key={scenario.name} className="border-b border-gray-100">
                         <td className="py-3 text-sm font-medium">{scenario.name}</td>
                         <td className="py-3 text-right font-mono text-sm">${scenario.intrinsic_value.toFixed(2)}</td>
@@ -1412,7 +1414,7 @@ export default function App() {
                   {comparableResult.industry && comparableResult.industry !== comparableResult.sector && (
                     <span> / {comparableResult.industry}</span>
                   )}
-                  <span className="text-gray-400 ml-2">• {comparableResult.peers.length} peers</span>
+                  <span className="text-gray-400 ml-2">• {comparableResult.peers?.length ?? 0} peers</span>
                 </div>
 
                 {/* Implied Valuations */}
@@ -1429,7 +1431,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {comparableResult.implied_valuations.map((iv) => (
+                      {comparableResult.implied_valuations?.map((iv) => (
                         <tr key={iv.metric} className="border-b border-gray-100">
                           <td className="py-3 text-sm font-medium">{iv.metric}</td>
                           <td className="py-3 text-right font-mono text-sm">
@@ -1495,7 +1497,7 @@ export default function App() {
                           </td>
                         </tr>
                         {/* Peer rows */}
-                        {comparableResult.peers.map((peer) => (
+                        {comparableResult.peers?.map((peer) => (
                           <tr key={peer.symbol} className="border-b border-gray-100">
                             <td className="py-3">
                               <span className="font-medium">{peer.symbol}</span>
@@ -1601,10 +1603,10 @@ export default function App() {
                 </div>
 
                 {/* Limited data warning */}
-                {technicalResult.prices.length < 50 && (
+                {technicalResult.prices && technicalResult.prices.length < 50 && (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
                     <p className="text-sm text-amber-800">
-                      <span className="font-semibold">Limited data:</span> Only {technicalResult.prices.length} trading days available. 
+                      <span className="font-semibold">Limited data:</span> Only {technicalResult.prices?.length ?? 0} trading days available. 
                       Some indicators need more data to calculate.
                     </p>
                   </div>
@@ -1650,7 +1652,7 @@ export default function App() {
                       <rect x="0" y="0" width="800" height="400" fill="#fafafa" />
                       
                       {/* Price line */}
-                      {technicalResult.prices.length > 1 && (() => {
+                      {technicalResult.prices && technicalResult.prices.length > 1 && (() => {
                         const prices = technicalResult.prices;
                         const minPrice = Math.min(...prices.map(p => p.low));
                         const maxPrice = Math.max(...prices.map(p => p.high));
@@ -1666,7 +1668,7 @@ export default function App() {
                         }).join(' ');
                         
                         // SMA 20 line
-                        const sma20Points = technicalResult.indicators.sma_20.map((s) => {
+                        const sma20Points = (technicalResult.indicators?.sma_20 ?? []).map((s) => {
                           const priceIdx = prices.findIndex(p => p.timestamp === s.timestamp);
                           if (priceIdx === -1) return null;
                           const x = padding + (priceIdx / (prices.length - 1)) * chartWidth;
@@ -1675,7 +1677,7 @@ export default function App() {
                         }).filter(Boolean).join(' ');
                         
                         // SMA 50 line
-                        const sma50Points = technicalResult.indicators.sma_50.map((s) => {
+                        const sma50Points = (technicalResult.indicators?.sma_50 ?? []).map((s) => {
                           const priceIdx = prices.findIndex(p => p.timestamp === s.timestamp);
                           if (priceIdx === -1) return null;
                           const x = padding + (priceIdx / (prices.length - 1)) * chartWidth;
@@ -1750,7 +1752,7 @@ export default function App() {
                 {/* RSI Chart */}
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum (RSI)<GlossaryRef id="rsi" /></h3>
-                  {technicalResult.indicators.rsi_14.length > 1 ? (
+                  {technicalResult.indicators?.rsi_14?.length > 1 ? (
                     <div className="bg-gray-50 rounded-lg p-6 overflow-hidden">
                       <svg viewBox="0 0 800 200" className="w-full h-48">
                         {/* Overbought/Oversold zones */}
@@ -1797,7 +1799,7 @@ export default function App() {
                 {/* MACD Chart */}
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum Trend (MACD)<GlossaryRef id="macd" /></h3>
-                  {technicalResult.indicators.macd.length > 1 ? (
+                  {technicalResult.indicators?.macd?.length > 1 ? (
                     <div className="bg-gray-50 rounded-lg p-6 overflow-hidden">
                       <svg viewBox="0 0 800 200" className="w-full h-48">
                         {(() => {
