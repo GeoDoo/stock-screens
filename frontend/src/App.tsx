@@ -785,18 +785,19 @@ export default function App() {
                         .slice(-10);  // Last 10 years
                       const maxAmount = Math.max(...sortedData.map(([, amt]) => amt));
                       const chartHeight = 120;
+                      const topPadding = 25;  // Space for amount labels
                       const barWidth = 40;
                       const gap = 8;
                       const chartWidth = sortedData.length * (barWidth + gap);
                       
                       return (
                         <div className="overflow-x-auto">
-                          <svg width={chartWidth} height={chartHeight + 40} className="min-w-full">
+                          <svg width={chartWidth} height={chartHeight + topPadding + 30} className="min-w-full">
                             {/* Bars */}
                             {sortedData.map(([year, amount], i) => {
                               const barHeight = maxAmount > 0 ? (amount / maxAmount) * chartHeight : 0;
                               const x = i * (barWidth + gap);
-                              const y = chartHeight - barHeight;
+                              const y = topPadding + chartHeight - barHeight;
                               
                               return (
                                 <g key={year}>
@@ -822,7 +823,7 @@ export default function App() {
                                   {/* Year label */}
                                   <text
                                     x={x + barWidth / 2}
-                                    y={chartHeight + 16}
+                                    y={topPadding + chartHeight + 16}
                                     textAnchor="middle"
                                     className="text-xs fill-gray-400"
                                   >
