@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { DiscountRateModal } from './components/DiscountRateModal';
@@ -95,6 +95,9 @@ export default function App() {
   
   // Tab navigation
   const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
+  
+  // Ref to prevent duplicate technical analysis calls
+  const technicalFetchRef = useRef<{ inProgress: boolean; provider: string | null }>({ inProgress: false, provider: null });
 
   // Unified analyze function - runs all analyses automatically
   const analyzeStock = async () => {
@@ -342,13 +345,20 @@ export default function App() {
     }
   };
 
-  // Auto-run technical analysis when switching to Technical tab
+  // Auto-run technical analysis when switching to Technical tab or changing provider
   useEffect(() => {
     const fetchTechnical = async () => {
       if (!stockData || !selectedTechnicalProvider) return;
       
+      // Skip if already fetching with same provider
+      if (technicalFetchRef.current.inProgress && technicalFetchRef.current.provider === selectedTechnicalProvider) {
+        return;
+      }
+      
+      // Mark as in progress
+      technicalFetchRef.current = { inProgress: true, provider: selectedTechnicalProvider };
+      
       setTechnicalLoading(true);
-      setTechnicalResult(null);
       setError(null);
       
       try {
@@ -363,14 +373,23 @@ export default function App() {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
         setTechnicalLoading(false);
+        technicalFetchRef.current.inProgress = false;
       }
     };
 
-    if (activeTab === 'technical' && stockData && !technicalResult && !technicalLoading) {
+    // Only fetch if on technical tab, have stock data, and either:
+    // 1. No result yet, or
+    // 2. Provider changed (result's provider differs from selected)
+    const shouldFetch = activeTab === 'technical' && 
+      stockData && 
+      !technicalLoading &&
+      (!technicalResult || technicalResult.provider !== selectedTechnicalProvider);
+    
+    if (shouldFetch) {
       fetchTechnical();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, stockData?.symbol, technicalResult, technicalLoading, selectedTechnicalProvider]);
+  }, [activeTab, stockData?.symbol, selectedTechnicalProvider]);
 
   // Smart validation: WACC-related issues can be bypassed with custom discount rate
   const canBypassWithCustomRate = useCustomDiscountRate && customDiscountRate && parseFloat(customDiscountRate) > 0;
@@ -470,10 +489,7 @@ export default function App() {
                   {technicalProviders.map((provider) => (
                     <button
                       key={provider.id}
-                      onClick={() => {
-                        setSelectedTechnicalProvider(provider.id);
-                        setTechnicalResult(null);
-                      }}
+                      onClick={() => setSelectedTechnicalProvider(provider.id)}
                       disabled={!provider.available}
                       className={`px-4 py-2 rounded-lg border-2 transition-all text-left ${
                         selectedTechnicalProvider === provider.id
