@@ -249,13 +249,20 @@ export default function App() {
 
   const hasInputs = revenueGrowth && operatingMargin && terminalGrowth && marketRiskPremium && projectionYears;
   
-  // Smart validation: Beta error can be bypassed with custom discount rate
-  const bypassableErrors = ['beta']; // Errors that custom discount rate makes irrelevant
+  // Smart validation: WACC-related issues can be bypassed with custom discount rate
   const canBypassWithCustomRate = useCustomDiscountRate && customDiscountRate && parseFloat(customDiscountRate) > 0;
   
+  // Filter errors - WACC-related errors are irrelevant when using custom discount rate
   const relevantErrors = (stockData?.validation?.errors ?? []).filter(e => {
-    // If using custom discount rate, Beta errors don't matter
-    if (canBypassWithCustomRate && bypassableErrors.includes(e.field.toLowerCase())) {
+    if (canBypassWithCustomRate && e.impacts === 'wacc') {
+      return false;
+    }
+    return true;
+  });
+  
+  // Filter warnings - WACC-related warnings are irrelevant when using custom discount rate
+  const relevantWarnings = (stockData?.validation?.warnings ?? []).filter(w => {
+    if (canBypassWithCustomRate && w.impacts === 'wacc') {
       return false;
     }
     return true;
@@ -414,7 +421,7 @@ export default function App() {
         {stockData && activeTab === 'fundamental' && (
           <>
             {/* Validation Alerts */}
-            {(relevantErrors.length > 0 || stockData.validation.has_warnings) && (
+            {(relevantErrors.length > 0 || relevantWarnings.length > 0) && (
               <section className="mb-8 space-y-4">
                 {relevantErrors.length > 0 && (
                   <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
@@ -428,11 +435,11 @@ export default function App() {
                     </ul>
                   </div>
                 )}
-                {stockData.validation.warnings.length > 0 && (
+                {relevantWarnings.length > 0 && (
                   <div className="p-6 bg-amber-50 border border-amber-200 rounded-lg">
                     <h3 className="text-sm font-semibold text-amber-600 mb-3">⚠️ Data Quality Warnings</h3>
                     <ul className="space-y-1">
-                      {stockData.validation.warnings.map((w, i) => (
+                      {relevantWarnings.map((w, i) => (
                         <li key={i} className="text-sm text-amber-800">
                           <span className="font-semibold capitalize">{w.field}:</span> {w.message}
                         </li>
