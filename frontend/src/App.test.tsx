@@ -475,3 +475,55 @@ describe('App - Provider Changes', () => {
 // - src/hooks/useProviderState.test.ts (logic documentation)
 // - The "shows 'no data' message" test above (integration)
 
+describe('App - Rate Limit Handling', () => {
+  beforeEach(() => {
+    mockFetch.mockReset()
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows error message and disables provider when rate limit exceeded', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      // Simulate rate limit error from API
+      if (url.includes('/analyze')) {
+        return Promise.resolve({ 
+          ok: false, 
+          status: 429,
+          json: () => Promise.resolve({ detail: 'Rate limit exceeded for yahoo. Try again later.' }) 
+        })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+
+    render(<App />)
+    
+    // Wait for providers to load and be auto-selected
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+    
+    // Wait for auto-selection to complete
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('AAPL')).toBeInTheDocument()
+    })
+
+    // Enter ticker and click Analyze
+    const input = screen.getByPlaceholderText('AAPL')
+    fireEvent.change(input, { target: { value: 'AAPL' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze/i }))
+    
+    // Should show rate limit error in error area
+    const errorElement = await screen.findByText(/Rate limit exceeded for yahoo/i)
+    expect(errorElement).toBeInTheDocument()
+    
+    // Provider should be marked with ⊘ symbol (may have multiple if same provider on both sides)
+    const disabledIndicators = screen.getAllByText('⊘')
+    expect(disabledIndicators.length).toBeGreaterThan(0)
+  })
+})
+
