@@ -133,6 +133,13 @@ export const glossaryTerms: GlossaryTerm[] = [
     investopediaUrl: "https://www.investopedia.com/terms/r/revenue.asp",
   },
   {
+    id: "cagr",
+    term: "CAGR",
+    fullName: "Compound Annual Growth Rate",
+    definition: "The mean annual growth rate of an investment over a specified time period longer than one year. It represents the rate at which an investment would have grown if it had grown at a steady rate each year.",
+    investopediaUrl: "https://www.investopedia.com/terms/c/cagr.asp",
+  },
+  {
     id: "operating-margin",
     term: "Operating Margin",
     definition: "Operating income divided by revenue, expressed as a percentage. It shows how much profit a company makes from its core operations before interest and taxes.",

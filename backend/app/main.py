@@ -16,6 +16,8 @@ from app.services.wacc_calculator import WACCCalculator
 from app.services.scenario_calculator import ScenarioCalculator, Scenario
 from app.services.comparable_analyzer import ComparableAnalyzer
 from app.services.ratio_calculator import RatioCalculator
+from app.services.dividend_analyzer import DividendAnalyzer, DividendPayment
+from app.services.historical_valuation import HistoricalValuationAnalyzer
 from app.services.fmp_client import FMPClient
 from app.services.technical_service import TechnicalService
 from app.services.fmp_provider import FMPProvider
@@ -634,6 +636,166 @@ async def get_ratios(symbol: str, provider: str):
             "asset_turnover": ratios.efficiency.asset_turnover,
             "inventory_turnover": ratios.efficiency.inventory_turnover,
         },
+    }
+
+
+@app.get("/api/stock/{symbol}/dividends")
+async def get_dividends(symbol: str, provider: str):
+    """
+    Get dividend history and metrics for a stock.
+    
+    Args:
+        symbol: Stock ticker symbol
+        provider: Data provider to use (yahoo recommended for dividend data)
+    
+    Returns dividend analysis including:
+    - Current annual dividend and yield
+    - Dividend growth rate (CAGR)
+    - Consecutive years of payments
+    - Annual dividend history
+    """
+    # Use Yahoo for dividend data as it has the best coverage
+    if provider not in ["yahoo", "fmp"]:
+        raise HTTPException(status_code=400, detail=f"Provider '{provider}' not supported for dividend data")
+    
+    try:
+        # Fetch dividend data using yfinance directly (best dividend data source)
+        import yfinance as yf
+        import asyncio
+        
+        loop = asyncio.get_event_loop()
+        
+        def fetch_dividends():
+            ticker = yf.Ticker(symbol.upper())
+            info = ticker.info
+            dividends = ticker.dividends
+            return info, dividends
+        
+        info, dividends_series = await loop.run_in_executor(None, fetch_dividends)
+        
+        # Convert pandas series to list of payments
+        payments = []
+        if dividends_series is not None and not dividends_series.empty:
+            for date, amount in dividends_series.items():
+                payments.append(DividendPayment(
+                    date=date.strftime("%Y-%m-%d"),
+                    amount=float(amount),
+                ))
+        
+        # Get current price and shares
+        current_price = info.get("regularMarketPrice") or info.get("currentPrice")
+        shares = info.get("sharesOutstanding")
+        
+        # Analyze
+        analyzer = DividendAnalyzer()
+        result = analyzer.analyze(payments, current_price, shares)
+        
+        return {
+            "symbol": symbol.upper(),
+            "has_dividends": result.has_dividends,
+            "current_annual_dividend": result.current_annual_dividend,
+            "current_yield": result.current_yield,
+            "dividend_cagr": result.dividend_cagr,
+            "consecutive_years": result.consecutive_years,
+            "annual_dividends": result.annual_dividends,
+            "payments": [
+                {"date": p.date, "amount": p.amount}
+                for p in result.payments[-20:]  # Last 20 payments
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Dividend analysis error: {str(e)}")
+
+
+@app.get("/api/stock/{symbol}/historical-valuation")
+async def get_historical_valuation(symbol: str, provider: str):
+    """
+    Get historical valuation context for a stock.
+    
+    Args:
+        symbol: Stock ticker symbol
+        provider: Data provider to use (fmp or yahoo)
+    
+    Compares current valuation multiples (P/E, P/S, P/B, EV/EBITDA)
+    to 5-year averages to assess if stock is cheap or expensive
+    relative to its own history.
+    """
+    client = get_client_for_provider(provider)
+    
+    try:
+        stock_data = await client.get_stock_data(symbol.upper())
+        data = stock_data_to_legacy(stock_data)
+    except RateLimitError as e:
+        raise HTTPException(status_code=429, detail=str(e))
+    except TickerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ProviderError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching data: {str(e)}")
+    
+    # Convert financials to list of dicts
+    financials = data.get("income_statement", [])
+    balance_sheet = data.get("balance_sheet", [])
+    cash_flow = data.get("cash_flow", [])
+    
+    # Merge financial data by date
+    merged_financials = []
+    balance_by_date = {b.get("date"): b for b in balance_sheet} if balance_sheet else {}
+    cash_by_date = {c.get("date"): c for c in cash_flow} if cash_flow else {}
+    
+    for inc in financials:
+        date = inc.get("date")
+        bal = balance_by_date.get(date, {})
+        cf = cash_by_date.get(date, {})
+        
+        merged = {**inc, **bal, **cf, "date": date}
+        merged_financials.append(merged)
+    
+    profile = data.get("profile", {})
+    
+    analyzer = HistoricalValuationAnalyzer()
+    result = analyzer.analyze(merged_financials, profile)
+    
+    return {
+        "symbol": symbol.upper(),
+        "current": {
+            "pe": result.current_pe,
+            "ps": result.current_ps,
+            "pb": result.current_pb,
+            "ev_ebitda": result.current_ev_ebitda,
+        },
+        "average_5yr": {
+            "pe": result.avg_pe_5yr,
+            "ps": result.avg_ps_5yr,
+            "pb": result.avg_pb_5yr,
+            "ev_ebitda": result.avg_ev_ebitda_5yr,
+        },
+        "premium_discount": {
+            "pe": result.premium_discount_pe,
+            "ps": result.premium_discount_ps,
+            "pb": result.premium_discount_pb,
+            "ev_ebitda": result.premium_discount_ev_ebitda,
+        },
+        "assessment": {
+            "pe": result.pe_assessment,
+            "ps": result.ps_assessment,
+            "pb": result.pb_assessment,
+            "ev_ebitda": result.ev_ebitda_assessment,
+        },
+        "yearly_metrics": [
+            {
+                "year": ym.year,
+                "revenue": ym.revenue,
+                "net_income": ym.net_income,
+                "ebitda": ym.ebitda,
+                "pe": ym.pe,
+                "ps": ym.ps,
+                "pb": ym.pb,
+                "ev_ebitda": ym.ev_ebitda,
+            }
+            for ym in result.yearly_metrics
+        ],
     }
 
 
