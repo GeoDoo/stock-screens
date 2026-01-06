@@ -6,6 +6,76 @@ import { formatCurrency, formatPercent, formatNumber, formatShareCount } from '.
 
 const API_BASE = 'http://localhost:8000';
 
+// ============================================================
+// DATA NORMALIZERS
+// Normalize API responses at the boundary to ensure consistent shape.
+// This prevents "cannot read property of undefined" errors throughout the app.
+// ============================================================
+
+function normalizeValuationResult(data: ValuationResult | null): ValuationResult | null {
+  if (!data) return null;
+  // If critical values are missing, don't render partial data
+  if (data.intrinsic_value_per_share == null) return null;
+  return {
+    ...data,
+    projections: data.projections ?? [],
+    sensitivity: data.sensitivity ? {
+      ...data.sensitivity,
+      terminal_growth_rates: data.sensitivity.terminal_growth_rates ?? [],
+      discount_rates: data.sensitivity.discount_rates ?? [],
+      matrix: data.sensitivity.matrix ?? [],
+    } : null,
+  };
+}
+
+function normalizeScenarioResult(data: ScenarioAnalysisResult | null): ScenarioAnalysisResult | null {
+  if (!data) return null;
+  return {
+    ...data,
+    scenarios: data.scenarios ?? [],
+  };
+}
+
+function normalizeComparableResult(data: ComparableResult | null): ComparableResult | null {
+  if (!data) return null;
+  return {
+    ...data,
+    peers: data.peers ?? [],
+    implied_valuations: data.implied_valuations ?? [],
+  };
+}
+
+function normalizeTechnicalResult(data: TechnicalAnalysisResult | null): TechnicalAnalysisResult | null {
+  if (!data) return null;
+  return {
+    ...data,
+    prices: data.prices ?? [],
+    indicators: data.indicators ? {
+      ...data.indicators,
+      sma_20: data.indicators.sma_20 ?? [],
+      sma_50: data.indicators.sma_50 ?? [],
+      rsi_14: data.indicators.rsi_14 ?? [],
+      macd: data.indicators.macd ?? [],
+    } : {
+      sma_20: [],
+      sma_50: [],
+      rsi_14: [],
+      macd: [],
+    },
+  };
+}
+
+function normalizeHistoricalValuation(data: HistoricalValuationResult | null): HistoricalValuationResult | null {
+  if (!data) return null;
+  // Ensure all nested objects exist
+  if (!data.current || !data.average_5yr || !data.premium_discount || !data.assessment) {
+    return null; // Incomplete data - don't render partial
+  }
+  return data;
+}
+
+// ============================================================
+
 // Format seconds into human-readable time (e.g., "5m 30s" or "2h 15m")
 function formatResetTime(seconds: number | null): string {
   if (seconds === null || seconds <= 0) return 'soon';
@@ -206,7 +276,7 @@ export default function App() {
       setStockData(stockResponse);
       setRatiosResult(batchData.ratios);
       setDividendResult(batchData.dividends);
-      setHistoricalValuation(batchData.historical_valuation);
+      setHistoricalValuation(normalizeHistoricalValuation(batchData.historical_valuation));
       
       // Pre-fill inputs with hints
       if (stockResponse.hints.revenue_growth !== null) {
@@ -272,7 +342,7 @@ export default function App() {
       const res = await fetch(`${API_BASE}/api/stock/${symbol}/comparables?provider=${selectedFundamentalProvider}`);
       if (res.ok) {
         const data: ComparableResult = await res.json();
-        setComparableResult(data);
+        setComparableResult(normalizeComparableResult(data));
       }
     } catch (err) {
       console.error('Failed to fetch comparables:', err);
@@ -315,7 +385,7 @@ export default function App() {
         throw new Error(errData.detail || 'Valuation failed');
       }
       const resultData: ValuationResult = await res.json();
-      setResult(resultData);
+      setResult(normalizeValuationResult(resultData));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -344,7 +414,7 @@ export default function App() {
         throw new Error(errData.detail || 'Scenario analysis failed');
       }
       const resultData: ScenarioAnalysisResult = await res.json();
-      setScenarioResult(resultData);
+      setScenarioResult(normalizeScenarioResult(resultData));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -371,7 +441,7 @@ export default function App() {
         throw new Error(errorMsg);
       }
       const data: TechnicalAnalysisResult = await res.json();
-      setTechnicalResult(data);
+      setTechnicalResult(normalizeTechnicalResult(data));
       // Refresh rate limits after successful call
       await fetchRateLimits();
     } catch (err) {
@@ -404,7 +474,7 @@ export default function App() {
           throw new Error(data.detail || 'Technical analysis failed');
         }
         const data: TechnicalAnalysisResult = await res.json();
-        setTechnicalResult(data);
+        setTechnicalResult(normalizeTechnicalResult(data));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
@@ -1135,7 +1205,7 @@ export default function App() {
             <div className="mb-12">
               <div className="flex items-baseline gap-4 mb-3">
                 <span className="text-sm text-gray-500">Intrinsic Value<GlossaryRef id="intrinsic-value" /></span>
-                <span className="text-5xl font-bold font-mono tracking-tight">${result.intrinsic_value_per_share?.toFixed(2) ?? '—'}</span>
+                <span className="text-5xl font-bold font-mono tracking-tight">${result.intrinsic_value_per_share.toFixed(2)}</span>
                 <span className="text-sm text-gray-400">per share</span>
               </div>
               
@@ -1193,7 +1263,7 @@ export default function App() {
             </div>
 
             {/* Projections */}
-            {result.projections && result.projections.length > 0 && (
+            {result.projections.length > 0 && (
               <div className="mb-12">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">FCF<GlossaryRef id="fcf" /> Projections</h3>
                 <table className="w-full text-sm">
@@ -1220,7 +1290,7 @@ export default function App() {
             )}
 
             {/* Sensitivity Analysis */}
-            {result.sensitivity && result.sensitivity.terminal_growth_rates && result.sensitivity.matrix && (
+            {result.sensitivity && (
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Sensitivity Analysis</h3>
                 <p className="text-sm text-gray-400 mb-6">Intrinsic value per share at different discount rates & terminal growth rates</p>
@@ -1350,7 +1420,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {scenarioResult.scenarios?.map((scenario) => (
+                    {scenarioResult.scenarios.map((scenario) => (
                       <tr key={scenario.name} className="border-b border-gray-100">
                         <td className="py-3 text-sm font-medium">{scenario.name}</td>
                         <td className="py-3 text-right font-mono text-sm">${scenario.intrinsic_value.toFixed(2)}</td>
@@ -1414,7 +1484,7 @@ export default function App() {
                   {comparableResult.industry && comparableResult.industry !== comparableResult.sector && (
                     <span> / {comparableResult.industry}</span>
                   )}
-                  <span className="text-gray-400 ml-2">• {comparableResult.peers?.length ?? 0} peers</span>
+                  <span className="text-gray-400 ml-2">• {comparableResult.peers.length} peers</span>
                 </div>
 
                 {/* Implied Valuations */}
@@ -1431,7 +1501,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {comparableResult.implied_valuations?.map((iv) => (
+                      {comparableResult.implied_valuations.map((iv) => (
                         <tr key={iv.metric} className="border-b border-gray-100">
                           <td className="py-3 text-sm font-medium">{iv.metric}</td>
                           <td className="py-3 text-right font-mono text-sm">
@@ -1497,7 +1567,7 @@ export default function App() {
                           </td>
                         </tr>
                         {/* Peer rows */}
-                        {comparableResult.peers?.map((peer) => (
+                        {comparableResult.peers.map((peer) => (
                           <tr key={peer.symbol} className="border-b border-gray-100">
                             <td className="py-3">
                               <span className="font-medium">{peer.symbol}</span>
@@ -1603,10 +1673,10 @@ export default function App() {
                 </div>
 
                 {/* Limited data warning */}
-                {technicalResult.prices && technicalResult.prices.length < 50 && (
+                {technicalResult.prices.length < 50 && (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
                     <p className="text-sm text-amber-800">
-                      <span className="font-semibold">Limited data:</span> Only {technicalResult.prices?.length ?? 0} trading days available. 
+                      <span className="font-semibold">Limited data:</span> Only {technicalResult.prices.length} trading days available. 
                       Some indicators need more data to calculate.
                     </p>
                   </div>
@@ -1652,7 +1722,7 @@ export default function App() {
                       <rect x="0" y="0" width="800" height="400" fill="#fafafa" />
                       
                       {/* Price line */}
-                      {technicalResult.prices && technicalResult.prices.length > 1 && (() => {
+                      {technicalResult.prices.length > 1 && (() => {
                         const prices = technicalResult.prices;
                         const minPrice = Math.min(...prices.map(p => p.low));
                         const maxPrice = Math.max(...prices.map(p => p.high));
@@ -1668,7 +1738,7 @@ export default function App() {
                         }).join(' ');
                         
                         // SMA 20 line
-                        const sma20Points = (technicalResult.indicators?.sma_20 ?? []).map((s) => {
+                        const sma20Points = technicalResult.indicators.sma_20.map((s) => {
                           const priceIdx = prices.findIndex(p => p.timestamp === s.timestamp);
                           if (priceIdx === -1) return null;
                           const x = padding + (priceIdx / (prices.length - 1)) * chartWidth;
@@ -1677,7 +1747,7 @@ export default function App() {
                         }).filter(Boolean).join(' ');
                         
                         // SMA 50 line
-                        const sma50Points = (technicalResult.indicators?.sma_50 ?? []).map((s) => {
+                        const sma50Points = technicalResult.indicators.sma_50.map((s) => {
                           const priceIdx = prices.findIndex(p => p.timestamp === s.timestamp);
                           if (priceIdx === -1) return null;
                           const x = padding + (priceIdx / (prices.length - 1)) * chartWidth;
@@ -1752,7 +1822,7 @@ export default function App() {
                 {/* RSI Chart */}
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum (RSI)<GlossaryRef id="rsi" /></h3>
-                  {technicalResult.indicators?.rsi_14?.length > 1 ? (
+                  {technicalResult.indicators.rsi_14.length > 1 ? (
                     <div className="bg-gray-50 rounded-lg p-6 overflow-hidden">
                       <svg viewBox="0 0 800 200" className="w-full h-48">
                         {/* Overbought/Oversold zones */}
@@ -1799,7 +1869,7 @@ export default function App() {
                 {/* MACD Chart */}
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum Trend (MACD)<GlossaryRef id="macd" /></h3>
-                  {technicalResult.indicators?.macd?.length > 1 ? (
+                  {technicalResult.indicators.macd.length > 1 ? (
                     <div className="bg-gray-50 rounded-lg p-6 overflow-hidden">
                       <svg viewBox="0 0 800 200" className="w-full h-48">
                         {(() => {
