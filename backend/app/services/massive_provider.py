@@ -6,9 +6,7 @@ Does NOT support fundamental analysis.
 import httpx
 from datetime import datetime, timedelta
 
-# Default risk-free rate (4.5%) - Massive doesn't provide treasury data
-DEFAULT_TREASURY_RATE = 0.045
-
+from app.constants import DEFAULT_TREASURY_RATE
 from app.services.base_provider import (
     StockDataProvider,
     StockData,

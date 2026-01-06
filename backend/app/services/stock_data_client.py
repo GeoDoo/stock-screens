@@ -12,10 +12,9 @@ from app.services.base_provider import (
 from app.services.fmp_provider import FMPProvider
 from app.services.yahoo_provider import YahooProvider
 
-logger = logging.getLogger(__name__)
+from app.constants import DEFAULT_TREASURY_RATE
 
-# Default risk-free rate when all providers fail (4.5%)
-DEFAULT_TREASURY_RATE = 0.045
+logger = logging.getLogger(__name__)
 
 
 class StockDataClient:
