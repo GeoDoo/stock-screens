@@ -213,6 +213,112 @@ export const glossaryTerms: GlossaryTerm[] = [
     definition: "Share price divided by book value per share. A low P/B may indicate an undervalued stock, though some industries naturally trade at higher P/B ratios.",
     investopediaUrl: "https://www.investopedia.com/terms/p/price-to-bookratio.asp",
   },
+  {
+    id: "earnings-yield",
+    term: "Earnings Yield",
+    definition: "Earnings per share divided by the stock price (the inverse of P/E). It represents the percentage of each dollar invested that was earned by the company, useful for comparing stocks to bonds.",
+    investopediaUrl: "https://www.investopedia.com/terms/e/earningsyield.asp",
+  },
+  {
+    id: "ev-revenue",
+    term: "EV/Revenue",
+    fullName: "Enterprise Value to Revenue",
+    definition: "Enterprise value divided by total revenue. This multiple is useful for valuing high-growth companies that may not yet be profitable, as it focuses on sales rather than earnings.",
+    investopediaUrl: "https://www.investopedia.com/terms/e/ev-revenue-multiple.asp",
+  },
+
+  // Dividend Metrics
+  {
+    id: "dividend-yield",
+    term: "Dividend Yield",
+    definition: "Annual dividends per share divided by the stock price. It shows the percentage return from dividends alone, important for income-focused investors.",
+    investopediaUrl: "https://www.investopedia.com/terms/d/dividendyield.asp",
+  },
+  {
+    id: "payout-ratio",
+    term: "Payout Ratio",
+    definition: "The proportion of earnings paid out as dividends to shareholders. A sustainable payout ratio (typically under 60%) suggests dividends can be maintained or grown.",
+    investopediaUrl: "https://www.investopedia.com/terms/d/dividendpayoutratio.asp",
+  },
+
+  // Profitability Ratios
+  {
+    id: "gross-margin",
+    term: "Gross Margin",
+    definition: "Gross profit divided by revenue, expressed as a percentage. It shows how efficiently a company produces its goods or services before operating expenses.",
+    investopediaUrl: "https://www.investopedia.com/terms/g/grossmargin.asp",
+  },
+  {
+    id: "net-margin",
+    term: "Net Margin",
+    fullName: "Net Profit Margin",
+    definition: "Net income divided by revenue. It shows the percentage of revenue that translates into actual profit after all expenses, taxes, and interest.",
+    investopediaUrl: "https://www.investopedia.com/terms/n/net_margin.asp",
+  },
+  {
+    id: "roe",
+    term: "ROE",
+    fullName: "Return on Equity",
+    definition: "Net income divided by shareholders' equity. It measures how effectively management uses shareholder capital to generate profits. Higher ROE generally indicates better capital efficiency.",
+    investopediaUrl: "https://www.investopedia.com/terms/r/returnonequity.asp",
+  },
+  {
+    id: "roa",
+    term: "ROA",
+    fullName: "Return on Assets",
+    definition: "Net income divided by total assets. It measures how efficiently a company uses its assets to generate profit. Useful for comparing companies in capital-intensive industries.",
+    investopediaUrl: "https://www.investopedia.com/terms/r/returnonassets.asp",
+  },
+  {
+    id: "roic",
+    term: "ROIC",
+    fullName: "Return on Invested Capital",
+    definition: "A measure of how well a company generates cash flow relative to the capital invested in its business. ROIC above WACC indicates the company is creating value.",
+    investopediaUrl: "https://www.investopedia.com/terms/r/returnoninvestmentcapital.asp",
+  },
+
+  // Liquidity & Solvency Ratios
+  {
+    id: "current-ratio",
+    term: "Current Ratio",
+    definition: "Current assets divided by current liabilities. A ratio above 1 indicates the company can cover its short-term obligations. Too high may suggest inefficient use of assets.",
+    investopediaUrl: "https://www.investopedia.com/terms/c/currentratio.asp",
+  },
+  {
+    id: "quick-ratio",
+    term: "Quick Ratio",
+    fullName: "Acid-Test Ratio",
+    definition: "Current assets minus inventory, divided by current liabilities. A more conservative liquidity measure than current ratio, as inventory may not be quickly convertible to cash.",
+    investopediaUrl: "https://www.investopedia.com/terms/q/quickratio.asp",
+  },
+  {
+    id: "debt-to-equity",
+    term: "Debt-to-Equity",
+    fullName: "D/E Ratio",
+    definition: "Total debt divided by shareholders' equity. It measures financial leverage—higher ratios indicate more debt financing, which can amplify returns but also risk.",
+    investopediaUrl: "https://www.investopedia.com/terms/d/debtequityratio.asp",
+  },
+  {
+    id: "interest-coverage",
+    term: "Interest Coverage",
+    fullName: "Interest Coverage Ratio",
+    definition: "EBIT divided by interest expense. It shows how easily a company can pay interest on its debt. A ratio below 1.5 may signal financial distress.",
+    investopediaUrl: "https://www.investopedia.com/terms/i/interestcoverageratio.asp",
+  },
+
+  // Efficiency Ratios
+  {
+    id: "asset-turnover",
+    term: "Asset Turnover",
+    definition: "Revenue divided by total assets. It measures how efficiently a company uses its assets to generate sales. Higher turnover indicates better asset utilization.",
+    investopediaUrl: "https://www.investopedia.com/terms/a/assetturnover.asp",
+  },
+  {
+    id: "inventory-turnover",
+    term: "Inventory Turnover",
+    definition: "Cost of goods sold divided by average inventory. It shows how many times inventory is sold and replaced over a period. Higher turnover suggests efficient inventory management.",
+    investopediaUrl: "https://www.investopedia.com/terms/i/inventoryturnover.asp",
+  },
 
   // Technical Analysis Terms
   {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { formatCurrency, formatPercent, formatNumber, formatShareCount } from './utils';
 
@@ -76,6 +76,10 @@ export default function App() {
   const [technicalResult, setTechnicalResult] = useState<TechnicalAnalysisResult | null>(null);
   const [technicalLoading, setTechnicalLoading] = useState(false);
   
+  // Financial Ratios
+  const [ratiosResult, setRatiosResult] = useState<FinancialRatiosResult | null>(null);
+  const [ratiosLoading, setRatiosLoading] = useState(false);
+  
   // Tab navigation
   const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
 
@@ -88,6 +92,7 @@ export default function App() {
     setResult(null);
     setScenarioResult(null);
     setComparableResult(null);
+    setRatiosResult(null);
     
     try {
       const res = await fetch(`${API_BASE}/api/stock/${ticker.toUpperCase()}?provider=${selectedFundamentalProvider}`);
@@ -105,10 +110,30 @@ export default function App() {
       if (data.hints.operating_margin !== null) {
         setOperatingMargin((data.hints.operating_margin * 100).toFixed(2));
       }
+      
+      // Auto-fetch financial ratios
+      fetchRatios(ticker.toUpperCase());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const fetchRatios = async (symbol: string) => {
+    if (!selectedFundamentalProvider) return;
+    
+    setRatiosLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/stock/${symbol}/ratios?provider=${selectedFundamentalProvider}`);
+      if (res.ok) {
+        const data: FinancialRatiosResult = await res.json();
+        setRatiosResult(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch ratios:', err);
+    } finally {
+      setRatiosLoading(false);
     }
   };
 
@@ -525,6 +550,147 @@ export default function App() {
                 </div>
               </div>
             </section>
+
+            {/* Financial Ratios */}
+            {ratiosResult && (
+              <section className="mb-16 pt-8 border-t border-gray-100">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Financial Ratios</h2>
+                <p className="text-sm text-gray-400 mb-8">Comprehensive metrics for analysis</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-8">
+                  {/* Valuation */}
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-4">Valuation</h3>
+                    <table className="w-full">
+                      <tbody>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">P/E<GlossaryRef id="pe-ratio" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.valuation.pe_ratio)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Earnings Yield<GlossaryRef id="earnings-yield" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.valuation.earnings_yield)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">P/S<GlossaryRef id="ps-ratio" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.valuation.ps_ratio)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">P/B<GlossaryRef id="pb-ratio" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.valuation.pb_ratio)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">EV/EBITDA<GlossaryRef id="ev-ebitda" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.valuation.ev_to_ebitda)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">EV/Revenue<GlossaryRef id="ev-revenue" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.valuation.ev_to_revenue)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Dividend */}
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-green-600 mb-4">Dividend</h3>
+                    <table className="w-full">
+                      <tbody>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Dividend Yield<GlossaryRef id="dividend-yield" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.dividend.dividend_yield)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Payout Ratio<GlossaryRef id="payout-ratio" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.dividend.payout_ratio)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Profitability */}
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-purple-600 mb-4">Profitability</h3>
+                    <table className="w-full">
+                      <tbody>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Gross Margin<GlossaryRef id="gross-margin" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.gross_margin)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Operating Margin<GlossaryRef id="operating-margin" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.operating_margin)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Net Margin<GlossaryRef id="net-margin" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.net_margin)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">ROE<GlossaryRef id="roe" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.roe)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">ROA<GlossaryRef id="roa" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.roa)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">ROIC<GlossaryRef id="roic" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.roic)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Liquidity & Solvency */}
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-orange-600 mb-4">Liquidity</h3>
+                    <table className="w-full">
+                      <tbody>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Current Ratio<GlossaryRef id="current-ratio" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.liquidity.current_ratio)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Quick Ratio<GlossaryRef id="quick-ratio" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.liquidity.quick_ratio)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Debt/Equity<GlossaryRef id="debt-to-equity" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.liquidity.debt_to_equity)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Interest Coverage<GlossaryRef id="interest-coverage" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.liquidity.interest_coverage)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Efficiency */}
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-teal-600 mb-4">Efficiency</h3>
+                    <table className="w-full">
+                      <tbody>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Asset Turnover<GlossaryRef id="asset-turnover" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.efficiency.asset_turnover)}</td>
+                        </tr>
+                        <tr className="border-b border-gray-100">
+                          <td className="py-2 text-sm text-gray-500">Inventory Turnover<GlossaryRef id="inventory-turnover" /></td>
+                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.efficiency.inventory_turnover)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            )}
+            
+            {ratiosLoading && (
+              <section className="mb-16 pt-8 border-t border-gray-100">
+                <p className="text-sm text-gray-400">Loading financial ratios...</p>
+              </section>
+            )}
 
             {/* Assumptions */}
             <section className="mb-16 pt-8 border-t border-gray-100">
