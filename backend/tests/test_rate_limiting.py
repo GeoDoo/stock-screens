@@ -7,6 +7,7 @@ from app.services.rate_limiter import (
     PROVIDER_CONFIGS, 
     ResetSchedule,
     CallRecord,
+    ApiLimitedRecord,
 )
 
 
@@ -153,6 +154,7 @@ class TestRateLimiter:
         assert stats["percentage"] == 40.0
         assert stats["reset_schedule"] == "daily"
         assert stats["api_limited"] == False
+        assert stats["reset_in_seconds"] is None  # Not limited, so no reset time
     
     def test_mark_api_limited(self):
         """Marking as API-limited should affect remaining and is_at_limit."""
@@ -214,6 +216,89 @@ class TestRateLimiter:
         
         assert limiter.get_count("fmp") == 3
         assert limiter.get_count("FMP") == 3
+
+
+class TestApiLimitedRecord:
+    """Tests for the ApiLimitedRecord auto-clear logic."""
+    
+    def test_daily_auto_clear_before_midnight(self):
+        """Daily limit should NOT auto-clear before midnight."""
+        # Limited just now
+        record = ApiLimitedRecord(
+            limited_at=datetime.now(timezone.utc),
+            reset_schedule=ResetSchedule.DAILY
+        )
+        assert record.should_auto_clear() == False
+    
+    def test_daily_auto_clear_after_midnight(self):
+        """Daily limit should auto-clear after midnight UTC."""
+        # Limited yesterday at 11 PM
+        yesterday = datetime.now(timezone.utc).replace(hour=23, minute=0) - timedelta(days=1)
+        record = ApiLimitedRecord(
+            limited_at=yesterday,
+            reset_schedule=ResetSchedule.DAILY
+        )
+        # It's now past midnight, so should auto-clear
+        assert record.should_auto_clear() == True
+    
+    def test_minute_auto_clear_before_60s(self):
+        """Per-minute limit should NOT auto-clear before 60 seconds."""
+        # Limited 30 seconds ago
+        record = ApiLimitedRecord(
+            limited_at=datetime.now(timezone.utc) - timedelta(seconds=30),
+            reset_schedule=ResetSchedule.PER_MINUTE
+        )
+        assert record.should_auto_clear() == False
+    
+    def test_minute_auto_clear_after_60s(self):
+        """Per-minute limit should auto-clear after 60 seconds."""
+        # Limited 90 seconds ago
+        record = ApiLimitedRecord(
+            limited_at=datetime.now(timezone.utc) - timedelta(seconds=90),
+            reset_schedule=ResetSchedule.PER_MINUTE
+        )
+        assert record.should_auto_clear() == True
+    
+    def test_time_until_reset_for_minute(self):
+        """Should return correct time until reset for per-minute."""
+        # Limited 30 seconds ago
+        record = ApiLimitedRecord(
+            limited_at=datetime.now(timezone.utc) - timedelta(seconds=30),
+            reset_schedule=ResetSchedule.PER_MINUTE
+        )
+        remaining = record.time_until_reset()
+        # Should be about 30 seconds left
+        assert 25 <= remaining.total_seconds() <= 35
+
+
+class TestRateLimiterAutoClear:
+    """Tests for auto-clearing api_limited flag."""
+    
+    def test_api_limited_auto_clears_for_massive(self):
+        """Massive provider should auto-clear after 60 seconds."""
+        limiter = RateLimiter()
+        
+        # Mark as limited
+        limiter.mark_api_limited("massive")
+        assert limiter.is_at_limit("massive") == True
+        
+        # Manually set the timestamp to 90 seconds ago
+        limiter._api_limited["massive"].limited_at = datetime.now(timezone.utc) - timedelta(seconds=90)
+        
+        # Should now be auto-cleared
+        assert limiter.is_at_limit("massive") == False
+        assert limiter.get_usage_stats("massive")["api_limited"] == False
+    
+    def test_reset_in_seconds_returns_value_when_limited(self):
+        """Should return seconds until reset when limited."""
+        limiter = RateLimiter()
+        limiter.mark_api_limited("massive")
+        
+        stats = limiter.get_usage_stats("massive")
+        assert stats["api_limited"] == True
+        assert stats["reset_in_seconds"] is not None
+        assert stats["reset_in_seconds"] > 0
+        assert stats["reset_in_seconds"] <= 60
 
 
 class TestProviderConfigs:

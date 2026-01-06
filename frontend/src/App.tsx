@@ -6,6 +6,23 @@ import { formatCurrency, formatPercent, formatNumber, formatShareCount } from '.
 
 const API_BASE = 'http://localhost:8000';
 
+// Format seconds into human-readable time (e.g., "5m 30s" or "2h 15m")
+function formatResetTime(seconds: number | null): string {
+  if (seconds === null || seconds <= 0) return 'soon';
+  
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  
+  if (hours > 0) {
+    return `${hours}h ${mins}m`;
+  } else if (mins > 0) {
+    return `${mins}m ${secs}s`;
+  } else {
+    return `${secs}s`;
+  }
+}
+
 export default function App() {
   // Provider selection - separate providers for Fundamental and Technical
   const [fundamentalProviders, setFundamentalProviders] = useState<Provider[]>([]);
@@ -482,8 +499,10 @@ export default function App() {
                         ? 'text-amber-600'
                         : 'text-gray-400'
                     }`}>
-                      ({rateLimits[selectedFundamentalProvider].remaining}/{rateLimits[selectedFundamentalProvider].limit} calls left
-                      {rateLimits[selectedFundamentalProvider].reset_schedule === 'daily' ? '/day' : '/min'})
+                      {rateLimits[selectedFundamentalProvider].api_limited 
+                        ? `⊘ Limited — resets in ${formatResetTime(rateLimits[selectedFundamentalProvider].reset_in_seconds)}`
+                        : `(${rateLimits[selectedFundamentalProvider].remaining}/${rateLimits[selectedFundamentalProvider].limit} calls left${rateLimits[selectedFundamentalProvider].reset_schedule === 'daily' ? '/day' : '/min'})`
+                      }
                     </span>
                   )}
                 </p>
@@ -530,8 +549,10 @@ export default function App() {
                         ? 'text-amber-600'
                         : 'text-gray-400'
                     }`}>
-                      ({rateLimits[selectedTechnicalProvider].remaining}/{rateLimits[selectedTechnicalProvider].limit} calls left
-                      {rateLimits[selectedTechnicalProvider].reset_schedule === 'daily' ? '/day' : '/min'})
+                      {rateLimits[selectedTechnicalProvider].api_limited 
+                        ? `⊘ Limited — resets in ${formatResetTime(rateLimits[selectedTechnicalProvider].reset_in_seconds)}`
+                        : `(${rateLimits[selectedTechnicalProvider].remaining}/${rateLimits[selectedTechnicalProvider].limit} calls left${rateLimits[selectedTechnicalProvider].reset_schedule === 'daily' ? '/day' : '/min'})`
+                      }
                     </span>
                   )}
                 </p>

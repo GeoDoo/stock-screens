@@ -7,8 +7,8 @@ Each provider has different limits and reset schedules:
 - Massive/Polygon: 5 calls/minute (rolling window)
 """
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Dict, List
+from datetime import datetime, timezone, timedelta
+from typing import Dict, List, Optional
 from enum import Enum
 
 
@@ -57,9 +57,50 @@ class CallRecord:
         self.timestamps = [ts for ts in self.timestamps if ts >= before]
 
 
+@dataclass
+class ApiLimitedRecord:
+    """Track when a provider was marked as rate-limited."""
+    limited_at: datetime
+    reset_schedule: ResetSchedule
+    
+    def should_auto_clear(self) -> bool:
+        """Check if enough time has passed to try again."""
+        now = datetime.now(timezone.utc)
+        
+        if self.reset_schedule == ResetSchedule.DAILY:
+            # Clear at next midnight UTC
+            # If limited before midnight and now it's past midnight, clear
+            today_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            return self.limited_at < today_midnight
+        
+        elif self.reset_schedule == ResetSchedule.PER_MINUTE:
+            # Clear after 60 seconds
+            return (now - self.limited_at).total_seconds() >= 60
+        
+        return False
+    
+    def time_until_reset(self) -> timedelta:
+        """Get time remaining until the limit resets."""
+        now = datetime.now(timezone.utc)
+        
+        if self.reset_schedule == ResetSchedule.DAILY:
+            # Next midnight UTC
+            tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            return tomorrow - now
+        
+        elif self.reset_schedule == ResetSchedule.PER_MINUTE:
+            # 60 seconds from when limited
+            reset_time = self.limited_at + timedelta(seconds=60)
+            remaining = reset_time - now
+            return remaining if remaining.total_seconds() > 0 else timedelta(seconds=0)
+        
+        return timedelta(seconds=0)
+
+
 class RateLimiter:
     """
     Accurately tracks API calls per provider with proper reset logic.
+    Auto-clears api_limited flag when the reset window passes.
     
     Usage:
         limiter = RateLimiter()
@@ -71,8 +112,8 @@ class RateLimiter:
     
     def __init__(self):
         self._records: Dict[str, CallRecord] = {}
-        # Track if provider hit actual API rate limit (from error response)
-        self._api_limited: Dict[str, bool] = {}
+        # Track when provider hit actual API rate limit (with timestamp for auto-clear)
+        self._api_limited: Dict[str, ApiLimitedRecord] = {}
     
     def _get_record(self, provider: str) -> CallRecord:
         """Get or create call record for provider."""
@@ -99,7 +140,6 @@ class RateLimiter:
             return now.replace(hour=0, minute=0, second=0, microsecond=0)
         elif config.reset_schedule == ResetSchedule.PER_MINUTE:
             # 1 minute ago (rolling window)
-            from datetime import timedelta
             return now - timedelta(minutes=1)
         else:
             return now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -114,7 +154,6 @@ class RateLimiter:
         record.add_call()
         
         # Cleanup old timestamps to save memory (keep last 24 hours)
-        from datetime import timedelta
         cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         record.cleanup_old(cutoff)
         
@@ -127,10 +166,25 @@ class RateLimiter:
         window_start = self._get_window_start(provider)
         return record.get_count_since(window_start)
     
+    def _is_api_limited(self, provider: str) -> bool:
+        """Check if provider is API-limited, with auto-clear logic."""
+        provider = provider.lower()
+        record = self._api_limited.get(provider)
+        
+        if record is None:
+            return False
+        
+        # Auto-clear if enough time has passed
+        if record.should_auto_clear():
+            del self._api_limited[provider]
+            return False
+        
+        return True
+    
     def get_remaining(self, provider: str) -> int:
         """Get remaining calls in the current window."""
-        # If API told us we're limited, return 0
-        if self._api_limited.get(provider.lower(), False):
+        # If API told us we're limited (and not auto-cleared), return 0
+        if self._is_api_limited(provider):
             return 0
         
         config = self._get_config(provider)
@@ -145,8 +199,8 @@ class RateLimiter:
     
     def is_at_limit(self, provider: str) -> bool:
         """Check if at or over the limit."""
-        # If API told us we're limited, we're definitely at limit
-        if self._api_limited.get(provider.lower(), False):
+        # If API told us we're limited (and not auto-cleared), we're at limit
+        if self._is_api_limited(provider):
             return True
         
         config = self._get_config(provider)
@@ -157,12 +211,29 @@ class RateLimiter:
         """
         Mark provider as rate-limited based on actual API error.
         This is the source of truth when API returns 429.
+        Records timestamp for auto-clear logic.
         """
-        self._api_limited[provider.lower()] = True
+        provider = provider.lower()
+        config = self._get_config(provider)
+        self._api_limited[provider] = ApiLimitedRecord(
+            limited_at=datetime.now(timezone.utc),
+            reset_schedule=config.reset_schedule
+        )
     
     def clear_api_limited(self, provider: str):
-        """Clear the API-limited flag (e.g., after window resets)."""
-        self._api_limited[provider.lower()] = False
+        """Clear the API-limited flag (e.g., manual override)."""
+        provider = provider.lower()
+        if provider in self._api_limited:
+            del self._api_limited[provider]
+    
+    def get_time_until_reset(self, provider: str) -> Optional[int]:
+        """Get seconds until rate limit resets (None if not limited)."""
+        provider = provider.lower()
+        record = self._api_limited.get(provider)
+        if record is None:
+            return None
+        remaining = record.time_until_reset()
+        return int(remaining.total_seconds())
     
     def get_usage_stats(self, provider: str) -> Dict:
         """Get accurate usage statistics for a provider."""
@@ -170,7 +241,8 @@ class RateLimiter:
         config = self._get_config(provider)
         count = self.get_count(provider)
         remaining = self.get_remaining(provider)
-        api_limited = self._api_limited.get(provider, False)
+        api_limited = self._is_api_limited(provider)
+        reset_in = self.get_time_until_reset(provider)
         
         return {
             "provider": provider,
@@ -179,7 +251,8 @@ class RateLimiter:
             "remaining": remaining,
             "percentage": round((count / config.limit) * 100, 1) if config.limit > 0 else 0,
             "reset_schedule": config.reset_schedule.value,
-            "api_limited": api_limited,  # True if provider returned 429
+            "api_limited": api_limited,  # True if provider returned 429 (auto-clears)
+            "reset_in_seconds": reset_in,  # Seconds until can try again (None if not limited)
         }
     
     def get_all_stats(self) -> Dict[str, Dict]:
@@ -190,7 +263,8 @@ class RateLimiter:
         """Manually reset a provider's count (for testing or admin)."""
         provider = provider.lower()
         self._records[provider] = CallRecord()
-        self._api_limited[provider] = False
+        if provider in self._api_limited:
+            del self._api_limited[provider]
     
     def reset_all(self) -> None:
         """Reset all provider counts."""
