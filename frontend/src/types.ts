@@ -12,18 +12,15 @@ export interface ProvidersResponse {
   technical: Provider[];
 }
 
-// Rate Limit Types
+// Rate Limit Types (accurate time-based tracking)
 export interface RateLimitStats {
+  provider: string;
   used: number;
   limit: number;
   remaining: number;
   percentage: number;
-}
-
-export interface AllRateLimits {
-  fmp: RateLimitStats;
-  yahoo: RateLimitStats;
-  massive: RateLimitStats;
+  reset_schedule: 'daily' | 'minute';  // When limit resets
+  api_limited: boolean;  // True if API returned 429
 }
 
 export interface CompanyData {

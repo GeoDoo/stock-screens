@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { DiscountRateModal } from './components/DiscountRateModal';
 import { formatCurrency, formatPercent, formatNumber, formatShareCount } from './utils';
@@ -13,8 +13,8 @@ export default function App() {
   const [selectedFundamentalProvider, setSelectedFundamentalProvider] = useState<string>('');
   const [selectedTechnicalProvider, setSelectedTechnicalProvider] = useState<string>('');
   const [providersLoading, setProvidersLoading] = useState(true);
-  // Track which providers have actually hit rate limits (from API errors)
-  const [rateLimitedProviders, setRateLimitedProviders] = useState<Set<string>>(new Set());
+  // Accurate rate limit tracking from backend
+  const [rateLimits, setRateLimits] = useState<Record<string, RateLimitStats>>({});
   
   const [ticker, setTicker] = useState('');
   const [stockData, setStockData] = useState<StockDataResponse | null>(null);
@@ -22,17 +22,26 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ValuationResult | null>(null);
   
-  // Check if a provider hit rate limit (based on actual API errors, not fake counters)
+  // Check if a provider is at its rate limit
   const isProviderAtLimit = (providerId: string): boolean => {
-    return rateLimitedProviders.has(providerId);
+    const stats = rateLimits[providerId.toLowerCase()];
+    return stats ? (stats.api_limited || stats.remaining === 0) : false;
   };
 
-  // Mark provider as rate-limited when we get an actual error
-  const markProviderRateLimited = (providerId: string) => {
-    setRateLimitedProviders(prev => new Set(prev).add(providerId));
+  // Fetch rate limits from backend (accurate time-based tracking)
+  const fetchRateLimits = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/rate-limits`);
+      if (res.ok) {
+        const data = await res.json();
+        setRateLimits(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch rate limits:', err);
+    }
   };
 
-  // Fetch available providers on mount
+  // Fetch available providers and rate limits on mount
   useEffect(() => {
     const fetchProviders = async () => {
       try {
@@ -40,6 +49,9 @@ export default function App() {
         const data: ProvidersResponse = await res.json();
         setFundamentalProviders(data.fundamental);
         setTechnicalProviders(data.technical);
+        
+        // Also fetch accurate rate limits
+        await fetchRateLimits();
         
         // Auto-select recommended or first available providers
         const fundRecommended = data.fundamental.find((p: Provider) => p.recommended && p.available);
@@ -132,13 +144,14 @@ export default function App() {
       if (!res.ok) {
         const errData = await res.json();
         const errorMsg = errData.detail || 'Failed to fetch stock data';
-        // Check if it's a rate limit error and mark provider as limited
-        if (res.status === 429 || errorMsg.toLowerCase().includes('rate limit')) {
-          markProviderRateLimited(selectedFundamentalProvider);
-        }
+        // Refresh rate limits (backend marks provider as limited on 429)
+        await fetchRateLimits();
         throw new Error(errorMsg);
       }
       const batchData = await res.json();
+      
+      // Refresh rate limits after successful call
+      await fetchRateLimits();
       
       // Extract data from batch response
       const stockResponse = batchData.stock as StockDataResponse;
@@ -305,14 +318,14 @@ export default function App() {
       if (!res.ok) {
         const errData = await res.json();
         const errorMsg = errData.detail || 'Technical analysis failed';
-        // Check if it's a rate limit error and mark provider as limited
-        if (res.status === 429 || errorMsg.toLowerCase().includes('rate limit')) {
-          markProviderRateLimited(selectedTechnicalProvider);
-        }
+        // Refresh rate limits (backend marks provider as limited on 429)
+        await fetchRateLimits();
         throw new Error(errorMsg);
       }
       const data: TechnicalAnalysisResult = await res.json();
       setTechnicalResult(data);
+      // Refresh rate limits after successful call
+      await fetchRateLimits();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -461,8 +474,17 @@ export default function App() {
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {fundamentalProviders.find(p => p.id === selectedFundamentalProvider)?.description}
-                  {isProviderAtLimit(selectedFundamentalProvider) && (
-                    <span className="ml-2 text-red-500">— Rate limit exceeded</span>
+                  {selectedFundamentalProvider && rateLimits[selectedFundamentalProvider] && (
+                    <span className={`ml-2 ${
+                      rateLimits[selectedFundamentalProvider].api_limited || rateLimits[selectedFundamentalProvider].remaining === 0
+                        ? 'text-red-500'
+                        : rateLimits[selectedFundamentalProvider].percentage >= 80
+                        ? 'text-amber-600'
+                        : 'text-gray-400'
+                    }`}>
+                      ({rateLimits[selectedFundamentalProvider].remaining}/{rateLimits[selectedFundamentalProvider].limit} calls left
+                      {rateLimits[selectedFundamentalProvider].reset_schedule === 'daily' ? '/day' : '/min'})
+                    </span>
                   )}
                 </p>
               </div>
@@ -500,8 +522,17 @@ export default function App() {
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {technicalProviders.find(p => p.id === selectedTechnicalProvider)?.description}
-                  {isProviderAtLimit(selectedTechnicalProvider) && (
-                    <span className="ml-2 text-red-500">— Rate limit exceeded</span>
+                  {selectedTechnicalProvider && rateLimits[selectedTechnicalProvider] && (
+                    <span className={`ml-2 ${
+                      rateLimits[selectedTechnicalProvider].api_limited || rateLimits[selectedTechnicalProvider].remaining === 0
+                        ? 'text-red-500'
+                        : rateLimits[selectedTechnicalProvider].percentage >= 80
+                        ? 'text-amber-600'
+                        : 'text-gray-400'
+                    }`}>
+                      ({rateLimits[selectedTechnicalProvider].remaining}/{rateLimits[selectedTechnicalProvider].limit} calls left
+                      {rateLimits[selectedTechnicalProvider].reset_schedule === 'daily' ? '/day' : '/min'})
+                    </span>
                   )}
                 </p>
               </div>
