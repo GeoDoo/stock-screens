@@ -1021,15 +1021,23 @@ export default function App() {
 
         {/* TECHNICAL TAB */}
         {stockData && activeTab === 'technical' && (
-          <div className="py-8">
+          <div className="space-y-8">
+            {/* Company Header - always visible, same as Fundamental */}
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold">
+                {stockData.symbol} {stockData.company_name && `— ${stockData.company_name}`}
+              </h2>
+              <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500 uppercase tracking-wide">
+                via {technicalResult 
+                  ? (technicalProviders.find(p => p.id === technicalResult.provider)?.name || technicalResult.provider)
+                  : (technicalProviders.find(p => p.id === selectedTechnicalProvider)?.name || selectedTechnicalProvider)}
+              </span>
+            </div>
+
             {/* Run Technical Analysis */}
             {!technicalResult && (
-              <div className="mb-8">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Technical Analysis</h2>
-                <p className="text-sm text-gray-400 mb-4">Price charts, moving averages, RSI, MACD indicators</p>
-                <p className="text-xs text-gray-400 mb-6">
-                  Provider: <span className="font-semibold text-gray-600">{technicalProviders.find(p => p.id === selectedTechnicalProvider)?.name || selectedTechnicalProvider}</span>
-                </p>
+              <div>
+                <p className="text-sm text-gray-400 mb-6">Run technical analysis to see price charts, moving averages, and momentum indicators.</p>
                 <button
                   onClick={runTechnicalAnalysis}
                   disabled={technicalLoading || !selectedTechnicalProvider}
@@ -1043,18 +1051,8 @@ export default function App() {
             {/* Technical Analysis Results */}
             {technicalResult && (
               <div className="space-y-8">
-                {/* Company Header - same style as Fundamental */}
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-semibold">
-                    {stockData?.symbol} {stockData?.company_name && `— ${stockData.company_name}`}
-                  </h2>
-                  <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500 uppercase tracking-wide">
-                    via {technicalProviders.find(p => p.id === technicalResult.provider)?.name || technicalResult.provider}
-                  </span>
-                </div>
-
                 {/* Price Summary */}
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <div className="flex items-baseline gap-3">
                     <span className="text-sm text-gray-500">Current Price</span>
                     <span className="text-3xl font-bold font-mono">${technicalResult.current_price.toFixed(2)}</span>
