@@ -144,15 +144,27 @@ const mockBatchAnalyzeWithoutWACC = {
   rate_limit: { used: 1, limit: 250, remaining: 249, percentage: 0.4 },
 }
 
+const mockRateLimits = {
+  fmp: { used: 10, limit: 250, remaining: 240, percentage: 4.0 },
+  yahoo: { used: 5, limit: 2000, remaining: 1995, percentage: 0.25 },
+  massive: { used: 1, limit: 5, remaining: 4, percentage: 20.0 },
+}
+
 describe('App - Unified Analyze Flow', () => {
   beforeEach(() => {
     mockFetch.mockReset()
-    // Default: return providers
+    // Default: return providers and rate limits
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve(mockProviders),
+        })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRateLimits),
         })
       }
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
@@ -180,6 +192,9 @@ describe('App - Unified Analyze Flow', () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRateLimits) })
       }
       // Batch analyze endpoint - DRY: one call for stock + ratios + dividends + historical
       if (url.includes('/api/stock/AAPL/analyze')) {
@@ -229,6 +244,9 @@ describe('App - Unified Analyze Flow', () => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
       }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRateLimits) })
+      }
       // Batch analyze returns data without WACC
       if (url.includes('/analyze')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeWithoutWACC) })
@@ -263,6 +281,9 @@ describe('App - Unified Analyze Flow', () => {
     mockFetch.mockImplementation((url: string, options?: RequestInit) => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRateLimits) })
       }
       // Batch analyze returns data without WACC
       if (url.includes('/api/stock/VSNTV/analyze')) {
@@ -320,6 +341,9 @@ describe('App - Unified Analyze Flow', () => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
       }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRateLimits) })
+      }
       // Batch analyze returns data without WACC
       if (url.includes('/api/stock/VSNTV/analyze')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeWithoutWACC) })
@@ -366,6 +390,9 @@ describe('App - Unified Analyze Flow', () => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
       }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRateLimits) })
+      }
       // Batch analyze - DRY: one call for stock + ratios + dividends + historical
       if (url.includes('/api/stock/AAPL/analyze')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeResponse) })
@@ -408,12 +435,18 @@ describe('App - Unified Analyze Flow', () => {
 describe('App - Provider Changes', () => {
   beforeEach(() => {
     mockFetch.mockReset()
-    // Default: return providers
+    // Default: return providers and rate limits
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/providers')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve(mockProviders),
+        })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRateLimits),
         })
       }
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })

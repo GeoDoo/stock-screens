@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats, AllRateLimits } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { DiscountRateModal } from './components/DiscountRateModal';
 import { formatCurrency, formatPercent, formatNumber, formatShareCount } from './utils';
@@ -13,7 +13,7 @@ export default function App() {
   const [selectedFundamentalProvider, setSelectedFundamentalProvider] = useState<string>('');
   const [selectedTechnicalProvider, setSelectedTechnicalProvider] = useState<string>('');
   const [providersLoading, setProvidersLoading] = useState(true);
-  const [rateLimitStats, setRateLimitStats] = useState<RateLimitStats | null>(null);
+  const [rateLimits, setRateLimits] = useState<AllRateLimits | null>(null);
   
   const [ticker, setTicker] = useState('');
   const [stockData, setStockData] = useState<StockDataResponse | null>(null);
@@ -21,7 +21,27 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ValuationResult | null>(null);
   
-  // Fetch available providers on mount
+  // Fetch rate limits
+  const fetchRateLimits = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/rate-limits`);
+      if (res.ok) {
+        const data: AllRateLimits = await res.json();
+        setRateLimits(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch rate limits:', err);
+    }
+  };
+
+  // Check if a provider is at its rate limit
+  const isProviderAtLimit = (providerId: string): boolean => {
+    if (!rateLimits) return false;
+    const stats = rateLimits[providerId as keyof AllRateLimits];
+    return stats ? stats.remaining === 0 : false;
+  };
+
+  // Fetch available providers and rate limits on mount
   useEffect(() => {
     const fetchProviders = async () => {
       try {
@@ -29,6 +49,9 @@ export default function App() {
         const data: ProvidersResponse = await res.json();
         setFundamentalProviders(data.fundamental);
         setTechnicalProviders(data.technical);
+        
+        // Also fetch rate limits
+        await fetchRateLimits();
         
         // Auto-select recommended or first available providers
         const fundRecommended = data.fundamental.find((p: Provider) => p.recommended && p.available);
@@ -134,10 +157,8 @@ export default function App() {
       setDividendResult(batchData.dividends);
       setHistoricalValuation(batchData.historical_valuation);
       
-      // Update rate limit stats from batch response
-      if (batchData.rate_limit) {
-        setRateLimitStats(batchData.rate_limit);
-      }
+      // Update rate limits after API call
+      await fetchRateLimits();
       
       // Pre-fill inputs with hints
       if (stockResponse.hints.revenue_growth !== null) {
@@ -300,8 +321,12 @@ export default function App() {
       }
       const data: TechnicalAnalysisResult = await res.json();
       setTechnicalResult(data);
+      // Update rate limits after API call
+      await fetchRateLimits();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
+      // Update rate limits even on error (we still made a call)
+      await fetchRateLimits();
     } finally {
       setTechnicalLoading(false);
     }
@@ -412,48 +437,52 @@ export default function App() {
                   <span className="font-normal text-gray-300 ml-2">(DCF, Comparables, Scenarios)</span>
                 </label>
                 <div className="flex gap-2 flex-wrap">
-                  {fundamentalProviders.map((provider) => (
-                    <button
-                      key={provider.id}
-                      onClick={() => {
-                        setSelectedFundamentalProvider(provider.id);
-                        setStockData(null);
-                        setResult(null);
-                        setScenarioResult(null);
-                        setComparableResult(null);
-                        setRatiosResult(null);
-                        setDividendResult(null);
-                        setHistoricalValuation(null);
-                        setTechnicalResult(null);  // Clear technical too - it's based on stock data
-                      }}
-                      disabled={!provider.available}
-                      className={`px-4 py-2 rounded-lg border-2 transition-all text-left ${
-                        selectedFundamentalProvider === provider.id
-                          ? 'border-gray-900 bg-gray-900 text-white'
-                          : provider.available
-                          ? 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
-                          : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
-                      }`}
-                    >
-                      <span className="font-semibold text-sm">{provider.name}</span>
-                      {provider.recommended && <span className="ml-1 text-xs">★</span>}
-                    </button>
-                  ))}
-      </div>
+                  {fundamentalProviders.map((provider) => {
+                    const atLimit = isProviderAtLimit(provider.id);
+                    const isDisabled = !provider.available || atLimit;
+                    return (
+                      <button
+                        key={provider.id}
+                        onClick={() => {
+                          setSelectedFundamentalProvider(provider.id);
+                          setStockData(null);
+                          setResult(null);
+                          setScenarioResult(null);
+                          setComparableResult(null);
+                          setRatiosResult(null);
+                          setDividendResult(null);
+                          setHistoricalValuation(null);
+                          setTechnicalResult(null);
+                        }}
+                        disabled={isDisabled}
+                        title={atLimit ? 'Rate limit exceeded' : undefined}
+                        className={`px-4 py-2 rounded-lg border-2 transition-all text-left ${
+                          selectedFundamentalProvider === provider.id
+                            ? 'border-gray-900 bg-gray-900 text-white'
+                            : isDisabled
+                            ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                        }`}
+                      >
+                        <span className="font-semibold text-sm">{provider.name}</span>
+                        {provider.recommended && !atLimit && <span className="ml-1 text-xs">★</span>}
+                        {atLimit && <span className="ml-1 text-xs text-red-400">⊘</span>}
+                      </button>
+                    );
+                  })}
+                </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {fundamentalProviders.find(p => p.id === selectedFundamentalProvider)?.description}
+                  {selectedFundamentalProvider && rateLimits?.[selectedFundamentalProvider as keyof AllRateLimits] && (
+                    <span className={`ml-2 ${
+                      rateLimits[selectedFundamentalProvider as keyof AllRateLimits].percentage >= 80 
+                        ? 'text-amber-600' 
+                        : ''
+                    }`}>
+                      ({rateLimits[selectedFundamentalProvider as keyof AllRateLimits].remaining} calls left)
+                    </span>
+                  )}
                 </p>
-                {/* Rate Limit Display */}
-                {rateLimitStats && (
-                  <div className={`mt-2 text-xs ${
-                    rateLimitStats.percentage >= 80 
-                      ? 'text-amber-600' 
-                      : 'text-gray-400'
-                  }`}>
-                    {rateLimitStats.percentage >= 80 ? '⚠️ ' : ''}
-                    {rateLimitStats.remaining} API calls remaining ({rateLimitStats.percentage.toFixed(0)}% used)
-                  </div>
-                )}
               </div>
 
               {/* Technical Analysis Provider */}
@@ -463,28 +492,43 @@ export default function App() {
                   <span className="font-normal text-gray-300 ml-2">(Price Charts, Indicators)</span>
                 </label>
                 <div className="flex gap-2 flex-wrap">
-                  {technicalProviders.map((provider) => (
-                    <button
-                      key={provider.id}
-                      onClick={() => setSelectedTechnicalProvider(provider.id)}
-                      disabled={!provider.available}
-                      className={`px-4 py-2 rounded-lg border-2 transition-all text-left ${
-                        selectedTechnicalProvider === provider.id
-                          ? 'border-gray-900 bg-gray-900 text-white'
-                          : provider.available
-                          ? 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
-                          : 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
-                      }`}
-                    >
-                      <span className="font-semibold text-sm">{provider.name}</span>
-                      {provider.recommended && <span className="ml-1 text-xs">★</span>}
-        </button>
-                  ))}
+                  {technicalProviders.map((provider) => {
+                    const atLimit = isProviderAtLimit(provider.id);
+                    const isDisabled = !provider.available || atLimit;
+                    return (
+                      <button
+                        key={provider.id}
+                        onClick={() => setSelectedTechnicalProvider(provider.id)}
+                        disabled={isDisabled}
+                        title={atLimit ? 'Rate limit exceeded' : undefined}
+                        className={`px-4 py-2 rounded-lg border-2 transition-all text-left ${
+                          selectedTechnicalProvider === provider.id
+                            ? 'border-gray-900 bg-gray-900 text-white'
+                            : isDisabled
+                            ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                        }`}
+                      >
+                        <span className="font-semibold text-sm">{provider.name}</span>
+                        {provider.recommended && !atLimit && <span className="ml-1 text-xs">★</span>}
+                        {atLimit && <span className="ml-1 text-xs text-red-400">⊘</span>}
+                      </button>
+                    );
+                  })}
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {technicalProviders.find(p => p.id === selectedTechnicalProvider)?.description}
-        </p>
-      </div>
+                  {selectedTechnicalProvider && rateLimits?.[selectedTechnicalProvider as keyof AllRateLimits] && (
+                    <span className={`ml-2 ${
+                      rateLimits[selectedTechnicalProvider as keyof AllRateLimits].percentage >= 80 
+                        ? 'text-amber-600' 
+                        : ''
+                    }`}>
+                      ({rateLimits[selectedTechnicalProvider as keyof AllRateLimits].remaining} calls left)
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
           )}
 
