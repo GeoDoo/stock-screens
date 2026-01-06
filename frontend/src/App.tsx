@@ -656,18 +656,26 @@ export default function App() {
                   <p className="text-sm text-gray-400 mb-6">Based on past performance (for reference)</p>
                   <table className="w-full">
                     <tbody>
-                      {[
-                        ['Revenue Growth (CAGR)', formatPercent(stockData.hints.revenue_growth)],
-                        ['Operating Margin', formatPercent(stockData.hints.operating_margin)],
-                        ['D&A / Revenue', formatPercent(stockData.hints.da_ratio)],
-                        ['CapEx / Revenue', formatPercent(stockData.hints.capex_ratio)],
-                        ['Working Capital / Revenue', formatPercent(stockData.hints.wc_ratio)],
-                      ].map(([label, value]) => (
-                        <tr key={label} className="border-b border-gray-100">
-                          <td className="py-3 text-sm text-gray-500">{label}</td>
-                          <td className="py-3 text-sm font-mono font-medium text-right">{value}</td>
-                        </tr>
-                      ))}
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">Revenue Growth (CAGR)<GlossaryRef id="cagr" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.hints.revenue_growth)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">Operating Margin<GlossaryRef id="operating-margin" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.hints.operating_margin)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">D&A / Revenue<GlossaryRef id="da" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.hints.da_ratio)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">CapEx / Revenue<GlossaryRef id="capex" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.hints.capex_ratio)}</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 text-sm text-gray-500">Working Capital / Revenue<GlossaryRef id="working-capital" /></td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.hints.wc_ratio)}</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -929,13 +937,13 @@ export default function App() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {[
-                    { label: 'P/E Ratio', current: historicalValuation.current.pe, avg: historicalValuation.average_5yr.pe, premium: historicalValuation.premium_discount.pe, assessment: historicalValuation.assessment.pe },
-                    { label: 'P/S Ratio', current: historicalValuation.current.ps, avg: historicalValuation.average_5yr.ps, premium: historicalValuation.premium_discount.ps, assessment: historicalValuation.assessment.ps },
-                    { label: 'P/B Ratio', current: historicalValuation.current.pb, avg: historicalValuation.average_5yr.pb, premium: historicalValuation.premium_discount.pb, assessment: historicalValuation.assessment.pb },
-                    { label: 'EV/EBITDA', current: historicalValuation.current.ev_ebitda, avg: historicalValuation.average_5yr.ev_ebitda, premium: historicalValuation.premium_discount.ev_ebitda, assessment: historicalValuation.assessment.ev_ebitda },
-                  ].map(({ label, current, avg, premium, assessment }) => (
+                    { label: 'P/E Ratio', glossaryId: 'pe-ratio', current: historicalValuation.current.pe, avg: historicalValuation.average_5yr.pe, premium: historicalValuation.premium_discount.pe, assessment: historicalValuation.assessment.pe },
+                    { label: 'P/S Ratio', glossaryId: 'ps-ratio', current: historicalValuation.current.ps, avg: historicalValuation.average_5yr.ps, premium: historicalValuation.premium_discount.ps, assessment: historicalValuation.assessment.ps },
+                    { label: 'P/B Ratio', glossaryId: 'pb-ratio', current: historicalValuation.current.pb, avg: historicalValuation.average_5yr.pb, premium: historicalValuation.premium_discount.pb, assessment: historicalValuation.assessment.pb },
+                    { label: 'EV/EBITDA', glossaryId: 'ev-ebitda', current: historicalValuation.current.ev_ebitda, avg: historicalValuation.average_5yr.ev_ebitda, premium: historicalValuation.premium_discount.ev_ebitda, assessment: historicalValuation.assessment.ev_ebitda },
+                  ].map(({ label, glossaryId, current, avg, premium, assessment }) => (
                     <div key={label} className="border border-gray-200 rounded-lg p-4">
-                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">{label}</p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">{label}<GlossaryRef id={glossaryId} /></p>
                       <div className="space-y-2">
                         <div className="flex justify-between">
                           <span className="text-sm text-gray-500">Current</span>
@@ -1639,7 +1647,7 @@ export default function App() {
                     </svg>
                     <div className="flex gap-6 mt-2 text-xs text-gray-400">
                       <span><span className="inline-block w-3 h-0.5 bg-gray-900 mr-1"></span> Price</span>
-                      <span><span className="inline-block w-3 h-0.5 bg-purple-500 mr-1"></span> SMA 20</span>
+                      <span><span className="inline-block w-3 h-0.5 bg-purple-500 mr-1"></span> SMA 20<GlossaryRef id="sma" /></span>
                       <span><span className="inline-block w-3 h-0.5 bg-amber-500 mr-1"></span> SMA 50</span>
                     </div>
                   </div>
@@ -1647,7 +1655,7 @@ export default function App() {
 
                 {/* RSI Chart */}
                 <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum (RSI)</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum (RSI)<GlossaryRef id="rsi" /></h3>
                   {technicalResult.indicators.rsi_14.length > 1 ? (
                     <div className="bg-gray-50 rounded-lg p-6 overflow-hidden">
                       <svg viewBox="0 0 800 200" className="w-full h-48">
@@ -1694,7 +1702,7 @@ export default function App() {
 
                 {/* MACD Chart */}
                 <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum Trend (MACD)</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum Trend (MACD)<GlossaryRef id="macd" /></h3>
                   {technicalResult.indicators.macd.length > 1 ? (
                     <div className="bg-gray-50 rounded-lg p-6 overflow-hidden">
                       <svg viewBox="0 0 800 200" className="w-full h-48">
