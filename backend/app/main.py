@@ -115,6 +115,7 @@ class ScenarioRequest(BaseModel):
     scenarios: Optional[List[ScenarioInput]] = None  # If None, use defaults
     projection_years: int = 10
     market_risk_premium: float = 0.06
+    discount_rate_override: Optional[float] = None  # Custom discount rate (bypasses WACC)
 
 
 @app.get("/health")
@@ -402,23 +403,26 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
     cash = extractor.cash() or 0
     shares = extractor.shares_outstanding() or 1
     
-    # Check if we can calculate WACC
-    if beta is None or market_cap is None or market_cap <= 0 or cost_of_debt is None:
+    # Calculate WACC or use custom discount rate
+    if request.discount_rate_override is not None:
+        # User provided custom discount rate
+        base_wacc = request.discount_rate_override
+    elif beta is None or market_cap is None or market_cap <= 0 or cost_of_debt is None:
         raise HTTPException(
             status_code=400, 
-            detail="Cannot calculate WACC. Missing beta, market cap, or cost of debt."
+            detail="Cannot calculate WACC. Missing beta, market cap, or cost of debt. Please provide a custom discount rate."
         )
-    
-    wacc_calculator = WACCCalculator(
-        risk_free_rate=risk_free_rate,
-        beta=beta,
-        market_risk_premium=request.market_risk_premium,
-        cost_of_debt=cost_of_debt,
-        tax_rate=tax_rate if tax_rate is not None else 0.25,
-        market_cap=market_cap,
-        total_debt=total_debt if total_debt is not None else 0,
-    )
-    base_wacc = wacc_calculator.calculate()
+    else:
+        wacc_calculator = WACCCalculator(
+            risk_free_rate=risk_free_rate,
+            beta=beta,
+            market_risk_premium=request.market_risk_premium,
+            cost_of_debt=cost_of_debt,
+            tax_rate=tax_rate if tax_rate is not None else 0.25,
+            market_cap=market_cap,
+            total_debt=total_debt if total_debt is not None else 0,
+        )
+        base_wacc = wacc_calculator.calculate()
     
     # Get current price
     current_price = stock_data.profile.price
