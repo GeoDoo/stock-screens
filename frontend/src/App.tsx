@@ -1079,7 +1079,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="p-4 rounded-lg border border-gray-100">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">RSI (14)</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Momentum</div>
                     <div className={`text-lg font-semibold capitalize ${
                       technicalResult.signals.rsi === 'overbought' ? 'text-red-600' :
                       technicalResult.signals.rsi === 'oversold' ? 'text-emerald-600' : 'text-gray-500'
@@ -1088,7 +1088,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="p-4 rounded-lg border border-gray-100">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">MACD</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Momentum Trend</div>
                     <div className={`text-lg font-semibold capitalize ${
                       technicalResult.signals.macd === 'bullish' ? 'text-emerald-600' :
                       technicalResult.signals.macd === 'bearish' ? 'text-red-600' : 'text-gray-500'
@@ -1206,7 +1206,7 @@ export default function App() {
 
                 {/* RSI Chart */}
                 <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">RSI (14)</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum (RSI)</h3>
                   {technicalResult.indicators.rsi_14.length > 1 ? (
                     <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
                       <svg viewBox="0 0 800 120" className="w-full h-24">
@@ -1246,14 +1246,14 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="bg-gray-50 rounded-lg p-6 text-center">
-                      <p className="text-sm text-gray-500">Not enough data. RSI needs at least 14 trading days.</p>
+                      <p className="text-sm text-gray-500">Not enough trading data available.</p>
                     </div>
                   )}
                 </div>
 
                 {/* MACD Chart */}
                 <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">MACD</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Momentum Trend (MACD)</h3>
                   {technicalResult.indicators.macd.length > 1 ? (
                     <div className="bg-gray-50 rounded-lg p-4 overflow-hidden">
                       <svg viewBox="0 0 800 120" className="w-full h-24">
@@ -1316,7 +1316,7 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="bg-gray-50 rounded-lg p-6 text-center">
-                      <p className="text-sm text-gray-500">Not enough data. MACD needs at least 26 trading days.</p>
+                      <p className="text-sm text-gray-500">Not enough trading data available.</p>
                     </div>
                   )}
                 </div>
