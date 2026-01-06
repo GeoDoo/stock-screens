@@ -787,7 +787,7 @@ export default function App() {
             </section>
 
             {/* Financial Ratios */}
-            {ratiosResult && (
+            {ratiosResult && ratiosResult.valuation && ratiosResult.profitability && ratiosResult.liquidity && ratiosResult.efficiency && (
               <section className="mb-16 pt-8 border-t border-gray-100">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Financial Ratios</h2>
                 <p className="text-sm text-gray-400 mb-8">Comprehensive metrics for analysis</p>
