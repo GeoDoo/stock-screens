@@ -48,6 +48,8 @@ export interface ValidationResult {
 export interface StockDataResponse {
   symbol: string;
   company_name: string | null;
+  industry: string | null;
+  sector: string | null;
   data_provider: string;
   data: CompanyData;
   hints: HistoricalHints;
