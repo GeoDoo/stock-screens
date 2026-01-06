@@ -23,6 +23,7 @@ from app.services.technical_service import TechnicalService
 from app.services.fmp_provider import FMPProvider
 from app.services.yahoo_provider import YahooProvider
 from app.services.massive_provider import MassiveProvider
+from app.services.rate_limiter import rate_limiter
 
 load_dotenv()
 
@@ -866,3 +867,247 @@ async def get_technical_analysis(symbol: str, provider: str = "massive", days: i
             "macd": result.macd_signal,
         },
     }
+
+
+# ============================================================
+# BATCH ANALYZE ENDPOINT - Reduces API calls
+# ============================================================
+
+@app.get("/api/stock/{symbol}/analyze")
+async def batch_analyze(symbol: str, provider: str):
+    """
+    Batch analyze endpoint - returns all fundamental data in a single call.
+    
+    This reduces API calls by fetching stock data once and computing all
+    derived metrics (ratios, dividends, historical valuation) from that data.
+    
+    Returns:
+        - stock: Basic stock data and validation
+        - ratios: Financial ratios
+        - dividends: Dividend history and metrics
+        - historical_valuation: Historical valuation context
+        - rate_limit: Current rate limit status for the provider
+    """
+    client = get_client_for_provider(provider)
+    
+    # Increment rate limit counter
+    rate_limiter.increment(provider)
+    
+    try:
+        stock_data = await client.get_stock_data(symbol.upper())
+        risk_free_rate = await client.get_treasury_rate()
+    except TickerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RateLimitError as e:
+        raise HTTPException(status_code=429, detail=str(e))
+    except DataNotAvailableError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ProviderError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch stock data: {str(e)}")
+
+    # Convert to legacy format for extractors
+    data = stock_data_to_legacy(stock_data)
+    extractor = DataExtractor(data)
+    
+    # === Build stock response ===
+    beta = extractor.beta()
+    cost_of_debt = extractor.cost_of_debt()
+    tax_rate = extractor.tax_rate()
+    market_cap = extractor.market_cap()
+    total_debt = extractor.total_debt()
+    
+    wacc = None
+    if beta is not None and market_cap is not None and market_cap > 0 and cost_of_debt is not None:
+        wacc_calculator = WACCCalculator(
+            risk_free_rate=risk_free_rate,
+            beta=beta,
+            market_risk_premium=0.06,
+            cost_of_debt=cost_of_debt,
+            tax_rate=tax_rate if tax_rate is not None else 0.25,
+            market_cap=market_cap,
+            total_debt=total_debt if total_debt is not None else 0,
+        )
+        wacc = wacc_calculator.calculate()
+    
+    fcf_projector = FCFProjector(
+        historical_revenue=extractor.revenue_history() or [0],
+        historical_ebit=extractor.ebit_history() or [0],
+        historical_da=extractor.da_history() or [0],
+        historical_capex=extractor.capex_history() or [0],
+        historical_working_capital=extractor.working_capital_history() or [0],
+        tax_rate=tax_rate,
+    )
+    
+    validator = DataValidator(
+        beta=beta,
+        market_cap=market_cap,
+        shares_outstanding=extractor.shares_outstanding(),
+        total_debt=total_debt,
+        cash=extractor.cash(),
+        tax_rate=tax_rate,
+        cost_of_debt=cost_of_debt,
+        revenue_history=extractor.revenue_history() or [],
+        ebit_history=extractor.ebit_history() or [],
+        da_history=extractor.da_history() or [],
+        capex_history=extractor.capex_history() or [],
+        working_capital_history=extractor.working_capital_history() or [],
+    )
+    validation_result = validator.validate()
+    
+    stock_response = {
+        "symbol": symbol.upper(),
+        "company_name": data.get("profile", {}).get("companyName"),
+        "industry": data.get("profile", {}).get("industry"),
+        "sector": data.get("profile", {}).get("sector"),
+        "data": {
+            "beta": beta,
+            "market_cap": market_cap,
+            "total_debt": total_debt,
+            "cash": extractor.cash(),
+            "tax_rate": tax_rate,
+            "cost_of_debt": cost_of_debt,
+            "shares_outstanding": extractor.shares_outstanding(),
+            "risk_free_rate": risk_free_rate,
+            "wacc": wacc,
+        },
+        "hints": {
+            "revenue_growth": fcf_projector.revenue_cagr(),
+            "operating_margin": fcf_projector.operating_margin(),
+            "da_to_revenue": fcf_projector.da_to_revenue_ratio(),
+            "capex_to_revenue": fcf_projector.capex_to_revenue_ratio(),
+            "wc_to_revenue": fcf_projector.wc_to_revenue_ratio(),
+        },
+        "validation": validation_result.to_dict(),
+        "data_provider": stock_data.provider,
+    }
+    
+    # === Common variables for multiple sections ===
+    financials = stock_data.financials
+    current_price = stock_data.profile.price
+    shares = stock_data.profile.shares_outstanding
+    
+    # === Build ratios response ===
+    ratio_calculator = RatioCalculator()
+    ratios = ratio_calculator.calculate(data)
+    
+    ratios_response = {
+        "symbol": symbol.upper(),
+        "valuation": {
+            "pe_ratio": ratios.valuation.pe_ratio,
+            "earnings_yield": ratios.valuation.earnings_yield,
+            "ps_ratio": ratios.valuation.ps_ratio,
+            "pb_ratio": ratios.valuation.pb_ratio,
+        },
+        "profitability": {
+            "gross_margin": ratios.profitability.gross_margin,
+            "operating_margin": ratios.profitability.operating_margin,
+            "net_margin": ratios.profitability.net_margin,
+            "roe": ratios.profitability.roe,
+            "roa": ratios.profitability.roa,
+        },
+        "liquidity": {
+            "current_ratio": ratios.liquidity.current_ratio,
+            "quick_ratio": ratios.liquidity.quick_ratio,
+            "debt_to_equity": ratios.liquidity.debt_to_equity,
+        },
+        "efficiency": {
+            "asset_turnover": ratios.efficiency.asset_turnover,
+            "inventory_turnover": ratios.efficiency.inventory_turnover,
+        },
+    }
+    
+    # === Build dividends response ===
+    analyzer = DividendAnalyzer()
+    payments = []
+    for fin in financials:
+        if fin.dividends_paid is not None and fin.dividends_paid != 0:
+            payments.append(DividendPayment(
+                date=fin.date,
+                amount=abs(fin.dividends_paid),
+            ))
+    
+    net_income = financials[0].net_income if financials else None
+    dividend_result = analyzer.analyze(payments, current_price, shares, net_income)
+    
+    dividends_response = {
+        "symbol": symbol.upper(),
+        "has_dividends": dividend_result.has_dividends,
+        "current_annual_dividend": dividend_result.current_annual_dividend,
+        "current_yield": dividend_result.current_yield,
+        "dividend_cagr": dividend_result.dividend_cagr,
+        "consecutive_years": dividend_result.consecutive_years,
+        "payout_ratio": dividend_result.payout_ratio,
+        "annual_dividends": dividend_result.annual_dividends,
+        "payments": [{"date": p.date, "amount": p.amount} for p in payments],
+    }
+    
+    # === Build historical valuation response ===
+    # Merge financials for historical analyzer (needs legacy format)
+    income_statements = data.get("income_statement", [])
+    balance_sheets = data.get("balance_sheet", [])
+    cash_flows = data.get("cash_flow", [])
+    
+    balance_by_date = {b.get("date"): b for b in balance_sheets}
+    cash_by_date = {c.get("date"): c for c in cash_flows}
+    
+    merged_financials = []
+    for inc in income_statements:
+        date = inc.get("date")
+        bal = balance_by_date.get(date, {})
+        cf = cash_by_date.get(date, {})
+        merged = {**inc, **bal, **cf, "date": date}
+        merged_financials.append(merged)
+    
+    profile = data.get("profile", {})
+    
+    hist_analyzer = HistoricalValuationAnalyzer()
+    hist_result = hist_analyzer.analyze(merged_financials, profile)
+    
+    historical_response = {
+        "symbol": symbol.upper(),
+        "current": {
+            "pe": hist_result.current_pe,
+            "ps": hist_result.current_ps,
+            "pb": hist_result.current_pb,
+            "ev_ebitda": hist_result.current_ev_ebitda,
+        },
+        "average_5yr": {
+            "pe": hist_result.avg_pe_5yr,
+            "ps": hist_result.avg_ps_5yr,
+            "pb": hist_result.avg_pb_5yr,
+            "ev_ebitda": hist_result.avg_ev_ebitda_5yr,
+        },
+        "assessment": {
+            "pe": hist_result.pe_assessment,
+            "ps": hist_result.ps_assessment,
+            "pb": hist_result.pb_assessment,
+            "ev_ebitda": hist_result.ev_ebitda_assessment,
+        },
+    }
+    
+    return {
+        "stock": stock_response,
+        "ratios": ratios_response,
+        "dividends": dividends_response,
+        "historical_valuation": historical_response,
+        "rate_limit": rate_limiter.get_usage_stats(provider),
+    }
+
+
+# ============================================================
+# RATE LIMIT ENDPOINTS
+# ============================================================
+
+@app.get("/api/rate-limits")
+async def get_rate_limits():
+    """Get current rate limit statistics for all providers."""
+    return rate_limiter.get_all_stats()
+
+
+@app.post("/api/rate-limits/reset")
+async def reset_rate_limits():
+    """Reset all rate limit counters (e.g., for a new day)."""
+    rate_limiter.reset_all()
+    return {"status": "ok", "message": "All rate limits reset"}
