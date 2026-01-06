@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
+import { DiscountRateModal } from './components/DiscountRateModal';
 import { formatCurrency, formatPercent, formatNumber, formatShareCount } from './utils';
 
 const API_BASE = 'http://localhost:8000';
@@ -88,10 +89,15 @@ export default function App() {
   const [historicalValuation, setHistoricalValuation] = useState<HistoricalValuationResult | null>(null);
   const [historicalLoading, setHistoricalLoading] = useState(false);
   
+  // Discount Rate Modal (for when WACC is missing)
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [pendingAnalysis, setPendingAnalysis] = useState<StockDataResponse | null>(null);
+  
   // Tab navigation
   const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
 
-  const fetchStock = async () => {
+  // Unified analyze function - runs all analyses automatically
+  const analyzeStock = async () => {
     if (!ticker.trim() || !selectedFundamentalProvider) return;
     
     setLoading(true);
@@ -103,8 +109,11 @@ export default function App() {
     setRatiosResult(null);
     setDividendResult(null);
     setHistoricalValuation(null);
+    setShowDiscountModal(false);
+    setPendingAnalysis(null);
     
     try {
+      // Step 1: Fetch stock data
       const res = await fetch(`${API_BASE}/api/stock/${ticker.toUpperCase()}?provider=${selectedFundamentalProvider}`);
       if (!res.ok) {
         const data = await res.json();
@@ -121,15 +130,73 @@ export default function App() {
         setOperatingMargin((data.hints.operating_margin * 100).toFixed(2));
       }
       
-      // Auto-fetch additional data
       const symbol = ticker.toUpperCase();
+      
+      // Step 2: Auto-fetch all supporting analyses in parallel
       fetchRatios(symbol);
       fetchDividends(symbol);
       fetchHistoricalValuation(symbol);
+      fetchComparables(symbol);
+      
+      // Step 3: Check if WACC is available for DCF
+      const hasWACC = data.data.wacc !== null;
+      
+      if (hasWACC) {
+        // WACC available - auto-run valuation and scenarios
+        await runValuationWithData(data);
+        await runScenariosWithData(data);
+      } else {
+        // WACC missing - show modal to prompt for custom discount rate
+        setPendingAnalysis(data);
+        setShowDiscountModal(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle modal submit - run DCF with custom rate
+  const handleDiscountRateSubmit = async (rate: number) => {
+    setShowDiscountModal(false);
+    if (!pendingAnalysis) return;
+    
+    // Set the custom discount rate in state for the valuation
+    setUseCustomDiscountRate(true);
+    setCustomDiscountRate(rate.toString());
+    
+    // Run valuation and scenarios with custom rate
+    await runValuationWithData(pendingAnalysis, rate / 100);
+    await runScenariosWithData(pendingAnalysis, rate / 100);
+    
+    setPendingAnalysis(null);
+  };
+
+  // Handle modal skip - skip DCF analysis
+  const handleDiscountRateSkip = () => {
+    setShowDiscountModal(false);
+    setPendingAnalysis(null);
+    // All other analyses (ratios, dividends, comparables) are already running/complete
+  };
+
+  // Fetch comparables (now called automatically)
+  const fetchComparables = async (symbol: string) => {
+    if (!selectedFundamentalProvider) return;
+    
+    setComparableLoading(true);
+    setComparableResult(null);
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/stock/${symbol}/comparables?provider=${selectedFundamentalProvider}`);
+      if (res.ok) {
+        const data: ComparableResult = await res.json();
+        setComparableResult(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch comparables:', err);
+    } finally {
+      setComparableLoading(false);
     }
   };
   
@@ -183,35 +250,38 @@ export default function App() {
     }
   };
 
-  const runValuation = async () => {
-    if (!stockData) return;
-    
+  // Run valuation with provided stock data and optional custom discount rate
+  const runValuationWithData = async (data: StockDataResponse, discountRateOverride?: number) => {
     setLoading(true);
     setError(null);
     
+    // Use hints as defaults if user hasn't entered values yet
+    const revGrowth = revenueGrowth ? parseFloat(revenueGrowth) / 100 : (data.hints.revenue_growth ?? 0.05);
+    const opMargin = operatingMargin ? parseFloat(operatingMargin) / 100 : (data.hints.operating_margin ?? 0.15);
+    
     const request: ValuationRequest = {
-      revenue_growth: parseFloat(revenueGrowth) / 100,
-      operating_margin: parseFloat(operatingMargin) / 100,
+      revenue_growth: revGrowth,
+      operating_margin: opMargin,
       terminal_growth_rate: parseFloat(terminalGrowth) / 100,
       market_risk_premium: parseFloat(marketRiskPremium) / 100,
       projection_years: parseInt(projectionYears),
-      discount_rate_override: useCustomDiscountRate && customDiscountRate 
+      discount_rate_override: discountRateOverride ?? (useCustomDiscountRate && customDiscountRate 
         ? parseFloat(customDiscountRate) / 100 
-        : null,
+        : null),
     };
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/valuation?provider=${selectedFundamentalProvider}`, {
+      const res = await fetch(`${API_BASE}/api/stock/${data.symbol}/valuation?provider=${selectedFundamentalProvider}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || 'Valuation failed');
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Valuation failed');
       }
-      const data: ValuationResult = await res.json();
-      setResult(data);
+      const resultData: ValuationResult = await res.json();
+      setResult(resultData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -219,27 +289,28 @@ export default function App() {
     }
   };
 
-  const runScenarios = async () => {
-    if (!stockData) return;
-    
+
+  // Run scenarios with provided stock data and optional custom discount rate
+  const runScenariosWithData = async (data: StockDataResponse, discountRateOverride?: number) => {
     setScenarioLoading(true);
     setScenarioResult(null);
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/scenarios?provider=${selectedFundamentalProvider}`, {
+      const res = await fetch(`${API_BASE}/api/stock/${data.symbol}/scenarios?provider=${selectedFundamentalProvider}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projection_years: parseInt(projectionYears) || 10,
           market_risk_premium: parseFloat(marketRiskPremium) / 100 || 0.06,
+          discount_rate_override: discountRateOverride ?? null,
         }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || 'Scenario analysis failed');
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Scenario analysis failed');
       }
-      const data: ScenarioAnalysisResult = await res.json();
-      setScenarioResult(data);
+      const resultData: ScenarioAnalysisResult = await res.json();
+      setScenarioResult(resultData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -247,26 +318,7 @@ export default function App() {
     }
   };
 
-  const runComparables = async () => {
-    if (!stockData) return;
-    
-    setComparableLoading(true);
-    setComparableResult(null);
-    
-    try {
-      const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/comparables?provider=${selectedFundamentalProvider}`);
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || 'Comparable analysis failed');
-      }
-      const data: ComparableResult = await res.json();
-      setComparableResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setComparableLoading(false);
-    }
-  };
+
 
   const runTechnicalAnalysis = async () => {
     if (!stockData || !selectedTechnicalProvider) return;
@@ -290,8 +342,36 @@ export default function App() {
     }
   };
 
-  const hasInputs = revenueGrowth && operatingMargin && terminalGrowth && marketRiskPremium && projectionYears;
-  
+  // Auto-run technical analysis when switching to Technical tab
+  useEffect(() => {
+    const fetchTechnical = async () => {
+      if (!stockData || !selectedTechnicalProvider) return;
+      
+      setTechnicalLoading(true);
+      setTechnicalResult(null);
+      setError(null);
+      
+      try {
+        const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/technical?provider=${selectedTechnicalProvider}&days=365`);
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.detail || 'Technical analysis failed');
+        }
+        const data: TechnicalAnalysisResult = await res.json();
+        setTechnicalResult(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setTechnicalLoading(false);
+      }
+    };
+
+    if (activeTab === 'technical' && stockData && !technicalResult && !technicalLoading) {
+      fetchTechnical();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, stockData?.symbol, technicalResult, technicalLoading, selectedTechnicalProvider]);
+
   // Smart validation: WACC-related issues can be bypassed with custom discount rate
   const canBypassWithCustomRate = useCustomDiscountRate && customDiscountRate && parseFloat(customDiscountRate) > 0;
   
@@ -319,9 +399,6 @@ export default function App() {
     }
     return true;
   });
-  
-  const hasValidationErrors = relevantErrors.length > 0;
-  const canRunValuation = hasInputs && !hasValidationErrors;
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
@@ -427,16 +504,16 @@ export default function App() {
                 placeholder={selectedFundamentalProvider ? "AAPL" : "Select provider first"}
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === 'Enter' && fetchStock()}
+                onKeyDown={(e) => e.key === 'Enter' && analyzeStock()}
                 disabled={!selectedFundamentalProvider}
                 className="w-48 px-4 py-3 text-base font-mono font-medium bg-white border-2 border-gray-200 rounded-lg outline-none transition-colors focus:border-gray-400 placeholder:text-gray-300 placeholder:font-normal disabled:bg-gray-50 disabled:cursor-not-allowed"
               />
               <button
-                onClick={fetchStock}
+                onClick={analyzeStock}
                 disabled={loading || !ticker.trim() || !selectedFundamentalProvider}
                 className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                {loading ? 'Loading...' : 'Analyze'}
+                {loading ? 'Analyzing...' : 'Analyze'}
               </button>
             </div>
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
@@ -964,17 +1041,6 @@ export default function App() {
               </div>
 
             </section>
-            
-            {/* Run Valuation Button - separate section for visual clarity */}
-            <section className="mb-16">
-              <button
-                onClick={runValuation}
-                disabled={loading || !canRunValuation}
-                className="px-10 py-4 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Calculating...' : hasValidationErrors ? 'Fix Errors Above' : 'Run Valuation'}
-              </button>
-            </section>
 
             {/* Valuation Result */}
             {result && (
@@ -1159,17 +1225,12 @@ export default function App() {
             )}
 
             {/* Scenario Analysis Section */}
+            {(scenarioResult || scenarioLoading) && (
             <section className="pt-12 border-t border-gray-100">
               <div className="mb-8">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Scenario Analysis</h2>
-              <p className="text-sm text-gray-400 mb-6">Bear / Base / Bull case valuations with probability weighting</p>
-              <button
-                onClick={runScenarios}
-                disabled={scenarioLoading || hasValidationErrors}
-                className="px-10 py-4 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                {scenarioLoading ? 'Analyzing...' : 'Run Scenarios'}
-              </button>
+              <p className="text-sm text-gray-400">Bear / Base / Bull case valuations with probability weighting</p>
+              {scenarioLoading && <p className="text-sm text-gray-400 mt-2">Analyzing scenarios...</p>}
             </div>
 
             {scenarioResult && (
@@ -1232,19 +1293,15 @@ export default function App() {
               </div>
             )}
           </section>
+            )}
 
             {/* Comparable Analysis Section */}
+            {(comparableResult || comparableLoading) && (
             <section className="pt-12 border-t border-gray-100">
               <div className="mb-8">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Comparable Analysis</h2>
-              <p className="text-sm text-gray-400 mb-6">Relative valuation vs sector peers using P/E, EV/EBITDA, P/S, P/B</p>
-              <button
-                onClick={runComparables}
-                disabled={comparableLoading}
-                className="px-10 py-4 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                {comparableLoading ? 'Loading...' : 'Run Comparables'}
-              </button>
+              <p className="text-sm text-gray-400">Relative valuation vs sector peers using P/E, EV/EBITDA, P/S, P/B</p>
+              {comparableLoading && <p className="text-sm text-gray-400 mt-2">Loading peer data...</p>}
             </div>
 
             {comparableResult && (
@@ -1403,6 +1460,7 @@ export default function App() {
               </div>
             )}
             </section>
+            )}
           </>
         )}
 
@@ -1426,17 +1484,10 @@ export default function App() {
               )}
             </div>
 
-            {/* Run Technical Analysis */}
-            {!technicalResult && (
-              <div>
-                <p className="text-sm text-gray-400 mb-6">Run technical analysis to see price charts, moving averages, and momentum indicators.</p>
-                <button
-                  onClick={runTechnicalAnalysis}
-                  disabled={technicalLoading || !selectedTechnicalProvider}
-                  className="px-10 py-4 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  {technicalLoading ? 'Loading...' : 'Run Technical Analysis'}
-                </button>
+            {/* Loading Technical Analysis */}
+            {!technicalResult && technicalLoading && (
+              <div className="text-sm text-gray-400">
+                Loading technical analysis...
               </div>
             )}
 
@@ -1734,6 +1785,17 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Discount Rate Modal - shown when WACC is missing */}
+      <DiscountRateModal
+        isOpen={showDiscountModal}
+        onClose={() => {
+          setShowDiscountModal(false);
+          setPendingAnalysis(null);
+        }}
+        onSubmit={handleDiscountRateSubmit}
+        onSkip={handleDiscountRateSkip}
+      />
     </div>
   );
 }
