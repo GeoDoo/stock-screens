@@ -175,6 +175,30 @@ class TestDataValidator:
         assert result.has_warnings
         assert any(w.field == "tax_rate" for w in result.warnings)
 
+    def test_missing_cost_of_debt_is_error(self):
+        """Missing cost of debt should be a critical error."""
+        validator = DataValidator(
+            market_cap=1000000000,
+            beta=1.2,
+            shares_outstanding=100000000,
+            total_debt=500000000,
+            cash=200000000,
+            tax_rate=0.25,
+            cost_of_debt=None,  # Missing!
+            revenue_history=[100, 110, 120],
+            ebit_history=[20, 22, 24],
+            da_history=[5, 5, 6],
+            capex_history=[10, 11, 12],
+            working_capital_history=[15, 16, 17],
+        )
+        result = validator.validate()
+        
+        assert result.has_errors
+        assert any(e.field == "cost_of_debt" for e in result.errors)
+        # Check the message is helpful
+        error = next(e for e in result.errors if e.field == "cost_of_debt")
+        assert "custom discount rate" in error.message.lower()
+
     def test_zero_cost_of_debt_with_debt_is_warning(self):
         """Zero cost of debt when company has debt should warn."""
         validator = DataValidator(

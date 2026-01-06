@@ -282,21 +282,22 @@ async def get_stock(symbol: str, provider: str):
         tax_rate=extractor.tax_rate() or 0.25,
     )
 
-    # Calculate WACC for display
+    # Calculate WACC for display (only if ALL required components available)
     beta = extractor.beta()
     cost_of_debt = extractor.cost_of_debt()
     tax_rate = extractor.tax_rate()
     market_cap = extractor.market_cap()
     total_debt = extractor.total_debt()
     
+    # WACC requires: beta, market_cap, and cost_of_debt - no defaults!
     wacc = None
-    if beta is not None and market_cap is not None:
+    if beta is not None and market_cap is not None and market_cap > 0 and cost_of_debt is not None:
         wacc_calculator = WACCCalculator(
             risk_free_rate=risk_free_rate,
             beta=beta,
-            market_risk_premium=0.06,  # Default
-            cost_of_debt=cost_of_debt if cost_of_debt is not None else 0.05,
-            tax_rate=tax_rate if tax_rate is not None else 0.25,
+            market_risk_premium=0.06,  # Default market risk premium is OK
+            cost_of_debt=cost_of_debt,
+            tax_rate=tax_rate if tax_rate is not None else 0.25,  # Tax rate default is OK
             market_cap=market_cap,
             total_debt=total_debt if total_debt is not None else 0,
         )
@@ -392,23 +393,30 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
     data = stock_data_to_legacy(stock_data)
     extractor = DataExtractor(data, market_risk_premium=request.market_risk_premium)
     
-    # Calculate WACC
-    beta = extractor.beta() or 1.0
-    cost_of_debt = extractor.cost_of_debt() or 0.05
-    tax_rate = extractor.tax_rate() or 0.25
-    market_cap = extractor.market_cap() or 0
-    total_debt = extractor.total_debt() or 0
+    # Calculate WACC (requires all components - no defaults)
+    beta = extractor.beta()
+    cost_of_debt = extractor.cost_of_debt()
+    tax_rate = extractor.tax_rate()
+    market_cap = extractor.market_cap()
+    total_debt = extractor.total_debt()
     cash = extractor.cash() or 0
     shares = extractor.shares_outstanding() or 1
+    
+    # Check if we can calculate WACC
+    if beta is None or market_cap is None or market_cap <= 0 or cost_of_debt is None:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot calculate WACC. Missing beta, market cap, or cost of debt."
+        )
     
     wacc_calculator = WACCCalculator(
         risk_free_rate=risk_free_rate,
         beta=beta,
         market_risk_premium=request.market_risk_premium,
         cost_of_debt=cost_of_debt,
-        tax_rate=tax_rate,
+        tax_rate=tax_rate if tax_rate is not None else 0.25,
         market_cap=market_cap,
-        total_debt=total_debt,
+        total_debt=total_debt if total_debt is not None else 0,
     )
     base_wacc = wacc_calculator.calculate()
     
