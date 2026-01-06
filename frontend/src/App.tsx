@@ -167,6 +167,12 @@ export default function App() {
   // Historical Valuation (loaded via batch endpoint)
   const [historicalValuation, setHistoricalValuation] = useState<HistoricalValuationResult | null>(null);
   
+  // Track if user has attempted analysis (for appropriate empty state message)
+  const [hasAttemptedAnalysis, setHasAttemptedAnalysis] = useState(false);
+  
+  // Show fallback notice when auto-switching providers
+  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
+  
   // Discount Rate Modal (for when WACC is missing)
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [pendingAnalysis, setPendingAnalysis] = useState<StockDataResponse | null>(null);
@@ -176,6 +182,26 @@ export default function App() {
   
   // Ref to prevent duplicate technical analysis calls
   const technicalFetchRef = useRef<{ inProgress: boolean; provider: string | null }>({ inProgress: false, provider: null });
+
+  // Errors that should trigger auto-fallback to another provider
+  const shouldFallback = (errorMsg: string): boolean => {
+    const fallbackTriggers = [
+      'premium',
+      'subscription',
+      'not found',
+      'ticker not found',
+      'no data available',
+    ];
+    const lowerMsg = errorMsg.toLowerCase();
+    return fallbackTriggers.some(trigger => lowerMsg.includes(trigger));
+  };
+
+  // Get alternative fundamental provider
+  const getAlternativeProvider = (currentProvider: string): string | null => {
+    if (!fundamentalProviders || fundamentalProviders.length === 0) return null;
+    const alternatives = fundamentalProviders.filter(p => p.id !== currentProvider && p.available);
+    return alternatives.length > 0 ? alternatives[0].id : null;
+  };
 
   // Unified analyze function - uses batch endpoint for efficiency (DRY/KISS)
   const analyzeStock = async () => {
@@ -192,54 +218,79 @@ export default function App() {
     setHistoricalValuation(null);
     setShowDiscountModal(false);
     setPendingAnalysis(null);
+    setHasAttemptedAnalysis(true);
+    setFallbackNotice(null);
     
     const symbol = ticker.toUpperCase();
     
-    try {
-      // Step 1: Use batch endpoint - ONE call for stock + ratios + dividends + historical
-      const res = await fetch(`${API_BASE}/api/stock/${symbol}/analyze?provider=${selectedFundamentalProvider}`);
-      if (!res.ok) {
-        const errData = await res.json();
-        const errorMsg = errData.detail || 'Failed to fetch stock data';
-        // Refresh rate limits (backend marks provider as limited on 429)
+    // Try primary provider first, then fallback if needed
+    const tryProvider = async (provider: string, isFallback: boolean = false): Promise<boolean> => {
+      try {
+        const res = await fetch(`${API_BASE}/api/stock/${symbol}/analyze?provider=${provider}`);
+        if (!res.ok) {
+          const errData = await res.json();
+          const errorMsg = errData.detail || 'Failed to fetch stock data';
+          await fetchRateLimits();
+          
+          // If this is the primary provider and error is fallback-worthy, try alternative
+          if (!isFallback && shouldFallback(errorMsg)) {
+            const altProvider = getAlternativeProvider(provider);
+            if (altProvider) {
+              const success = await tryProvider(altProvider, true);
+              if (success) {
+                setFallbackNotice(`${provider} unavailable for ${symbol}. Using ${altProvider} instead.`);
+                setSelectedFundamentalProvider(altProvider);
+                return true;
+              }
+            }
+          }
+          throw new Error(errorMsg);
+        }
+        
+        const batchData = await res.json();
         await fetchRateLimits();
-        throw new Error(errorMsg);
+        
+        // Extract data from batch response
+        const stockResponse = normalizeStockData(batchData.stock as StockDataResponse);
+        setStockData(stockResponse);
+        setRatiosResult(batchData.ratios);
+        setDividendResult(batchData.dividends);
+        setHistoricalValuation(normalizeHistoricalValuation(batchData.historical_valuation));
+        
+        // Pre-fill inputs with hints
+        if (stockResponse.hints.revenue_growth !== null) {
+          setRevenueGrowth((stockResponse.hints.revenue_growth * 100).toFixed(2));
+        }
+        if (stockResponse.hints.operating_margin !== null) {
+          setOperatingMargin((stockResponse.hints.operating_margin * 100).toFixed(2));
+        }
+        
+        // Fetch comparables separately (requires peer data fetching)
+        fetchComparables(symbol, provider);
+        
+        // Check if WACC is available for DCF
+        const hasWACC = stockResponse.data.wacc !== null;
+        
+        if (hasWACC) {
+          await runValuationWithData(stockResponse, undefined, provider);
+          await runScenariosWithData(stockResponse, undefined, provider);
+        } else {
+          setPendingAnalysis(stockResponse);
+          setShowDiscountModal(true);
+        }
+        
+        return true;
+      } catch (err) {
+        if (isFallback) {
+          // Fallback also failed - propagate error
+          throw err;
+        }
+        throw err;
       }
-      const batchData = await res.json();
-      
-      // Refresh rate limits after successful call
-      await fetchRateLimits();
-      
-      // Extract data from batch response
-      const stockResponse = normalizeStockData(batchData.stock as StockDataResponse);
-      setStockData(stockResponse);
-      setRatiosResult(batchData.ratios);
-      setDividendResult(batchData.dividends);
-      setHistoricalValuation(normalizeHistoricalValuation(batchData.historical_valuation));
-      
-      // Pre-fill inputs with hints
-      if (stockResponse.hints.revenue_growth !== null) {
-        setRevenueGrowth((stockResponse.hints.revenue_growth * 100).toFixed(2));
-      }
-      if (stockResponse.hints.operating_margin !== null) {
-        setOperatingMargin((stockResponse.hints.operating_margin * 100).toFixed(2));
-      }
-      
-      // Step 2: Fetch comparables separately (requires peer data fetching)
-      fetchComparables(symbol);
-      
-      // Step 3: Check if WACC is available for DCF
-      const hasWACC = stockResponse.data.wacc !== null;
-      
-      if (hasWACC) {
-        // WACC available - auto-run valuation and scenarios
-        await runValuationWithData(stockResponse);
-        await runScenariosWithData(stockResponse);
-      } else {
-        // WACC missing - show modal to prompt for custom discount rate
-        setPendingAnalysis(stockResponse);
-        setShowDiscountModal(true);
-      }
+    };
+
+    try {
+      await tryProvider(selectedFundamentalProvider);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -271,14 +322,15 @@ export default function App() {
   };
 
   // Fetch comparables (now called automatically)
-  const fetchComparables = async (symbol: string) => {
-    if (!selectedFundamentalProvider) return;
+  const fetchComparables = async (symbol: string, providerOverride?: string) => {
+    const provider = providerOverride || selectedFundamentalProvider;
+    if (!provider) return;
     
     setComparableLoading(true);
     setComparableResult(null);
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${symbol}/comparables?provider=${selectedFundamentalProvider}`);
+      const res = await fetch(`${API_BASE}/api/stock/${symbol}/comparables?provider=${provider}`);
       if (res.ok) {
         const data: ComparableResult = await res.json();
         setComparableResult(normalizeComparableResult(data));
@@ -294,7 +346,8 @@ export default function App() {
   // These are now fetched via the batch /analyze endpoint
 
   // Run valuation with provided stock data and optional custom discount rate
-  const runValuationWithData = async (data: StockDataResponse, discountRateOverride?: number) => {
+  const runValuationWithData = async (data: StockDataResponse, discountRateOverride?: number, providerOverride?: string) => {
+    const provider = providerOverride || selectedFundamentalProvider;
     setLoading(true);
     setError(null);
     
@@ -314,7 +367,7 @@ export default function App() {
     };
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${data.symbol}/valuation?provider=${selectedFundamentalProvider}`, {
+      const res = await fetch(`${API_BASE}/api/stock/${data.symbol}/valuation?provider=${provider}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
@@ -334,12 +387,13 @@ export default function App() {
 
 
   // Run scenarios with provided stock data and optional custom discount rate
-  const runScenariosWithData = async (data: StockDataResponse, discountRateOverride?: number) => {
+  const runScenariosWithData = async (data: StockDataResponse, discountRateOverride?: number, providerOverride?: string) => {
+    const provider = providerOverride || selectedFundamentalProvider;
     setScenarioLoading(true);
     setScenarioResult(null);
     
     try {
-      const res = await fetch(`${API_BASE}/api/stock/${data.symbol}/scenarios?provider=${selectedFundamentalProvider}`, {
+      const res = await fetch(`${API_BASE}/api/stock/${data.symbol}/scenarios?provider=${provider}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -622,6 +676,11 @@ export default function App() {
               </button>
             </div>
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            {fallbackNotice && (
+              <p className="mt-3 text-sm text-amber-600 flex items-center gap-1">
+                <span>⚠️</span> {fallbackNotice}
+              </p>
+            )}
           </div>
         </section>
 
@@ -662,8 +721,17 @@ export default function App() {
         {/* FUNDAMENTAL TAB - No Data Message */}
         {!stockData && activeTab === 'fundamental' && !loading && (
           <div className="text-center py-16">
-            <p className="text-gray-400 mb-2">No stock data available</p>
-            <p className="text-sm text-gray-300">Enter a ticker and click Analyze to get started</p>
+            {hasAttemptedAnalysis && error ? (
+              <>
+                <p className="text-gray-400 mb-2">Analysis failed</p>
+                <p className="text-sm text-gray-300">Try a different ticker or provider</p>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-400 mb-2">No stock data available</p>
+                <p className="text-sm text-gray-300">Enter a ticker and click Analyze to get started</p>
+              </>
+            )}
           </div>
         )}
 
@@ -1562,8 +1630,17 @@ export default function App() {
         {/* TECHNICAL TAB - No Data Message */}
         {!stockData && activeTab === 'technical' && (
           <div className="text-center py-16">
-            <p className="text-gray-400 mb-2">No stock data available</p>
-            <p className="text-sm text-gray-300">Enter a ticker and click Analyze to get started</p>
+            {hasAttemptedAnalysis && error ? (
+              <>
+                <p className="text-gray-400 mb-2">Analysis failed</p>
+                <p className="text-sm text-gray-300">Try a different ticker or provider</p>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-400 mb-2">No stock data available</p>
+                <p className="text-sm text-gray-300">Enter a ticker and click Analyze to get started</p>
+              </>
+            )}
           </div>
         )}
 

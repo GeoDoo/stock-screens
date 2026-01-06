@@ -720,3 +720,167 @@ describe('App - Handles Incomplete API Data (Regression)', () => {
   })
 })
 
+// Auto-fallback provider tests
+describe('Provider Auto-Fallback', () => {
+  beforeEach(() => {
+    mockFetch.mockReset()
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('auto-falls back to Yahoo when FMP returns premium error', async () => {
+    let fmpCallCount = 0
+    let yahooCallCount = 0
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      if (url.includes('/analyze')) {
+        if (url.includes('provider=fmp')) {
+          fmpCallCount++
+          // FMP returns premium error
+          return Promise.resolve({ 
+            ok: false, 
+            json: () => Promise.resolve({ detail: 'Data requires premium FMP subscription' }) 
+          })
+        }
+        if (url.includes('provider=yahoo')) {
+          yahooCallCount++
+          // Yahoo works
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeResponse) })
+        }
+      }
+      if (url.includes('/comparables')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparables) })
+      }
+      if (url.includes('/valuation')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockValuationResult) })
+      }
+      if (url.includes('/scenarios')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockScenarioResult) })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+
+    // Wait for providers to load - FMP button should appear
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /FMP/i })).toBeInTheDocument()
+    })
+
+    // Select FMP provider
+    const fmpButton = screen.getByRole('button', { name: /FMP/i })
+    fireEvent.click(fmpButton)
+
+    const input = screen.getByPlaceholderText('AAPL')
+    fireEvent.change(input, { target: { value: 'USAR' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze/i }))
+    
+    // Should show fallback notice and data from Yahoo
+    await waitFor(() => {
+      expect(screen.getByText(/FMP unavailable for USAR/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // Verify both providers were tried
+    expect(fmpCallCount).toBe(1)
+    expect(yahooCallCount).toBe(1)
+  })
+
+  it('shows error message instead of welcome when analysis fails completely', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      if (url.includes('/analyze')) {
+        // All providers fail with non-fallback error
+        return Promise.resolve({ 
+          ok: false, 
+          json: () => Promise.resolve({ detail: 'Internal server error' }) 
+        })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+
+    const input = screen.getByPlaceholderText('AAPL')
+    fireEvent.change(input, { target: { value: 'TEST' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze/i }))
+    
+    // Wait for error to be displayed
+    await waitFor(() => {
+      expect(screen.getByText(/Internal server error/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // Should show "Analysis failed" message, NOT "Enter a ticker and click Analyze"
+    await waitFor(() => {
+      expect(screen.getByText(/Analysis failed/i)).toBeInTheDocument()
+      expect(screen.getByText(/Try a different ticker or provider/i)).toBeInTheDocument()
+    })
+
+    // Should NOT show welcome message
+    expect(screen.queryByText(/Enter a ticker and click Analyze to get started/i)).not.toBeInTheDocument()
+  })
+
+  it('does not fallback for rate limit errors (429)', async () => {
+    let callCount = 0
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      if (url.includes('/analyze')) {
+        callCount++
+        // Rate limit error - should NOT trigger fallback
+        return Promise.resolve({ 
+          ok: false, 
+          json: () => Promise.resolve({ detail: 'Rate limit exceeded' }) 
+        })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+
+    const input = screen.getByPlaceholderText('AAPL')
+    fireEvent.change(input, { target: { value: 'TEST' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze/i }))
+    
+    // Wait for error to be displayed
+    await waitFor(() => {
+      expect(screen.getByText(/Rate limit exceeded/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // Should only have tried once (no fallback for rate limits)
+    expect(callCount).toBe(1)
+    
+    // Should NOT show fallback notice
+    expect(screen.queryByText(/unavailable for/i)).not.toBeInTheDocument()
+  })
+})
+
