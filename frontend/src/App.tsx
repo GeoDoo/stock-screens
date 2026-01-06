@@ -775,21 +775,66 @@ export default function App() {
                   </div>
                 </div>
                 
-                {/* Annual Dividend History */}
+                {/* Annual Dividend History Chart */}
                 {Object.keys(dividendResult.annual_dividends).length > 0 && (
                   <div className="mt-8">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Annual Dividends</h3>
-                    <div className="flex gap-4 overflow-x-auto pb-2">
-                      {Object.entries(dividendResult.annual_dividends)
-                        .sort(([a], [b]) => Number(b) - Number(a))
-                        .slice(0, 10)
-                        .map(([year, amount]) => (
-                          <div key={year} className="flex-shrink-0 text-center">
-                            <p className="text-xs text-gray-400">{year}</p>
-                            <p className="text-sm font-mono font-medium">${amount.toFixed(2)}</p>
-                          </div>
-                        ))}
-                    </div>
+                    {(() => {
+                      const sortedData = Object.entries(dividendResult.annual_dividends)
+                        .sort(([a], [b]) => Number(a) - Number(b))  // Oldest first for chart
+                        .slice(-10);  // Last 10 years
+                      const maxAmount = Math.max(...sortedData.map(([, amt]) => amt));
+                      const chartHeight = 120;
+                      const barWidth = 40;
+                      const gap = 8;
+                      const chartWidth = sortedData.length * (barWidth + gap);
+                      
+                      return (
+                        <div className="overflow-x-auto">
+                          <svg width={chartWidth} height={chartHeight + 40} className="min-w-full">
+                            {/* Bars */}
+                            {sortedData.map(([year, amount], i) => {
+                              const barHeight = maxAmount > 0 ? (amount / maxAmount) * chartHeight : 0;
+                              const x = i * (barWidth + gap);
+                              const y = chartHeight - barHeight;
+                              
+                              return (
+                                <g key={year}>
+                                  {/* Bar */}
+                                  <rect
+                                    x={x}
+                                    y={y}
+                                    width={barWidth}
+                                    height={barHeight}
+                                    fill="#22c55e"
+                                    className="opacity-80 hover:opacity-100 transition-opacity"
+                                    rx={4}
+                                  />
+                                  {/* Amount label */}
+                                  <text
+                                    x={x + barWidth / 2}
+                                    y={y - 5}
+                                    textAnchor="middle"
+                                    className="text-xs fill-gray-600 font-mono"
+                                  >
+                                    ${amount.toFixed(2)}
+                                  </text>
+                                  {/* Year label */}
+                                  <text
+                                    x={x + barWidth / 2}
+                                    y={chartHeight + 16}
+                                    textAnchor="middle"
+                                    className="text-xs fill-gray-400"
+                                  >
+                                    {year}
+                                  </text>
+                                </g>
+                              );
+                            })}
+                          </svg>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </section>
