@@ -140,6 +140,68 @@ class TestBatchAnalyzeEndpoint:
             assert "remaining" in data["rate_limit"]
 
 
+class TestDividendCalculation:
+    """REGRESSION: Tests for correct per-share dividend calculation."""
+    
+    def test_dividends_are_per_share_not_total(self):
+        """
+        REGRESSION TEST: dividends should be per-share (e.g. $0.95), not total company (e.g. $15B).
+        
+        Bug: batch endpoint used fin.dividends_paid (total) directly instead of dividing
+        by shares_outstanding to get per-share amount.
+        """
+        mock_stock_data = create_mock_stock_data()
+        # Mock data has: dividends_paid = $15B, shares = 15.7B
+        # Per-share should be ~$0.95, NOT $15B
+        
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+        mock_client.get_peer_symbols = AsyncMock(return_value=[])
+        mock_client.get_company_metrics = AsyncMock(return_value={})
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.get("/api/stock/AAPL/analyze?provider=fmp")
+
+            assert response.status_code == 200
+            data = response.json()
+            
+            dividends = data["dividends"]
+            assert dividends["has_dividends"] is True
+            
+            # Current annual dividend should be reasonable per-share value
+            # Mock has ~$15B total / 15.7B shares = ~$0.95/share
+            annual_div = dividends["current_annual_dividend"]
+            assert annual_div is not None
+            assert annual_div < 100, f"Dividend ${annual_div} looks like total not per-share!"
+            assert annual_div > 0.1, f"Dividend ${annual_div} seems too low"
+            
+            # Yield should be reasonable (0.5-5% typical)
+            current_yield = dividends["current_yield"]
+            if current_yield is not None:
+                assert current_yield < 0.5, f"Yield {current_yield*100}% is unreasonable - data not per-share!"
+                assert current_yield > 0.001, f"Yield {current_yield*100}% seems too low"
+    
+    def test_dividend_payments_are_per_share(self):
+        """Individual dividend payments should be per-share amounts."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+        mock_client.get_peer_symbols = AsyncMock(return_value=[])
+        mock_client.get_company_metrics = AsyncMock(return_value={})
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.get("/api/stock/AAPL/analyze?provider=fmp")
+            data = response.json()
+            
+            payments = data["dividends"].get("payments", [])
+            for payment in payments:
+                # Per-share dividends are typically $0.20-$5.00 range
+                # Total company dividends are billions
+                assert payment["amount"] < 100, f"Payment ${payment['amount']} looks like total not per-share!"
+
+
 class TestRateLimitEndpoint:
     """Tests for the /api/rate-limits endpoint."""
     
