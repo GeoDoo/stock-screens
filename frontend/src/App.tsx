@@ -181,7 +181,12 @@ export default function App() {
   
   // Tab navigation
   const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
-  const [ratiosPeriod, setRatiosPeriod] = useState<'annual' | 'ttm'>('ttm'); // Default to TTM (more current)
+  const [fundamentalPeriod, setFundamentalPeriod] = useState<'annual' | 'ttm'>('ttm'); // Default to TTM (more current)
+  
+  // Computed: Get hints for the selected period
+  const currentHints = stockData ? 
+    (fundamentalPeriod === 'ttm' && stockData.hints_ttm) ? stockData.hints_ttm : stockData.hints_annual 
+    : null;
   
   // Ref to prevent duplicate technical analysis calls
   const technicalFetchRef = useRef<{ inProgress: boolean; provider: string | null }>({ inProgress: false, provider: null });
@@ -244,12 +249,13 @@ export default function App() {
         setDividendResult(batchData.dividends);
         setHistoricalValuation(normalizeHistoricalValuation(batchData.historical_valuation));
         
-        // Pre-fill inputs with hints
-        if (stockResponse.hints.revenue_growth !== null) {
-          setRevenueGrowth((stockResponse.hints.revenue_growth * 100).toFixed(2));
+        // Pre-fill inputs with hints (prefer TTM if available, else annual)
+        const hintsToUse = stockResponse.hints_ttm || stockResponse.hints_annual;
+        if (hintsToUse?.revenue_growth !== null && hintsToUse?.revenue_growth !== undefined) {
+          setRevenueGrowth((hintsToUse.revenue_growth * 100).toFixed(2));
         }
-        if (stockResponse.hints.operating_margin !== null) {
-          setOperatingMargin((stockResponse.hints.operating_margin * 100).toFixed(2));
+        if (hintsToUse?.operating_margin !== null && hintsToUse?.operating_margin !== undefined) {
+          setOperatingMargin((hintsToUse.operating_margin * 100).toFixed(2));
         }
         
         // Fetch comparables separately (requires peer data fetching)
@@ -260,7 +266,7 @@ export default function App() {
         
         // Check if inputs are reasonable for auto-running DCF
         // Don't auto-run with extreme values (e.g., -1349% operating margin)
-        const opMargin = stockResponse.hints.operating_margin;
+        const opMargin = hintsToUse?.operating_margin;
         const hasExtremeInputs = opMargin !== null && (opMargin < -1.0 || opMargin > 1.0); // Outside -100% to +100%
         
         if (hasWACC && !hasExtremeInputs) {
@@ -346,9 +352,10 @@ export default function App() {
     setLoading(true);
     setError(null);
     
-    // Use hints as defaults if user hasn't entered values yet
-    const revGrowth = revenueGrowth ? parseFloat(revenueGrowth) / 100 : (data.hints.revenue_growth ?? 0.05);
-    const opMargin = operatingMargin ? parseFloat(operatingMargin) / 100 : (data.hints.operating_margin ?? 0.15);
+    // Use hints as defaults if user hasn't entered values yet (prefer TTM)
+    const dataHints = data.hints_ttm || data.hints_annual;
+    const revGrowth = revenueGrowth ? parseFloat(revenueGrowth) / 100 : (dataHints?.revenue_growth ?? 0.05);
+    const opMargin = operatingMargin ? parseFloat(operatingMargin) / 100 : (dataHints?.operating_margin ?? 0.15);
     
     const request: ValuationRequest = {
       revenue_growth: revGrowth,
@@ -853,6 +860,40 @@ export default function App() {
         {/* FUNDAMENTAL TAB */}
         {stockData && activeTab === 'fundamental' && (
           <>
+            {/* Data Period Selector - TTM vs Annual */}
+            <div className="mb-8 flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                {fundamentalPeriod === 'ttm' 
+                  ? 'Showing Trailing Twelve Months data (sum of last 4 quarters)' 
+                  : 'Showing most recent Annual Report data'}
+              </p>
+              <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+                <button
+                  onClick={() => setFundamentalPeriod('ttm')}
+                  disabled={!stockData.hints_ttm}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                    fundamentalPeriod === 'ttm'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : stockData.hints_ttm
+                        ? 'text-gray-600 hover:text-gray-900'
+                        : 'text-gray-300 cursor-not-allowed'
+                  }`}
+                >
+                  TTM
+                </button>
+                <button
+                  onClick={() => setFundamentalPeriod('annual')}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                    fundamentalPeriod === 'annual'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Annual
+                </button>
+              </div>
+            </div>
+
             {/* Validation Alerts */}
             {(relevantErrors.length > 0 || relevantWarnings.length > 0) && (
               <section className="mb-8 space-y-4">
@@ -954,23 +995,23 @@ export default function App() {
                     <tbody>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 text-sm text-gray-500">Revenue Growth (CAGR)<GlossaryRef id="cagr" /></td>
-                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.hints.revenue_growth)}</td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(currentHints?.revenue_growth)}</td>
                       </tr>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 text-sm text-gray-500">Operating Margin<GlossaryRef id="operating-margin" /></td>
-                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.hints.operating_margin)}</td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(currentHints?.operating_margin)}</td>
                       </tr>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 text-sm text-gray-500">D&A / Revenue<GlossaryRef id="da" /></td>
-                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.hints.da_ratio)}</td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(currentHints?.da_ratio)}</td>
                       </tr>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 text-sm text-gray-500">CapEx / Revenue<GlossaryRef id="capex" /></td>
-                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.hints.capex_ratio)}</td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(currentHints?.capex_ratio)}</td>
                       </tr>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 text-sm text-gray-500">Working Capital / Revenue<GlossaryRef id="working-capital" /></td>
-                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(stockData.hints.wc_ratio)}</td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(currentHints?.wc_ratio)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -978,54 +1019,15 @@ export default function App() {
               </div>
             </section>
 
-            {/* Financial Ratios - with Annual/TTM tabs */}
+            {/* Financial Ratios */}
             {ratiosResult && (ratiosResult.annual || ratiosResult.ttm) && (
               <section className="mb-16 pt-8 border-t border-gray-100">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Financial Ratios</h2>
-                    <p className="text-sm text-gray-400">
-                      {ratiosPeriod === 'ttm' 
-                        ? 'Trailing Twelve Months (sum of last 4 quarters)' 
-                        : 'Most recent annual report'}
-                    </p>
-                  </div>
-                  
-                  {/* Annual/TTM Toggle */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setRatiosPeriod('ttm')}
-                      disabled={!ratiosResult.ttm}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                        ratiosPeriod === 'ttm'
-                          ? 'bg-gray-900 text-white'
-                          : ratiosResult.ttm
-                            ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            : 'bg-gray-50 text-gray-300 cursor-not-allowed'
-                      }`}
-                    >
-                      TTM
-                    </button>
-                    <button
-                      onClick={() => setRatiosPeriod('annual')}
-                      disabled={!ratiosResult.annual}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                        ratiosPeriod === 'annual'
-                          ? 'bg-gray-900 text-white'
-                          : ratiosResult.annual
-                            ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            : 'bg-gray-50 text-gray-300 cursor-not-allowed'
-                      }`}
-                    >
-                      Annual
-                    </button>
-                  </div>
-                </div>
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-6">Financial Ratios</h2>
                 
                 {/* Render ratios table based on selected period */}
-                {ratiosPeriod === 'ttm' && ratiosResult.ttm ? (
+                {fundamentalPeriod === 'ttm' && ratiosResult.ttm ? (
                   <FinancialRatiosTable ratios={ratiosResult.ttm} />
-                ) : ratiosPeriod === 'annual' && ratiosResult.annual ? (
+                ) : fundamentalPeriod === 'annual' && ratiosResult.annual ? (
                   <FinancialRatiosTable ratios={ratiosResult.annual} />
                 ) : ratiosResult.annual ? (
                   <FinancialRatiosTable ratios={ratiosResult.annual} />
@@ -1202,8 +1204,8 @@ export default function App() {
               
               <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-8">
                 {[
-                  { label: <>Revenue Growth (%)<GlossaryRef id="revenue-growth" /></>, value: revenueGrowth, setter: setRevenueGrowth, hint: stockData.hints.revenue_growth !== null ? `Historical: ${(stockData.hints.revenue_growth * 100).toFixed(2)}%` : null, key: 'revenue' },
-                  { label: <>Operating Margin (%)<GlossaryRef id="operating-margin" /></>, value: operatingMargin, setter: setOperatingMargin, hint: stockData.hints.operating_margin !== null ? `Historical: ${(stockData.hints.operating_margin * 100).toFixed(2)}%` : null, key: 'margin' },
+                  { label: <>Revenue Growth (%)<GlossaryRef id="revenue-growth" /></>, value: revenueGrowth, setter: setRevenueGrowth, hint: currentHints?.revenue_growth !== null ? `${fundamentalPeriod === 'ttm' ? 'TTM' : 'Historical'}: ${((currentHints?.revenue_growth ?? 0) * 100).toFixed(2)}%` : null, key: 'revenue' },
+                  { label: <>Operating Margin (%)<GlossaryRef id="operating-margin" /></>, value: operatingMargin, setter: setOperatingMargin, hint: currentHints?.operating_margin !== null ? `${fundamentalPeriod === 'ttm' ? 'TTM' : 'Historical'}: ${((currentHints?.operating_margin ?? 0) * 100).toFixed(2)}%` : null, key: 'margin' },
                   { label: <>Terminal Growth Rate (%)<GlossaryRef id="terminal-growth" /></>, value: terminalGrowth, setter: setTerminalGrowth, hint: 'Typically 2-3% (GDP growth)', key: 'terminal' },
                   { label: <>Market Risk Premium (%)<GlossaryRef id="market-risk-premium" /></>, value: marketRiskPremium, setter: setMarketRiskPremium, hint: 'Typically 5-7%', key: 'mrp' },
                   { label: 'Projection Years', value: projectionYears, setter: setProjectionYears, hint: 'Usually 5-10 years', key: 'years' },

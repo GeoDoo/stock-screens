@@ -17,24 +17,38 @@ import type {
   HistoricalValuationResult,
 } from './types';
 
+// Helper to normalize hints (map backend property names to frontend)
+function normalizeHints(rawHints: Record<string, unknown> | null | undefined) {
+  if (!rawHints) return null;
+  return {
+    revenue_growth: (rawHints.revenue_growth as number | null) ?? null,
+    operating_margin: (rawHints.operating_margin as number | null) ?? null,
+    da_ratio: (rawHints.da_to_revenue ?? rawHints.da_ratio ?? null) as number | null,
+    capex_ratio: (rawHints.capex_to_revenue ?? rawHints.capex_ratio ?? null) as number | null,
+    wc_ratio: (rawHints.wc_to_revenue ?? rawHints.wc_ratio ?? null) as number | null,
+  };
+}
+
 export function normalizeStockData(data: StockDataResponse | null): StockDataResponse | null {
   if (!data) return null;
   
-  // Map backend property names to frontend expected names
-  // Backend sends: da_to_revenue, capex_to_revenue, wc_to_revenue
-  // Frontend expects: da_ratio, capex_ratio, wc_ratio
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawHints = data.hints as any;
+  const anyData = data as any;
+  
+  // Normalize both annual and TTM hints
+  const hintsAnnual = normalizeHints(anyData.hints_annual || anyData.hints);
+  const hintsTtm = normalizeHints(anyData.hints_ttm);
   
   return {
     ...data,
-    hints: {
-      revenue_growth: rawHints?.revenue_growth ?? null,
-      operating_margin: rawHints?.operating_margin ?? null,
-      da_ratio: rawHints?.da_to_revenue ?? rawHints?.da_ratio ?? null,
-      capex_ratio: rawHints?.capex_to_revenue ?? rawHints?.capex_ratio ?? null,
-      wc_ratio: rawHints?.wc_to_revenue ?? rawHints?.wc_ratio ?? null,
+    hints_annual: hintsAnnual || {
+      revenue_growth: null,
+      operating_margin: null,
+      da_ratio: null,
+      capex_ratio: null,
+      wc_ratio: null,
     },
+    hints_ttm: hintsTtm,
     validation: {
       ...data.validation,
       errors: data.validation?.errors ?? [],
