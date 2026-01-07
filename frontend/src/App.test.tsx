@@ -251,6 +251,78 @@ describe('App - Unified Analyze Flow', () => {
     }, { timeout: 3000 })
   })
 
+  it('reverts to previous provider when auto-refresh hits rate limit', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRateLimits) })
+      }
+      if (url.includes('/api/stock/AAPL/analyze')) {
+        // Yahoo works
+        if (url.includes('provider=yahoo')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeResponse) })
+        }
+        // FMP returns rate limit error
+        if (url.includes('provider=fmp')) {
+          return Promise.resolve({ 
+            ok: false, 
+            status: 429,
+            json: () => Promise.resolve({ detail: 'Rate limit exceeded for fmp' }) 
+          })
+        }
+      }
+      if (url.includes('/comparables')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparables) })
+      }
+      if (url.includes('/valuation')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockValuationResult) })
+      }
+      if (url.includes('/scenarios')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockScenarios) })
+      }
+      if (url.includes('/technical')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockTechnical) })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+
+    // Wait for providers to load
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /FMP/i })[0]).toBeInTheDocument()
+    })
+
+    // Analyze with Yahoo (default) first
+    const input = screen.getByPlaceholderText('AAPL')
+    fireEvent.change(input, { target: { value: 'AAPL' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze/i }))
+    
+    // Wait for data to load
+    await waitFor(() => {
+      expect(screen.getByText(/Apple Inc/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // Now try to switch to FMP (which is rate limited)
+    const fmpButtons = screen.getAllByRole('button', { name: /FMP/i })
+    fireEvent.click(fmpButtons[0])
+
+    // Should show notice about rate limit and revert to Yahoo
+    await waitFor(() => {
+      expect(screen.getByText(/FMP is rate limited/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // Yahoo button should still be selected (reverted)
+    // Data should still be visible (not cleared)
+    expect(screen.getByText(/Apple Inc/i)).toBeInTheDocument()
+  })
+
   it('auto-runs all analyses when WACC is available', async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/providers')) {
