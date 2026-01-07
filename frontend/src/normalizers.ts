@@ -19,8 +19,22 @@ import type {
 
 export function normalizeStockData(data: StockDataResponse | null): StockDataResponse | null {
   if (!data) return null;
+  
+  // Map backend property names to frontend expected names
+  // Backend sends: da_to_revenue, capex_to_revenue, wc_to_revenue
+  // Frontend expects: da_ratio, capex_ratio, wc_ratio
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawHints = data.hints as any;
+  
   return {
     ...data,
+    hints: {
+      revenue_growth: rawHints?.revenue_growth ?? null,
+      operating_margin: rawHints?.operating_margin ?? null,
+      da_ratio: rawHints?.da_to_revenue ?? rawHints?.da_ratio ?? null,
+      capex_ratio: rawHints?.capex_to_revenue ?? rawHints?.capex_ratio ?? null,
+      wc_ratio: rawHints?.wc_to_revenue ?? rawHints?.wc_ratio ?? null,
+    },
     validation: {
       ...data.validation,
       errors: data.validation?.errors ?? [],
