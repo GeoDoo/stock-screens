@@ -541,10 +541,27 @@ export default function App() {
         setError(null);
         setFallbackNotice(null);
         
+        const newProviderName = getProviderDisplayName(selectedFundamentalProvider, fundamentalProviders);
+        const prevProviderName = getProviderDisplayName(prevProvider, fundamentalProviders);
+        
         try {
           const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/analyze?provider=${selectedFundamentalProvider}`);
           if (!res.ok) {
             const errData = await res.json();
+            await fetchRateLimits();
+            
+            // Check if it's a rate limit error
+            const isRateLimit = res.status === 429 || 
+              (errData.detail && errData.detail.toLowerCase().includes('rate limit'));
+            
+            if (isRateLimit) {
+              // Revert to previous working provider
+              setSelectedFundamentalProvider(prevProvider);
+              prevFundamentalProviderRef.current = prevProvider;
+              setFallbackNotice(`${newProviderName} is rate limited. Staying with ${prevProviderName}.`);
+              return; // Don't throw, just show notice
+            }
+            
             throw new Error(errData.detail || 'Failed to fetch stock data');
           }
           
@@ -571,7 +588,10 @@ export default function App() {
           // Re-fetch comparables
           fetchComparables(stockData.symbol, selectedFundamentalProvider);
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Unknown error');
+          // On error, revert to previous provider
+          setSelectedFundamentalProvider(prevProvider);
+          prevFundamentalProviderRef.current = prevProvider;
+          setError(`${newProviderName} failed: ${err instanceof Error ? err.message : 'Unknown error'}. Reverted to ${prevProviderName}.`);
         } finally {
           setLoading(false);
         }
