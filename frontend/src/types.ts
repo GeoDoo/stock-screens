@@ -44,6 +44,9 @@ export interface HistoricalHints {
   wc_ratio: number | null;
 }
 
+// Same structure for both annual and TTM hints
+export type PeriodHints = HistoricalHints;
+
 export interface ValidationIssue {
   field: string;
   message: string;
@@ -64,7 +67,8 @@ export interface StockDataResponse {
   sector: string | null;
   data_provider: string;
   data: CompanyData;
-  hints: HistoricalHints;
+  hints_annual: HistoricalHints;
+  hints_ttm: HistoricalHints | null;  // Null if TTM data not available
   validation: ValidationResult;
 }
 

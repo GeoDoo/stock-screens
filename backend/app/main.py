@@ -990,13 +990,14 @@ async def batch_analyze(symbol: str, provider: str):
             "risk_free_rate": risk_free_rate,
             "wacc": wacc,
         },
-        "hints": {
+        "hints_annual": {
             "revenue_growth": fcf_projector.revenue_cagr(),
             "operating_margin": fcf_projector.operating_margin(),
             "da_to_revenue": fcf_projector.da_to_revenue_ratio(),
             "capex_to_revenue": fcf_projector.capex_to_revenue_ratio(),
             "wc_to_revenue": fcf_projector.wc_to_revenue_ratio(),
         },
+        "hints_ttm": None,  # Will be populated below for Yahoo
         "validation": validation_result.to_dict(),
         "data_provider": stock_data.provider,
     }
@@ -1037,8 +1038,10 @@ async def batch_analyze(symbol: str, provider: str):
         },
     }
     
-    # === Build TTM ratios (from quarterly data) ===
+    # === Build TTM data (ratios and hints from quarterly data) ===
     ratios_ttm = None
+    hints_ttm = None
+    
     if provider == "yahoo":
         from app.services.yahoo_provider import YahooProvider
         yahoo = YahooProvider()
@@ -1093,6 +1096,30 @@ async def batch_analyze(symbol: str, provider: str):
                     "inventory_turnover": ttm_ratios.efficiency.inventory_turnover,
                 },
             }
+            
+            # Calculate TTM hints for DCF projections
+            ttm_revenue = ttm_financials.revenue
+            ttm_operating_income = ttm_financials.operating_income
+            ttm_da = ttm_financials.depreciation_amortization
+            ttm_capex = ttm_financials.capital_expenditure
+            ttm_current_assets = ttm_financials.current_assets
+            ttm_current_liabilities = ttm_financials.current_liabilities
+            
+            # Calculate working capital change (simplified - uses current period)
+            ttm_wc = None
+            if ttm_current_assets is not None and ttm_current_liabilities is not None:
+                ttm_wc = ttm_current_assets - ttm_current_liabilities
+            
+            hints_ttm = {
+                "revenue_growth": stock_response["hints_annual"]["revenue_growth"],  # Use annual CAGR (TTM YoY is complex)
+                "operating_margin": (ttm_operating_income / ttm_revenue) if ttm_revenue and ttm_operating_income else None,
+                "da_to_revenue": (ttm_da / ttm_revenue) if ttm_revenue and ttm_da else None,
+                "capex_to_revenue": (abs(ttm_capex) / ttm_revenue) if ttm_revenue and ttm_capex else None,  # CapEx is negative
+                "wc_to_revenue": (ttm_wc / ttm_revenue) if ttm_revenue and ttm_wc else None,
+            }
+    
+    # Update stock_response with TTM hints
+    stock_response["hints_ttm"] = hints_ttm
     
     ratios_response = {
         "annual": ratios_annual,
