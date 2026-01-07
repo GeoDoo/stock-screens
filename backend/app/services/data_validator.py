@@ -126,6 +126,20 @@ class DataValidator:
                 severity=Severity.ERROR,
                 impacts="wacc",
             ))
+        elif self.beta < 0:
+            result.issues.append(ValidationIssue(
+                field="beta",
+                message=f"Negative beta ({self.beta:.2f}) is unusual. This makes cost of equity lower than risk-free rate, resulting in artificially low WACC. Consider using a custom discount rate (10-15% typical for equities).",
+                severity=Severity.WARNING,
+                impacts="wacc",
+            ))
+        elif self.beta < 0.5:
+            result.issues.append(ValidationIssue(
+                field="beta",
+                message=f"Very low beta ({self.beta:.2f}) suggests low market correlation. WACC may be understated for a risky stock.",
+                severity=Severity.WARNING,
+                impacts="wacc",
+            ))
         
         if self.shares_outstanding is None or self.shares_outstanding <= 0:
             result.issues.append(ValidationIssue(

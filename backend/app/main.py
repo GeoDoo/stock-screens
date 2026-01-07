@@ -65,6 +65,13 @@ class HistoricalHints(BaseModel):
     wc_ratio: Optional[float]
 
 
+def cap_hint(value: Optional[float], min_val: float, max_val: float) -> Optional[float]:
+    """Cap a hint value to reasonable bounds. Returns None if value is None."""
+    if value is None:
+        return None
+    return max(min_val, min(max_val, value))
+
+
 class ValidationIssueResponse(BaseModel):
     """A single validation issue."""
     field: str
@@ -327,11 +334,13 @@ async def get_stock(symbol: str, provider: str):
             wacc=wacc,
         ),
         hints=HistoricalHints(
-            revenue_growth=fcf_projector.revenue_cagr() if extractor.revenue_history() else None,
-            operating_margin=fcf_projector.operating_margin() if extractor.ebit_history() else None,
-            da_ratio=fcf_projector.da_to_revenue_ratio() if extractor.da_history() else None,
-            capex_ratio=fcf_projector.capex_to_revenue_ratio() if extractor.capex_history() else None,
-            wc_ratio=fcf_projector.wc_to_revenue_ratio() if extractor.working_capital_history() else None,
+            # Cap hints to reasonable ranges for DCF projections
+            # Extreme historical averages (e.g., -1349% op margin) are not useful defaults
+            revenue_growth=cap_hint(fcf_projector.revenue_cagr(), -0.5, 1.0) if extractor.revenue_history() else None,  # -50% to +100%
+            operating_margin=cap_hint(fcf_projector.operating_margin(), -1.0, 0.5) if extractor.ebit_history() else None,  # -100% to +50%
+            da_ratio=cap_hint(fcf_projector.da_to_revenue_ratio(), 0, 0.5) if extractor.da_history() else None,  # 0% to 50%
+            capex_ratio=cap_hint(fcf_projector.capex_to_revenue_ratio(), 0, 0.5) if extractor.capex_history() else None,  # 0% to 50%
+            wc_ratio=cap_hint(fcf_projector.wc_to_revenue_ratio(), -0.5, 1.0) if extractor.working_capital_history() else None,  # -50% to +100%
         ),
         validation=ValidationResponse(**validation_result.to_dict()),
     )
@@ -991,11 +1000,12 @@ async def batch_analyze(symbol: str, provider: str):
             "wacc": wacc,
         },
         "hints": {
-            "revenue_growth": fcf_projector.revenue_cagr(),
-            "operating_margin": fcf_projector.operating_margin(),
-            "da_to_revenue": fcf_projector.da_to_revenue_ratio(),
-            "capex_to_revenue": fcf_projector.capex_to_revenue_ratio(),
-            "wc_to_revenue": fcf_projector.wc_to_revenue_ratio(),
+            # Cap hints to reasonable ranges for DCF projections
+            "revenue_growth": cap_hint(fcf_projector.revenue_cagr(), -0.5, 1.0),  # -50% to +100%
+            "operating_margin": cap_hint(fcf_projector.operating_margin(), -1.0, 0.5),  # -100% to +50%
+            "da_to_revenue": cap_hint(fcf_projector.da_to_revenue_ratio(), 0, 0.5),  # 0% to 50%
+            "capex_to_revenue": cap_hint(fcf_projector.capex_to_revenue_ratio(), 0, 0.5),  # 0% to 50%
+            "wc_to_revenue": cap_hint(fcf_projector.wc_to_revenue_ratio(), -0.5, 1.0),  # -50% to +100%
         },
         "validation": validation_result.to_dict(),
         "data_provider": stock_data.provider,
