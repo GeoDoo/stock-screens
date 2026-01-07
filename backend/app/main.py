@@ -1006,12 +1006,13 @@ async def batch_analyze(symbol: str, provider: str):
     current_price = stock_data.profile.price
     shares = stock_data.profile.shares_outstanding
     
-    # === Build ratios response ===
+    # === Build ratios response (ANNUAL - from most recent annual report) ===
     ratio_calculator = RatioCalculator()
     ratios = ratio_calculator.calculate(data)
     
-    ratios_response = {
+    ratios_annual = {
         "symbol": symbol.upper(),
+        "period": "annual",
         "valuation": {
             "pe_ratio": ratios.valuation.pe_ratio,
             "earnings_yield": ratios.valuation.earnings_yield,
@@ -1034,6 +1035,68 @@ async def batch_analyze(symbol: str, provider: str):
             "asset_turnover": ratios.efficiency.asset_turnover,
             "inventory_turnover": ratios.efficiency.inventory_turnover,
         },
+    }
+    
+    # === Build TTM ratios (from quarterly data) ===
+    ratios_ttm = None
+    if provider == "yahoo":
+        from app.services.yahoo_provider import YahooProvider
+        yahoo = YahooProvider()
+        ttm_financials = yahoo.get_ttm_financials_sync(symbol)
+        
+        if ttm_financials:
+            # Build legacy format for TTM (keys must match ratio_calculator expectations)
+            ttm_data = {
+                "profile": data.get("profile", {}),
+                "income_statement": [{
+                    "revenue": ttm_financials.revenue,
+                    "grossProfit": ttm_financials.gross_profit,
+                    "operatingIncome": ttm_financials.operating_income,
+                    "netIncome": ttm_financials.net_income,
+                    "interestExpense": ttm_financials.interest_expense,
+                }],
+                "balance_sheet": [{
+                    "totalAssets": ttm_financials.total_assets,
+                    "totalLiabilities": ttm_financials.total_liabilities,
+                    "totalStockholdersEquity": ttm_financials.total_equity,
+                    "totalDebt": ttm_financials.total_debt,
+                    "cashAndCashEquivalents": ttm_financials.cash_and_equivalents,
+                    "totalCurrentAssets": ttm_financials.current_assets,
+                    "totalCurrentLiabilities": ttm_financials.current_liabilities,
+                }],
+            }
+            ttm_ratios = ratio_calculator.calculate(ttm_data)
+            
+            ratios_ttm = {
+                "symbol": symbol.upper(),
+                "period": "ttm",
+                "valuation": {
+                    "pe_ratio": ttm_ratios.valuation.pe_ratio,
+                    "earnings_yield": ttm_ratios.valuation.earnings_yield,
+                    "ps_ratio": ttm_ratios.valuation.ps_ratio,
+                    "pb_ratio": ttm_ratios.valuation.pb_ratio,
+                },
+                "profitability": {
+                    "gross_margin": ttm_ratios.profitability.gross_margin,
+                    "operating_margin": ttm_ratios.profitability.operating_margin,
+                    "net_margin": ttm_ratios.profitability.net_margin,
+                    "roe": ttm_ratios.profitability.roe,
+                    "roa": ttm_ratios.profitability.roa,
+                },
+                "liquidity": {
+                    "current_ratio": ttm_ratios.liquidity.current_ratio,
+                    "quick_ratio": ttm_ratios.liquidity.quick_ratio,
+                    "debt_to_equity": ttm_ratios.liquidity.debt_to_equity,
+                },
+                "efficiency": {
+                    "asset_turnover": ttm_ratios.efficiency.asset_turnover,
+                    "inventory_turnover": ttm_ratios.efficiency.inventory_turnover,
+                },
+            }
+    
+    ratios_response = {
+        "annual": ratios_annual,
+        "ttm": ratios_ttm,
     }
     
     # === Build dividends response ===

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
+import { FinancialRatiosTable } from './components/FinancialRatiosTable';
 import { DiscountRateModal } from './components/DiscountRateModal';
 import { formatCurrency, formatPercent, formatNumber, formatShareCount } from './utils';
 import {
@@ -180,6 +181,7 @@ export default function App() {
   
   // Tab navigation
   const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
+  const [ratiosPeriod, setRatiosPeriod] = useState<'annual' | 'ttm'>('ttm'); // Default to TTM (more current)
   
   // Ref to prevent duplicate technical analysis calls
   const technicalFetchRef = useRef<{ inProgress: boolean; provider: string | null }>({ inProgress: false, provider: null });
@@ -976,121 +978,62 @@ export default function App() {
               </div>
             </section>
 
-            {/* Financial Ratios */}
-            {ratiosResult && ratiosResult.valuation && ratiosResult.profitability && ratiosResult.liquidity && ratiosResult.efficiency && (
+            {/* Financial Ratios - with Annual/TTM tabs */}
+            {ratiosResult && (ratiosResult.annual || ratiosResult.ttm) && (
               <section className="mb-16 pt-8 border-t border-gray-100">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Financial Ratios</h2>
-                <p className="text-sm text-gray-400 mb-8">From most recent annual report (not TTM — may differ from Yahoo Finance)</p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                  {/* Valuation */}
+                <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-4">Valuation</h3>
-                    <table className="w-full">
-                      <tbody>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">P/E<GlossaryRef id="pe-ratio" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.valuation.pe_ratio)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Earnings Yield<GlossaryRef id="earnings-yield" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.valuation.earnings_yield)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">P/S<GlossaryRef id="ps-ratio" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.valuation.ps_ratio)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">P/B<GlossaryRef id="pb-ratio" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.valuation.pb_ratio)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">EV/EBITDA<GlossaryRef id="ev-ebitda" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.valuation.ev_to_ebitda)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">EV/Revenue<GlossaryRef id="ev-revenue" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.valuation.ev_to_revenue)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Financial Ratios</h2>
+                    <p className="text-sm text-gray-400">
+                      {ratiosPeriod === 'ttm' 
+                        ? 'Trailing Twelve Months (sum of last 4 quarters)' 
+                        : 'Most recent annual report'}
+                    </p>
                   </div>
-
-                  {/* Profitability */}
-                  <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-purple-600 mb-4">Profitability</h3>
-                    <table className="w-full">
-                      <tbody>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Gross Margin<GlossaryRef id="gross-margin" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.gross_margin)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Operating Margin<GlossaryRef id="operating-margin" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.operating_margin)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Net Margin<GlossaryRef id="net-margin" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.net_margin)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">ROE<GlossaryRef id="roe" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.roe)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">ROA<GlossaryRef id="roa" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.roa)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">ROIC<GlossaryRef id="roic" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratiosResult.profitability.roic)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Liquidity & Solvency */}
-                  <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-orange-600 mb-4">Liquidity</h3>
-                    <table className="w-full">
-                      <tbody>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Current Ratio<GlossaryRef id="current-ratio" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.liquidity.current_ratio)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Quick Ratio<GlossaryRef id="quick-ratio" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.liquidity.quick_ratio)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Debt/Equity<GlossaryRef id="debt-to-equity" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.liquidity.debt_to_equity)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Interest Coverage<GlossaryRef id="interest-coverage" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.liquidity.interest_coverage)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Efficiency */}
-                  <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-teal-600 mb-4">Efficiency</h3>
-                    <table className="w-full">
-                      <tbody>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Asset Turnover<GlossaryRef id="asset-turnover" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.efficiency.asset_turnover)}</td>
-                        </tr>
-                        <tr className="border-b border-gray-100">
-                          <td className="py-2 text-sm text-gray-500">Inventory Turnover<GlossaryRef id="inventory-turnover" /></td>
-                          <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratiosResult.efficiency.inventory_turnover)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                  
+                  {/* Annual/TTM Toggle */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setRatiosPeriod('ttm')}
+                      disabled={!ratiosResult.ttm}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                        ratiosPeriod === 'ttm'
+                          ? 'bg-gray-900 text-white'
+                          : ratiosResult.ttm
+                            ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            : 'bg-gray-50 text-gray-300 cursor-not-allowed'
+                      }`}
+                    >
+                      TTM
+                    </button>
+                    <button
+                      onClick={() => setRatiosPeriod('annual')}
+                      disabled={!ratiosResult.annual}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                        ratiosPeriod === 'annual'
+                          ? 'bg-gray-900 text-white'
+                          : ratiosResult.annual
+                            ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            : 'bg-gray-50 text-gray-300 cursor-not-allowed'
+                      }`}
+                    >
+                      Annual
+                    </button>
                   </div>
                 </div>
+                
+                {/* Render ratios table based on selected period */}
+                {ratiosPeriod === 'ttm' && ratiosResult.ttm ? (
+                  <FinancialRatiosTable ratios={ratiosResult.ttm} />
+                ) : ratiosPeriod === 'annual' && ratiosResult.annual ? (
+                  <FinancialRatiosTable ratios={ratiosResult.annual} />
+                ) : ratiosResult.annual ? (
+                  <FinancialRatiosTable ratios={ratiosResult.annual} />
+                ) : ratiosResult.ttm ? (
+                  <FinancialRatiosTable ratios={ratiosResult.ttm} />
+                ) : (
+                  <p className="text-gray-500">No ratios data available</p>
+                )}
               </section>
             )}
 
