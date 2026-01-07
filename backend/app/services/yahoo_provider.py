@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import List
+from typing import List, Optional
 import yfinance as yf
 
 from app.services.base_provider import (
@@ -77,7 +77,7 @@ class YahooProvider(StockDataProvider):
         )
     
     def _get_financials(self, ticker: yf.Ticker) -> List[FinancialStatement]:
-        """Extract and normalize financial statements."""
+        """Extract and normalize financial statements (annual)."""
         financials = []
         
         try:
@@ -137,6 +137,81 @@ class YahooProvider(StockDataProvider):
             pass
         
         return financials
+    
+    def _get_ttm_financials(self, ticker: yf.Ticker) -> Optional[FinancialStatement]:
+        """
+        Calculate TTM (Trailing Twelve Months) financials from quarterly data.
+        
+        - Income/Cash flow items: Sum last 4 quarters
+        - Balance sheet items: Use most recent quarter
+        """
+        try:
+            # Get quarterly financials
+            q_income = ticker.quarterly_financials
+            q_balance = ticker.quarterly_balance_sheet
+            q_cash = ticker.quarterly_cashflow
+            
+            if q_income is None or q_income.empty or len(q_income.columns) < 4:
+                return None
+            
+            # Helper to sum last 4 quarters (for income/cash flow)
+            def sum_quarters(df, *keys):
+                if df is None or df.empty:
+                    return None
+                for key in keys:
+                    if key in df.index:
+                        vals = df.loc[key].head(4)  # Last 4 quarters
+                        # Filter out NaN values
+                        valid_vals = [v for v in vals if v is not None and not (isinstance(v, float) and v != v)]
+                        if len(valid_vals) >= 4:
+                            return float(sum(valid_vals))
+                return None
+            
+            # Helper to get most recent quarter (for balance sheet)
+            def latest_quarter(df, *keys):
+                if df is None or df.empty:
+                    return None
+                for key in keys:
+                    if key in df.index:
+                        val = df.loc[key].iloc[0]  # Most recent
+                        if val is not None and not (isinstance(val, float) and val != val):
+                            return float(val)
+                return None
+            
+            return FinancialStatement(
+                date="TTM",
+                period="ttm",
+                # Income Statement (sum 4 quarters)
+                revenue=sum_quarters(q_income, "Total Revenue", "Operating Revenue"),
+                cost_of_revenue=sum_quarters(q_income, "Cost Of Revenue"),
+                gross_profit=sum_quarters(q_income, "Gross Profit"),
+                operating_income=sum_quarters(q_income, "Operating Income", "EBIT"),
+                net_income=sum_quarters(q_income, "Net Income", "Net Income Common Stockholders"),
+                interest_expense=sum_quarters(q_income, "Interest Expense"),
+                income_tax_expense=sum_quarters(q_income, "Tax Provision", "Income Tax Expense"),
+                # Balance Sheet (latest quarter)
+                total_assets=latest_quarter(q_balance, "Total Assets"),
+                total_liabilities=latest_quarter(q_balance, "Total Liabilities Net Minority Interest", "Total Liabilities"),
+                total_equity=latest_quarter(q_balance, "Total Equity Gross Minority Interest", "Stockholders Equity"),
+                total_debt=latest_quarter(q_balance, "Total Debt"),
+                cash_and_equivalents=latest_quarter(q_balance, "Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"),
+                current_assets=latest_quarter(q_balance, "Current Assets"),
+                current_liabilities=latest_quarter(q_balance, "Current Liabilities"),
+                # Cash Flow (sum 4 quarters)
+                operating_cash_flow=sum_quarters(q_cash, "Operating Cash Flow", "Cash Flow From Continuing Operating Activities"),
+                capital_expenditure=sum_quarters(q_cash, "Capital Expenditure"),
+                free_cash_flow=sum_quarters(q_cash, "Free Cash Flow"),
+                depreciation_amortization=sum_quarters(q_cash, "Depreciation And Amortization"),
+                dividends_paid=sum_quarters(q_cash, "Cash Dividends Paid", "Common Stock Dividend Paid"),
+            )
+        except Exception as e:
+            logger.warning(f"Failed to calculate TTM financials: {e}")
+            return None
+    
+    def get_ttm_financials_sync(self, symbol: str) -> Optional[FinancialStatement]:
+        """Public sync method to get TTM financials for a symbol."""
+        ticker = yf.Ticker(symbol.upper())
+        return self._get_ttm_financials(ticker)
     
     async def get_treasury_rate(self) -> float:
         """

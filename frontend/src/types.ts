@@ -244,10 +244,10 @@ export interface TechnicalAnalysisResult {
   };
 }
 
-// Financial Ratios Types
-export interface FinancialRatiosResult {
+// Financial Ratios Types (single period)
+export interface FinancialRatiosPeriod {
   symbol: string;
-  company_name: string | null;
+  period: 'annual' | 'ttm';
   valuation: {
     pe_ratio: number | null;
     earnings_yield: number | null;
@@ -256,7 +256,7 @@ export interface FinancialRatiosResult {
     ev_to_ebitda: number | null;
     ev_to_revenue: number | null;
   };
-  dividend: {
+  dividend?: {
     dividend_yield: number | null;
     payout_ratio: number | null;
   };
@@ -278,6 +278,12 @@ export interface FinancialRatiosResult {
     asset_turnover: number | null;
     inventory_turnover: number | null;
   };
+}
+
+// Financial Ratios Result (contains both annual and TTM)
+export interface FinancialRatiosResult {
+  annual: FinancialRatiosPeriod;
+  ttm: FinancialRatiosPeriod | null;
 }
 
 // Dividend History Types
