@@ -893,7 +893,7 @@ export default function App() {
                 {/* Company Data Card */}
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Company Data</h3>
-                  <p className="text-sm text-gray-400 mb-6">From financial statements (read-only)</p>
+                  <p className="text-sm text-gray-400 mb-6">From most recent annual report (not TTM)</p>
                   <table className="w-full">
                     <tbody>
                       <tr className="border-b border-gray-100">
@@ -939,7 +939,7 @@ export default function App() {
                 {/* Historical Hints Card */}
       <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-600 mb-2">Historical Hints</h3>
-                  <p className="text-sm text-gray-400 mb-6">Based on past performance (for reference)</p>
+                  <p className="text-sm text-gray-400 mb-6">Averaged from multiple annual reports (may differ from TTM)</p>
                   <table className="w-full">
                     <tbody>
                       <tr className="border-b border-gray-100">
@@ -972,7 +972,7 @@ export default function App() {
             {ratiosResult && ratiosResult.valuation && ratiosResult.profitability && ratiosResult.liquidity && ratiosResult.efficiency && (
               <section className="mb-16 pt-8 border-t border-gray-100">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Financial Ratios</h2>
-                <p className="text-sm text-gray-400 mb-8">Comprehensive metrics for analysis</p>
+                <p className="text-sm text-gray-400 mb-8">From most recent annual report (not TTM — may differ from Yahoo Finance)</p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                   {/* Valuation */}
