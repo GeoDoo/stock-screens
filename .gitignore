@@ -28,5 +28,5 @@ Thumbs.db
 # Rate limit persistence (contains call timestamps)
 .rate_limits.json
 
-
+NOTES.md
 

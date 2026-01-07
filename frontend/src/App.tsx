@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { FinancialRatiosTable } from './components/FinancialRatiosTable';
@@ -187,6 +187,36 @@ export default function App() {
   const currentHints = stockData ? 
     (fundamentalPeriod === 'ttm' && stockData.hints_ttm) ? stockData.hints_ttm : stockData.hints_annual 
     : null;
+  
+  // Detect significant discrepancies between Annual and TTM data (indicates company transformation)
+  const dataDiscrepancyWarning = useMemo(() => {
+    if (!stockData?.hints_annual || !stockData?.hints_ttm) return null;
+    
+    const annual = stockData.hints_annual;
+    const ttm = stockData.hints_ttm;
+    const warnings: string[] = [];
+    
+    // Check operating margin discrepancy (most important for DCF)
+    if (annual.operating_margin !== null && ttm.operating_margin !== null) {
+      const diff = Math.abs(annual.operating_margin - ttm.operating_margin);
+      // If difference is more than 50 percentage points OR sign changed
+      if (diff > 0.5 || (annual.operating_margin < 0 !== ttm.operating_margin < 0)) {
+        const annualPct = (annual.operating_margin * 100).toFixed(1);
+        const ttmPct = (ttm.operating_margin * 100).toFixed(1);
+        warnings.push(`Operating margin changed dramatically: Annual avg ${annualPct}% → TTM ${ttmPct}%`);
+      }
+    }
+    
+    // Check D&A ratio discrepancy (indicates business model change)
+    if (annual.da_ratio !== null && ttm.da_ratio !== null) {
+      const ratio = annual.da_ratio !== 0 ? Math.abs(ttm.da_ratio / annual.da_ratio) : 0;
+      if (ratio < 0.3 || ratio > 3) { // More than 3x change
+        warnings.push(`D&A/Revenue ratio changed significantly (may indicate restructuring)`);
+      }
+    }
+    
+    return warnings.length > 0 ? warnings : null;
+  }, [stockData?.hints_annual, stockData?.hints_ttm]);
   
   // Ref to prevent duplicate technical analysis calls
   const technicalFetchRef = useRef<{ inProgress: boolean; provider: string | null }>({ inProgress: false, provider: null });
@@ -893,6 +923,24 @@ export default function App() {
                 </button>
               </div>
             </div>
+
+            {/* Historical Data Discrepancy Warning */}
+            {dataDiscrepancyWarning && (
+              <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                <h3 className="text-sm font-semibold text-purple-700 mb-2 flex items-center gap-2">
+                  <span>📊</span> Company Has Transformed Significantly
+                </h3>
+                <p className="text-sm text-purple-600 mb-2">
+                  Historical annual data differs dramatically from recent TTM data. This often indicates major restructuring, pivots, or turnarounds. 
+                  <strong> TTM data is recommended</strong> for this stock.
+                </p>
+                <ul className="text-sm text-purple-600 list-disc list-inside">
+                  {dataDiscrepancyWarning.map((warning, i) => (
+                    <li key={i}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Validation Alerts */}
             {(relevantErrors.length > 0 || relevantWarnings.length > 0) && (
