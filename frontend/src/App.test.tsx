@@ -797,6 +797,86 @@ describe('Provider Auto-Fallback', () => {
     expect(yahooCallCount).toBe(1)
   })
 
+  it('shows correct provider badge after fallback (not the failed provider)', async () => {
+    // Simulate the BUG: Backend returns requested provider in data_provider field,
+    // even when a different provider actually served the data after fallback
+    const mockStockWithWrongProvider = {
+      ...mockStockDataWithWACC,
+      symbol: 'USAR',
+      company_name: 'USA Rare Earth LLC',
+      data_provider: 'fmp', // BUG: Backend returns 'fmp' but Yahoo actually served it
+    }
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+      }
+      if (url.includes('/analyze')) {
+        if (url.includes('provider=fmp')) {
+          // FMP returns premium error
+          return Promise.resolve({ 
+            ok: false, 
+            json: () => Promise.resolve({ detail: 'Data requires premium FMP subscription' }) 
+          })
+        }
+        if (url.includes('provider=yahoo')) {
+          // Yahoo works - but backend INCORRECTLY reports data_provider as 'fmp'
+          // This simulates the bug where backend returns requested provider, not actual
+          return Promise.resolve({ 
+            ok: true, 
+            json: () => Promise.resolve({
+              stock: mockStockWithWrongProvider, // Still says 'fmp' in data_provider
+              ratios: mockRatios,
+              dividends: mockDividends,
+              historical_valuation: mockHistorical,
+              rate_limit: { used: 1, limit: 250, remaining: 249, percentage: 0.4 },
+            })
+          })
+        }
+      }
+      if (url.includes('/comparables')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparables) })
+      }
+      if (url.includes('/valuation')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockValuationResult) })
+      }
+      if (url.includes('/scenarios')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockScenarios) })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+
+    // Wait for providers to load and select FMP
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /FMP/i })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /FMP/i }))
+
+    const input = screen.getByPlaceholderText('AAPL')
+    fireEvent.change(input, { target: { value: 'USAR' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze/i }))
+    
+    // Wait for data to load after fallback
+    await waitFor(() => {
+      expect(screen.getByText(/USA Rare Earth/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // CRITICAL: Badge should show "yahoo" (the actual provider used after fallback),
+    // NOT "fmp" (what the buggy backend returned in data_provider)
+    // The frontend should use selectedFundamentalProvider, not stockData.data_provider
+    expect(screen.getByText(/via yahoo/i)).toBeInTheDocument()
+    expect(screen.queryByText(/via fmp/i)).not.toBeInTheDocument()
+  })
+
   it('shows error message instead of welcome when analysis fails completely', async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/providers')) {

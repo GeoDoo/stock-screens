@@ -808,7 +808,7 @@ export default function App() {
                     {stockData.symbol} {stockData.company_name && `— ${stockData.company_name}`}
                   </h2>
                   <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500 uppercase tracking-wide">
-                    via {stockData.data_provider}
+                    via {selectedFundamentalProvider}
                   </span>
                 </div>
                 {stockData.industry && (
