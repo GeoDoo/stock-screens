@@ -256,12 +256,20 @@ export default function App() {
         // Check if WACC is available for DCF
         const hasWACC = stockResponse.data.wacc !== null;
         
-        if (hasWACC) {
+        // Check if inputs are reasonable for auto-running DCF
+        // Don't auto-run with extreme values (e.g., -1349% operating margin)
+        const opMargin = stockResponse.hints.operating_margin;
+        const hasExtremeInputs = opMargin !== null && (opMargin < -1.0 || opMargin > 1.0); // Outside -100% to +100%
+        
+        if (hasWACC && !hasExtremeInputs) {
           await runValuationWithData(stockResponse, undefined, provider);
           await runScenariosWithData(stockResponse, undefined, provider);
-        } else {
+        } else if (!hasWACC) {
           setPendingAnalysis(stockResponse);
           setShowDiscountModal(true);
+        } else if (hasExtremeInputs) {
+          // Show warning - user needs to adjust inputs manually
+          setFallbackNotice(`⚠️ Historical operating margin (${(opMargin! * 100).toFixed(0)}%) is extreme. Please adjust assumptions before running DCF valuation.`);
         }
         
         return true;
