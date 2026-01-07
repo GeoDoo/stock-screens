@@ -522,6 +522,66 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, stockData?.symbol, selectedTechnicalProvider]);
 
+  // Track previous fundamental provider to detect changes
+  const prevFundamentalProviderRef = useRef<string>('');
+  
+  // Auto-refresh fundamental data when provider changes (only if already have data)
+  useEffect(() => {
+    // Skip on initial load or if no data yet
+    if (!stockData || !selectedFundamentalProvider) return;
+    
+    const prevProvider = prevFundamentalProviderRef.current;
+    prevFundamentalProviderRef.current = selectedFundamentalProvider;
+    
+    // Only re-fetch if provider actually changed (not on initial set)
+    if (prevProvider && prevProvider !== selectedFundamentalProvider) {
+      // Re-run analysis with new provider using stockData.symbol
+      const refreshWithNewProvider = async () => {
+        setLoading(true);
+        setError(null);
+        setFallbackNotice(null);
+        
+        try {
+          const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/analyze?provider=${selectedFundamentalProvider}`);
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.detail || 'Failed to fetch stock data');
+          }
+          
+          const batchData = await res.json();
+          await fetchRateLimits();
+          
+          const stockResponse = normalizeStockData(batchData.stock as StockDataResponse);
+          if (!stockResponse) {
+            throw new Error('Failed to parse stock data');
+          }
+          
+          setStockData(stockResponse);
+          setRatiosResult(batchData.ratios);
+          setDividendResult(batchData.dividends);
+          setHistoricalValuation(normalizeHistoricalValuation(batchData.historical_valuation));
+          
+          // Re-run valuation and scenarios with new provider data
+          const hasWACC = stockResponse.data.wacc !== null;
+          if (hasWACC) {
+            await runValuationWithData(stockResponse, undefined, selectedFundamentalProvider);
+            await runScenariosWithData(stockResponse, undefined, selectedFundamentalProvider);
+          }
+          
+          // Re-fetch comparables
+          fetchComparables(stockData.symbol, selectedFundamentalProvider);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Unknown error');
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      refreshWithNewProvider();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFundamentalProvider, stockData?.symbol]);
+
   // Smart validation: WACC-related issues can be bypassed with custom discount rate
   const canBypassWithCustomRate = useCustomDiscountRate && customDiscountRate && parseFloat(customDiscountRate) > 0;
   
@@ -588,15 +648,8 @@ export default function App() {
                       <button
                         key={provider.id}
                         onClick={() => {
+                          // Just update provider - useEffect will handle refresh if data exists
                           setSelectedFundamentalProvider(provider.id);
-                          setStockData(null);
-                          setResult(null);
-                          setScenarioResult(null);
-                          setComparableResult(null);
-                          setRatiosResult(null);
-                          setDividendResult(null);
-                          setHistoricalValuation(null);
-                          setTechnicalResult(null);
                         }}
                         disabled={isDisabled}
                         title={atLimit ? 'Rate limit exceeded' : undefined}

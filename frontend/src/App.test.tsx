@@ -188,6 +188,69 @@ describe('App - Unified Analyze Flow', () => {
     expect(screen.queryByRole('button', { name: /Run Comparables/i })).not.toBeInTheDocument()
   })
 
+  it('auto-refreshes fundamental data when provider changes after initial analysis', async () => {
+    let analyzeCallCount = 0
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes('/api/providers')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProviders) })
+      }
+      if (url.includes('/api/rate-limits')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRateLimits) })
+      }
+      if (url.includes('/api/stock/AAPL/analyze')) {
+        analyzeCallCount++
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockBatchAnalyzeResponse) })
+      }
+      if (url.includes('/comparables')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparables) })
+      }
+      if (url.includes('/valuation')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockValuationResult) })
+      }
+      if (url.includes('/scenarios')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockScenarios) })
+      }
+      if (url.includes('/technical')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockTechnical) })
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
+    })
+
+    render(<App />)
+    
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+    })
+
+    // Wait for providers to load - look for FMP button in Fundamental section
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /FMP/i })[0]).toBeInTheDocument()
+    })
+
+    // Enter ticker and click Analyze
+    const input = screen.getByPlaceholderText('AAPL')
+    fireEvent.change(input, { target: { value: 'AAPL' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze/i }))
+    
+    // Wait for initial analysis to complete
+    await waitFor(() => {
+      expect(screen.getByText(/Apple Inc/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    const initialCallCount = analyzeCallCount
+
+    // Now click on FMP provider button (first one is Fundamental)
+    // This switches from Yahoo (default) to FMP
+    const fmpButtons = screen.getAllByRole('button', { name: /FMP/i })
+    fireEvent.click(fmpButtons[0]) // First FMP button is in Fundamental section
+
+    // Should auto-refresh with new provider (another analyze call)
+    await waitFor(() => {
+      expect(analyzeCallCount).toBeGreaterThan(initialCallCount)
+    }, { timeout: 3000 })
+  })
+
   it('auto-runs all analyses when WACC is available', async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/providers')) {
