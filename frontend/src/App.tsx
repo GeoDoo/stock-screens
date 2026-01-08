@@ -1424,7 +1424,7 @@ export default function App() {
               </div>
               <p className="text-sm text-gray-400 mb-8">Adjust these based on your analysis</p>
               
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-8">
                 {[
                   { label: <>Revenue Growth (%)<GlossaryRef id="revenue-growth" /></>, value: revenueGrowth, setter: setRevenueGrowth, hint: currentHints?.revenue_growth !== null ? `${fundamentalPeriod === 'ttm' ? 'TTM' : 'Historical'}: ${((currentHints?.revenue_growth ?? 0) * 100).toFixed(2)}%` : null, key: 'revenue' },
                   { label: <>Operating Margin (%)<GlossaryRef id="operating-margin" /></>, value: operatingMargin, setter: setOperatingMargin, hint: currentHints?.operating_margin !== null ? `${fundamentalPeriod === 'ttm' ? 'TTM' : 'Historical'}: ${((currentHints?.operating_margin ?? 0) * 100).toFixed(2)}%` : null, key: 'margin' },
@@ -1432,16 +1432,17 @@ export default function App() {
                   { label: <>Market Risk Premium (%)<GlossaryRef id="market-risk-premium" /></>, value: marketRiskPremium, setter: setMarketRiskPremium, hint: 'Typically 5-7%', key: 'mrp' },
                   { label: 'Projection Years', value: projectionYears, setter: setProjectionYears, hint: 'Usually 5-10 years', key: 'years' },
                 ].map(({ label, value, setter, hint, key }) => (
-                  <div key={key} className="flex flex-col gap-2">
-                    <label className="text-sm font-medium text-gray-600">{label}</label>
+                  <div key={key} className="flex flex-col">
+                    <label className="text-sm font-medium text-gray-500 mb-2">{label}</label>
                     <input
                       type="number"
                       step="0.1"
                       value={value}
                       onChange={(e) => setter(e.target.value)}
-                      className="px-3 py-2.5 text-base font-mono bg-white border-2 border-gray-200 rounded-md outline-none transition-colors focus:border-gray-400"
+                      className="w-full px-4 py-3 text-lg font-mono border border-gray-200 rounded-lg outline-none transition-all focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+                      style={{ backgroundColor: '#fff' }}
                     />
-                    {hint && <span className="text-xs text-gray-400">{hint}</span>}
+                    {hint && <span className="text-xs text-gray-400 mt-2">{hint}</span>}
                   </div>
                 ))}
               </div>
