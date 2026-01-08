@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats, CreateMemoRequest, GrowthStage } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, CreateMemoRequest, GrowthStage } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { FinancialRatiosTable } from './components/FinancialRatiosTable';
 import { DiscountRateModal } from './components/DiscountRateModal';
@@ -7,16 +7,13 @@ import { AssumptionHistoryDrawer } from './components/AssumptionHistoryDrawer';
 import { AssumptionCommitModal } from './components/AssumptionCommitModal';
 import { formatCurrency, formatPercent, formatNumber, formatShareCount } from './utils';
 import {
-  normalizeStockData,
   normalizeValuationResult,
   normalizeScenarioResult,
-  normalizeComparableResult,
-  normalizeTechnicalResult,
-  normalizeHistoricalValuation,
   formatMetric,
 } from './normalizers';
-import { shouldFallback, getAlternativeProvider, getProviderDisplayName } from './providerFallback';
 import { useAssumptionTracker } from './hooks/useAssumptionTracker';
+import { useProviders } from './hooks/useProviders';
+import { useStockAnalysis } from './hooks/useStockAnalysis';
 import { MemoCreateModal } from './components/MemoCreateModal';
 import { Layout } from './components/Layout';
 import { MonteCarloPanel } from './components/MonteCarloPanel';
@@ -42,148 +39,43 @@ function formatResetTime(seconds: number | null): string {
 }
 
 export default function App() {
-  // Provider selection - separate providers for Fundamental and Technical
-  const [fundamentalProviders, setFundamentalProviders] = useState<Provider[]>([]);
-  const [technicalProviders, setTechnicalProviders] = useState<Provider[]>([]);
-  const [selectedFundamentalProvider, setSelectedFundamentalProvider] = useState<string>('');
-  const [selectedTechnicalProvider, setSelectedTechnicalProvider] = useState<string>('');
-  const [providersLoading, setProvidersLoading] = useState(true);
-  // Accurate rate limit tracking from backend (with localStorage cache for instant display)
-  const [rateLimits, setRateLimits] = useState<Record<string, RateLimitStats>>(() => {
-    // Load from localStorage on initial render for instant display
-    try {
-      const cached = localStorage.getItem('rateLimits');
-      return cached ? JSON.parse(cached) : {};
-    } catch {
-      return {};
-    }
-  });
-  const [rateLimitsLoading, setRateLimitsLoading] = useState(true);
+  // Provider management (extracted to hook)
+  const {
+    fundamentalProviders,
+    selectedFundamentalProvider,
+    setSelectedFundamentalProvider,
+    technicalProviders,
+    selectedTechnicalProvider,
+    setSelectedTechnicalProvider,
+    rateLimits,
+    rateLimitsLoading,
+    providersLoading,
+    isProviderAtLimit,
+    refreshRateLimits,
+  } = useProviders();
+
+  // Stock analysis (extracted to hook)
+  const {
+    stockData,
+    loading,
+    error,
+    ratiosResult,
+    dividendResult,
+    historicalValuation,
+    comparableResult,
+    comparableLoading,
+    technicalResult,
+    technicalLoading,
+    hasAttemptedAnalysis,
+    fallbackNotice,
+    analyzeStock: analyzeStockHook,
+    fetchComparables,
+    fetchTechnical,
+    setFallbackNotice,
+  } = useStockAnalysis(refreshRateLimits);
   
   const [ticker, setTicker] = useState('');
-  const [stockData, setStockData] = useState<StockDataResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ValuationResult | null>(null);
-  
-  // Check if a provider is at its rate limit
-  const isProviderAtLimit = (providerId: string): boolean => {
-    const stats = rateLimits[providerId.toLowerCase()];
-    return stats ? (stats.api_limited || stats.remaining === 0) : false;
-  };
-
-  // Fetch rate limits from backend (accurate time-based tracking)
-  const fetchRateLimits = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/rate-limits`);
-      if (res.ok) {
-        const data = await res.json();
-        setRateLimits(data);
-        // Cache to localStorage for instant display on next page load
-        try {
-          localStorage.setItem('rateLimits', JSON.stringify(data));
-        } catch {
-          // localStorage might be full or disabled
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch rate limits:', err);
-    } finally {
-      setRateLimitsLoading(false);
-    }
-  };
-
-  // Auto-switch to available provider when current one hits rate limit
-  useEffect(() => {
-    const checkLimit = (id: string) => {
-      const stats = rateLimits[id?.toLowerCase()];
-      return stats ? (stats.api_limited || stats.remaining === 0) : false;
-    };
-    
-    if (selectedFundamentalProvider && checkLimit(selectedFundamentalProvider) && fundamentalProviders.length > 0) {
-      // Current provider is limited - find an available one
-      const available = fundamentalProviders.find(p => p.available && !checkLimit(p.id));
-      if (available) {
-        setSelectedFundamentalProvider(available.id);
-      }
-    }
-  }, [rateLimits, selectedFundamentalProvider, fundamentalProviders]);
-
-  useEffect(() => {
-    const checkLimit = (id: string) => {
-      const stats = rateLimits[id?.toLowerCase()];
-      return stats ? (stats.api_limited || stats.remaining === 0) : false;
-    };
-    
-    if (selectedTechnicalProvider && checkLimit(selectedTechnicalProvider) && technicalProviders.length > 0) {
-      // Current provider is limited - find an available one
-      const available = technicalProviders.find(p => p.available && !checkLimit(p.id));
-      if (available) {
-        setSelectedTechnicalProvider(available.id);
-      }
-    }
-  }, [rateLimits, selectedTechnicalProvider, technicalProviders]);
-
-  // Fetch available providers and rate limits on mount
-  useEffect(() => {
-    const fetchProviders = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/providers`);
-        const data: ProvidersResponse = await res.json();
-        setFundamentalProviders(data.fundamental);
-        setTechnicalProviders(data.technical);
-        
-        // Also fetch accurate rate limits
-        await fetchRateLimits();
-        
-        // Check localStorage for rate limit data (to avoid rate-limited providers)
-        const cachedLimits = localStorage.getItem('rateLimits');
-        const limits = cachedLimits ? JSON.parse(cachedLimits) : {};
-        const isLimited = (providerId: string) => limits[providerId]?.api_limited === true;
-        
-        // Try to restore saved provider, but only if not rate-limited
-        const savedFundamental = localStorage.getItem('selectedFundamentalProvider');
-        const savedTechnical = localStorage.getItem('selectedTechnicalProvider');
-        
-        // Find best fundamental provider: saved (if not limited) > recommended (if not limited) > any available
-        const fundSaved = savedFundamental && data.fundamental.find((p: Provider) => p.id === savedFundamental && p.available && !isLimited(p.id));
-        const fundRecommended = data.fundamental.find((p: Provider) => p.recommended && p.available && !isLimited(p.id));
-        const fundAvailable = data.fundamental.find((p: Provider) => p.available && !isLimited(p.id));
-        const fundFallback = data.fundamental.find((p: Provider) => p.available); // Last resort even if limited
-        
-        const selectedFund = fundSaved || fundRecommended || fundAvailable || fundFallback;
-        if (selectedFund) {
-          setSelectedFundamentalProvider(selectedFund.id);
-          localStorage.setItem('selectedFundamentalProvider', selectedFund.id);
-        }
-        
-        // Same logic for technical provider
-        const techSaved = savedTechnical && data.technical.find((p: Provider) => p.id === savedTechnical && p.available && !isLimited(p.id));
-        const techRecommended = data.technical.find((p: Provider) => p.recommended && p.available && !isLimited(p.id));
-        const techAvailable = data.technical.find((p: Provider) => p.available && !isLimited(p.id));
-        const techFallback = data.technical.find((p: Provider) => p.available);
-        
-        const selectedTech = techSaved || techRecommended || techAvailable || techFallback;
-        if (selectedTech) {
-          setSelectedTechnicalProvider(selectedTech.id);
-          localStorage.setItem('selectedTechnicalProvider', selectedTech.id);
-        }
-      } catch (err) {
-        console.error('Failed to fetch providers:', err);
-      } finally {
-        setProvidersLoading(false);
-      }
-    };
-    fetchProviders();
-  }, []);
-  
-  // Periodic refresh of rate limits (every 30 seconds) to keep UI in sync
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchRateLimits();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
   
   // User inputs
   const [revenueGrowth, setRevenueGrowth] = useState('');
@@ -201,32 +93,16 @@ export default function App() {
   const [wcMode, setWcMode] = useState<'level' | 'incremental'>('level');
   const [growthStages, setGrowthStages] = useState<GrowthStage[]>([]);
   
+  // Valuation state (loading/error tracked but not displayed separately)
+  const [_valuationLoading, setValuationLoading] = useState(false);
+  const [_valuationError, setValuationError] = useState<string | null>(null);
+  void _valuationLoading; void _valuationError; // Suppress unused warnings
+  
   // Scenario Analysis
   const [scenarioResult, setScenarioResult] = useState<ScenarioAnalysisResult | null>(null);
   const [scenarioLoading, setScenarioLoading] = useState(false);
-  
-  // Comparable Analysis
-  const [comparableResult, setComparableResult] = useState<ComparableResult | null>(null);
-  const [comparableLoading, setComparableLoading] = useState(false);
-  
-  // Technical Analysis
-  const [technicalResult, setTechnicalResult] = useState<TechnicalAnalysisResult | null>(null);
-  const [technicalLoading, setTechnicalLoading] = useState(false);
-  
-  // Financial Ratios (loaded via batch endpoint)
-  const [ratiosResult, setRatiosResult] = useState<FinancialRatiosResult | null>(null);
-  
-  // Dividend History (loaded via batch endpoint)
-  const [dividendResult, setDividendResult] = useState<DividendHistoryResult | null>(null);
-  
-  // Historical Valuation (loaded via batch endpoint)
-  const [historicalValuation, setHistoricalValuation] = useState<HistoricalValuationResult | null>(null);
-  
-  // Track if user has attempted analysis (for appropriate empty state message)
-  const [hasAttemptedAnalysis, setHasAttemptedAnalysis] = useState(false);
-  
-  // Show fallback notice when auto-switching providers
-  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
+  const [_scenarioError, setScenarioError] = useState<string | null>(null);
+  void _scenarioError; // Suppress unused warning
   
   // Discount Rate Modal (for when WACC is missing)
   const [showDiscountModal, setShowDiscountModal] = useState(false);
@@ -288,67 +164,27 @@ export default function App() {
     return warnings.length > 0 ? warnings : null;
   }, [stockData?.hints_annual, stockData?.hints_ttm]);
   
-  // Ref to prevent duplicate technical analysis calls
-  const technicalFetchRef = useRef<{ inProgress: boolean; provider: string | null }>({ inProgress: false, provider: null });
 
-  // Unified analyze function - uses batch endpoint for efficiency (DRY/KISS)
+  // Unified analyze function - uses hook for fetching, adds App-specific logic
   const analyzeStock = async () => {
     if (!ticker.trim() || !selectedFundamentalProvider) return;
     
-    setLoading(true);
-    setError(null);
-    setStockData(null);
     setResult(null);
     setScenarioResult(null);
-    setComparableResult(null);
-    setRatiosResult(null);
-    setDividendResult(null);
-    setHistoricalValuation(null);
     setShowDiscountModal(false);
     setPendingAnalysis(null);
-    setHasAttemptedAnalysis(true);
-    setFallbackNotice(null);
     
     const symbol = ticker.toUpperCase();
     
-    // Try primary provider first, then fallback if needed
-    const tryProvider = async (provider: string, isFallback: boolean = false): Promise<boolean> => {
-      try {
-        const res = await fetch(`${API_BASE}/api/stock/${symbol}/analyze?provider=${provider}`);
-        if (!res.ok) {
-          const errData = await res.json();
-          const errorMsg = errData.detail || 'Failed to fetch stock data';
-          await fetchRateLimits();
-          
-          // If this is the primary provider and error is fallback-worthy, try alternative
-          if (!isFallback && shouldFallback(errorMsg)) {
-            const altProvider = getAlternativeProvider(provider, fundamentalProviders);
-            if (altProvider) {
-              const success = await tryProvider(altProvider, true);
-              if (success) {
-                setFallbackNotice(`${getProviderDisplayName(provider, fundamentalProviders)} unavailable for ${symbol}. Using ${getProviderDisplayName(altProvider, fundamentalProviders)} instead.`);
-                setSelectedFundamentalProvider(altProvider);
-                return true;
-              }
-            }
-          }
-          throw new Error(errorMsg);
-        }
-        
-        const batchData = await res.json();
-        await fetchRateLimits();
-        
-        // Extract data from batch response
-        const stockResponse = normalizeStockData(batchData.stock as StockDataResponse);
-        if (!stockResponse) {
-          throw new Error('Failed to parse stock data');
-        }
-        
-        setStockData(stockResponse);
-        setRatiosResult(batchData.ratios);
-        setDividendResult(batchData.dividends);
-        setHistoricalValuation(normalizeHistoricalValuation(batchData.historical_valuation));
-        
+    // Track which provider actually served the data (may change due to fallback)
+    let actualProvider = selectedFundamentalProvider;
+    
+    // Use hook for fetching with fallback support
+    await analyzeStockHook(
+      symbol,
+      selectedFundamentalProvider,
+      fundamentalProviders,
+      async (stockResponse: StockDataResponse) => {
         // Pre-fill inputs with hints (prefer TTM if available, else annual)
         const hintsToUse = stockResponse.hints_ttm || stockResponse.hints_annual;
         if (hintsToUse?.revenue_growth !== null && hintsToUse?.revenue_growth !== undefined) {
@@ -359,7 +195,7 @@ export default function App() {
         }
         
         // Fetch comparables separately (requires peer data fetching)
-        fetchComparables(symbol, provider);
+        fetchComparables(symbol, actualProvider);
         
         // Check if WACC is available for DCF
         const hasWACC = stockResponse.data.wacc !== null;
@@ -367,36 +203,24 @@ export default function App() {
         // Check if inputs are reasonable for auto-running DCF
         // Don't auto-run with extreme values (e.g., -1349% operating margin)
         const opMargin = hintsToUse?.operating_margin;
-        const hasExtremeInputs = opMargin !== null && (opMargin < -1.0 || opMargin > 1.0); // Outside -100% to +100%
+        const hasExtremeInputs = opMargin !== null && (opMargin < -1.0 || opMargin > 1.0);
         
         if (hasWACC && !hasExtremeInputs) {
-          await runValuationWithData(stockResponse, undefined, provider);
-          await runScenariosWithData(stockResponse, undefined, provider);
+          await runValuationWithData(stockResponse, undefined, actualProvider);
+          await runScenariosWithData(stockResponse, undefined, actualProvider);
         } else if (!hasWACC) {
           setPendingAnalysis(stockResponse);
           setShowDiscountModal(true);
         } else if (hasExtremeInputs) {
-          // Show warning - user needs to adjust inputs manually
           setFallbackNotice(`Historical operating margin (${(opMargin! * 100).toFixed(0)}%) is extreme. Please adjust assumptions before running DCF valuation.`);
         }
-        
-        return true;
-      } catch (err) {
-        if (isFallback) {
-          // Fallback also failed - propagate error
-          throw err;
-        }
-        throw err;
-      }
-    };
-
-    try {
-      await tryProvider(selectedFundamentalProvider);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
+      },
+      // Update selected provider when fallback occurs
+      (newProvider: string) => {
+        actualProvider = newProvider;
+        setSelectedFundamentalProvider(newProvider);
+      },
+    );
   };
 
   // Handle modal submit - run DCF with custom rate
@@ -422,35 +246,14 @@ export default function App() {
     // All other analyses (ratios, dividends, comparables) are already running/complete
   };
 
-  // Fetch comparables (now called automatically)
-  const fetchComparables = async (symbol: string, providerOverride?: string) => {
-    const provider = providerOverride || selectedFundamentalProvider;
-    if (!provider) return;
-    
-    setComparableLoading(true);
-    setComparableResult(null);
-    
-    try {
-      const res = await fetch(`${API_BASE}/api/stock/${symbol}/comparables?provider=${provider}`);
-      if (res.ok) {
-        const data: ComparableResult = await res.json();
-        setComparableResult(normalizeComparableResult(data));
-      }
-    } catch (err) {
-      console.error('Failed to fetch comparables:', err);
-    } finally {
-      setComparableLoading(false);
-    }
-  };
-  
-  // NOTE: fetchRatios, fetchDividends, fetchHistoricalValuation removed (DRY)
-  // These are now fetched via the batch /analyze endpoint
+  // NOTE: fetchComparables, fetchRatios, fetchDividends, fetchHistoricalValuation
+  // are now handled by useStockAnalysis hook
 
   // Run valuation with provided stock data and optional custom discount rate
   const runValuationWithData = async (data: StockDataResponse, discountRateOverride?: number, providerOverride?: string) => {
     const provider = providerOverride || selectedFundamentalProvider;
-    setLoading(true);
-    setError(null);
+    setValuationLoading(true);
+    setValuationError(null);
     
     // Use hints from SELECTED PERIOD (TTM or Annual) - clean separation
     const periodHints = fundamentalPeriod === 'ttm' && data.hints_ttm 
@@ -493,9 +296,9 @@ export default function App() {
       const resultData: ValuationResult = await res.json();
       setResult(normalizeValuationResult(resultData));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setValuationError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
-      setLoading(false);
+      setValuationLoading(false);
     }
   };
 
@@ -534,7 +337,7 @@ export default function App() {
       const resultData: ScenarioAnalysisResult = await res.json();
       setScenarioResult(normalizeScenarioResult(resultData));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setScenarioError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setScenarioLoading(false);
     }
@@ -638,132 +441,26 @@ export default function App() {
     return res.json();
   };
 
-  const runTechnicalAnalysis = async () => {
-    if (!stockData || !selectedTechnicalProvider) return;
-    
-    setTechnicalLoading(true);
-    setTechnicalResult(null);
-    setError(null);
-    
-    // Try provider with fallback
-    const tryTechnicalProvider = async (provider: string, isFallback: boolean = false): Promise<boolean> => {
-      try {
-        const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/technical?provider=${provider}&days=365`);
-        if (!res.ok) {
-          const errData = await res.json();
-          const errorMsg = errData.detail || 'Technical analysis failed';
-          await fetchRateLimits();
-          
-          // If this is the primary provider and error is fallback-worthy, try alternative
-          if (!isFallback && shouldFallback(errorMsg)) {
-            const altProvider = getAlternativeProvider(provider, technicalProviders);
-            if (altProvider) {
-              const success = await tryTechnicalProvider(altProvider, true);
-              if (success) {
-                setFallbackNotice(`${getProviderDisplayName(provider, technicalProviders)} unavailable for technical data. Using ${getProviderDisplayName(altProvider, technicalProviders)} instead.`);
-                setSelectedTechnicalProvider(altProvider);
-                return true;
-              }
-            }
-          }
-          throw new Error(errorMsg);
-        }
-        const data: TechnicalAnalysisResult = await res.json();
-        setTechnicalResult(normalizeTechnicalResult(data));
-        await fetchRateLimits();
-        return true;
-      } catch (err) {
-        if (isFallback) throw err;
-        throw err;
-      }
-    };
-
-    try {
-      await tryTechnicalProvider(selectedTechnicalProvider);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setTechnicalLoading(false);
-    }
-  };
-
   // Auto-run technical analysis when switching to Technical tab or changing provider
   useEffect(() => {
-    const fetchTechnical = async () => {
-      if (!stockData || !selectedTechnicalProvider) return;
-      
-      // Skip if already fetching with same provider
-      if (technicalFetchRef.current.inProgress && technicalFetchRef.current.provider === selectedTechnicalProvider) {
-        return;
-      }
-      
-      // Mark as in progress
-      technicalFetchRef.current = { inProgress: true, provider: selectedTechnicalProvider };
-      
-      setTechnicalLoading(true);
-      setError(null);
-      
-      // Try provider with fallback (similar to runTechnicalAnalysis)
-      const tryProvider = async (provider: string, isFallback: boolean = false): Promise<boolean> => {
-        try {
-          const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/technical?provider=${provider}&days=365`);
-          if (!res.ok) {
-            const errData = await res.json();
-            const errorMsg = errData.detail || 'Technical analysis failed';
-            
-            // Try fallback if error is provider-specific
-            if (!isFallback && shouldFallback(errorMsg)) {
-              const altProvider = getAlternativeProvider(provider, technicalProviders);
-              if (altProvider) {
-                const success = await tryProvider(altProvider, true);
-                if (success) {
-                  setFallbackNotice(`${getProviderDisplayName(provider, technicalProviders)} unavailable for technical data. Using ${getProviderDisplayName(altProvider, technicalProviders)} instead.`);
-                  setSelectedTechnicalProvider(altProvider);
-                  return true;
-                }
-              }
-            }
-            throw new Error(errorMsg);
-          }
-          const data: TechnicalAnalysisResult = await res.json();
-          setTechnicalResult(normalizeTechnicalResult(data));
-          return true;
-        } catch (err) {
-          if (isFallback) throw err;
-          throw err;
-        }
-      };
-
-      try {
-        await tryProvider(selectedTechnicalProvider);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setTechnicalLoading(false);
-        technicalFetchRef.current.inProgress = false;
-      }
-    };
-
     // Only fetch if on technical tab, have stock data, and either:
     // 1. No result yet, or
-    // 2. Provider changed (result's provider differs from selected)
-    const shouldFetch = activeTab === 'technical' && 
+    // 2. Provider changed
+    const shouldFetchTechnical = activeTab === 'technical' && 
       stockData && 
       !technicalLoading &&
       (!technicalResult || technicalResult.provider !== selectedTechnicalProvider);
     
-    if (shouldFetch) {
-      fetchTechnical();
+    if (shouldFetchTechnical) {
+      fetchTechnical(stockData.symbol, selectedTechnicalProvider, technicalProviders);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, stockData?.symbol, selectedTechnicalProvider]);
+  }, [activeTab, stockData?.symbol, selectedTechnicalProvider, technicalResult, technicalLoading, fetchTechnical, technicalProviders, stockData]);
 
   // Track previous fundamental provider to detect changes
   const prevFundamentalProviderRef = useRef<string>('');
   
   // Auto-refresh fundamental data when provider changes (only if already have data)
   useEffect(() => {
-    // Skip on initial load or if no data yet
     if (!stockData || !selectedFundamentalProvider) return;
     
     const prevProvider = prevFundamentalProviderRef.current;
@@ -771,65 +468,46 @@ export default function App() {
     
     // Only re-fetch if provider actually changed (not on initial set)
     if (prevProvider && prevProvider !== selectedFundamentalProvider) {
-      // Re-run analysis with new provider using stockData.symbol
+      // Re-run analysis with new provider, with rate limit detection
       const refreshWithNewProvider = async () => {
-        setLoading(true);
-        setError(null);
-        setFallbackNotice(null);
-        
-        const newProviderName = getProviderDisplayName(selectedFundamentalProvider, fundamentalProviders);
-        const prevProviderName = getProviderDisplayName(prevProvider, fundamentalProviders);
-        
         try {
           const res = await fetch(`${API_BASE}/api/stock/${stockData.symbol}/analyze?provider=${selectedFundamentalProvider}`);
           if (!res.ok) {
             const errData = await res.json();
-            await fetchRateLimits();
-            
-            // Check if it's a rate limit error
             const isRateLimit = res.status === 429 || 
               (errData.detail && errData.detail.toLowerCase().includes('rate limit'));
             
             if (isRateLimit) {
-              // Revert to previous working provider
+              // Revert to previous provider
               setSelectedFundamentalProvider(prevProvider);
               prevFundamentalProviderRef.current = prevProvider;
-              setFallbackNotice(`${newProviderName} is rate limited. Staying with ${prevProviderName}.`);
-              return; // Don't throw, just show notice
+              const newName = fundamentalProviders.find(p => p.id === selectedFundamentalProvider)?.name || selectedFundamentalProvider;
+              const prevName = fundamentalProviders.find(p => p.id === prevProvider)?.name || prevProvider;
+              setFallbackNotice(`${newName} is rate limited. Staying with ${prevName}.`);
+              await refreshRateLimits();
+              return;
             }
-            
             throw new Error(errData.detail || 'Failed to fetch stock data');
           }
           
-          const batchData = await res.json();
-          await fetchRateLimits();
-          
-          const stockResponse = normalizeStockData(batchData.stock as StockDataResponse);
-          if (!stockResponse) {
-            throw new Error('Failed to parse stock data');
-          }
-          
-          setStockData(stockResponse);
-          setRatiosResult(batchData.ratios);
-          setDividendResult(batchData.dividends);
-          setHistoricalValuation(normalizeHistoricalValuation(batchData.historical_valuation));
-          
-          // Re-run valuation and scenarios with new provider data
-          const hasWACC = stockResponse.data.wacc !== null;
-          if (hasWACC) {
-            await runValuationWithData(stockResponse, undefined, selectedFundamentalProvider);
-            await runScenariosWithData(stockResponse, undefined, selectedFundamentalProvider);
-          }
-          
-          // Re-fetch comparables
-          fetchComparables(stockData.symbol, selectedFundamentalProvider);
+          // Success - proceed with data
+          await analyzeStockHook(
+            stockData.symbol,
+            selectedFundamentalProvider,
+            fundamentalProviders,
+            async (stockResponse: StockDataResponse) => {
+              const hasWACC = stockResponse.data.wacc !== null;
+              if (hasWACC) {
+                await runValuationWithData(stockResponse, undefined, selectedFundamentalProvider);
+                await runScenariosWithData(stockResponse, undefined, selectedFundamentalProvider);
+              }
+              fetchComparables(stockData.symbol, selectedFundamentalProvider);
+            },
+          );
         } catch (err) {
           // On error, revert to previous provider
           setSelectedFundamentalProvider(prevProvider);
           prevFundamentalProviderRef.current = prevProvider;
-          setError(`${newProviderName} failed: ${err instanceof Error ? err.message : 'Unknown error'}. Reverted to ${prevProviderName}.`);
-        } finally {
-          setLoading(false);
         }
       };
       
@@ -2657,8 +2335,8 @@ export default function App() {
 
                 {/* Run again button */}
                 <button
-                  onClick={runTechnicalAnalysis}
-                  disabled={technicalLoading}
+                  onClick={() => stockData && fetchTechnical(stockData.symbol, selectedTechnicalProvider, technicalProviders)}
+                  disabled={technicalLoading || !stockData}
                   className="px-6 py-2 text-sm font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30"
                 >
                   {technicalLoading ? 'Loading...' : 'Refresh'}
