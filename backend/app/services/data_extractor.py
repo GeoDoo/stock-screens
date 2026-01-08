@@ -1,13 +1,11 @@
 from typing import Any, List, Optional
+from app.constants import DEFAULT_MARKET_RISK_PREMIUM
 
 
 class DataExtractor:
     """
     Extracts financial metrics from FMP data for use in valuation models.
     """
-
-    # Default market risk premium (historical average ~6%)
-    DEFAULT_MARKET_RISK_PREMIUM = 0.06
 
     def __init__(self, data: dict, market_risk_premium: float = None):
         self.profile = data.get("profile", {})
@@ -116,7 +114,7 @@ class DataExtractor:
         """
         if self._market_risk_premium is not None:
             return self._market_risk_premium
-        return self.DEFAULT_MARKET_RISK_PREMIUM
+        return DEFAULT_MARKET_RISK_PREMIUM
 
     # Historical data for FCF projections
     def revenue_history(self) -> List[float]:

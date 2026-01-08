@@ -3,11 +3,12 @@ from fastapi import FastAPI, HTTPException, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 from app.services.stock_data_client import StockDataClient
 from app.services.data_adapter import stock_data_to_legacy
+from app.constants import DEFAULT_TAX_RATE, DEFAULT_MARKET_RISK_PREMIUM, DEFAULT_TERMINAL_GROWTH
 from app.services.base_provider import ProviderError, TickerNotFoundError, DataNotAvailableError, RateLimitError
 from app.services.data_extractor import DataExtractor
 from app.services.valuation_service import ValuationService
@@ -147,7 +148,7 @@ class ScenarioRequest(BaseModel):
     """Request for scenario analysis."""
     scenarios: Optional[List[ScenarioInput]] = None  # If None, use defaults
     projection_years: int = 10
-    market_risk_premium: float = 0.06
+    market_risk_premium: float = DEFAULT_MARKET_RISK_PREMIUM
     discount_rate_override: Optional[float] = None  # Custom discount rate (bypasses WACC)
     # Hints for default scenario generation - passed from frontend for clean TTM/Annual separation
     revenue_growth_hint: Optional[float] = None  # If provided, use this instead of annual CAGR
@@ -166,7 +167,7 @@ class MonteCarloRequest(BaseModel):
     margin_std: float = 0.02  # Standard deviation for margin uncertainty
     base_discount_rate: float  # Base discount rate / WACC
     discount_std: float = 0.01  # Standard deviation for discount rate
-    terminal_growth: float = 0.03  # Terminal growth rate
+    terminal_growth: float = DEFAULT_TERMINAL_GROWTH  # Terminal growth rate
     projection_years: int = 5
     iterations: int = 5000  # Number of simulations (default 5000 for speed)
 
@@ -361,9 +362,9 @@ async def get_stock(symbol: str, provider: str):
         wacc_calculator = WACCCalculator(
             risk_free_rate=risk_free_rate,
             beta=beta,
-            market_risk_premium=0.06,  # Default market risk premium is OK
+            market_risk_premium=DEFAULT_MARKET_RISK_PREMIUM,
             cost_of_debt=cost_of_debt,
-            tax_rate=tax_rate if tax_rate is not None else 0.25,  # Tax rate default is OK
+            tax_rate=tax_rate if tax_rate is not None else DEFAULT_TAX_RATE,
             market_cap=market_cap,
             total_debt=total_debt if total_debt is not None else 0,
         )
@@ -497,7 +498,7 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
             beta=beta,
             market_risk_premium=request.market_risk_premium,
             cost_of_debt=cost_of_debt,
-            tax_rate=tax_rate if tax_rate is not None else 0.25,
+            tax_rate=tax_rate if tax_rate is not None else DEFAULT_TAX_RATE,
             market_cap=market_cap,
             total_debt=total_debt if total_debt is not None else 0,
         )
@@ -1016,9 +1017,9 @@ async def batch_analyze(symbol: str, provider: str):
         wacc_calculator = WACCCalculator(
             risk_free_rate=risk_free_rate,
             beta=beta,
-            market_risk_premium=0.06,
+            market_risk_premium=DEFAULT_MARKET_RISK_PREMIUM,
             cost_of_debt=cost_of_debt,
-            tax_rate=tax_rate if tax_rate is not None else 0.25,
+            tax_rate=tax_rate if tax_rate is not None else DEFAULT_TAX_RATE,
             market_cap=market_cap,
             total_debt=total_debt if total_debt is not None else 0,
         )
@@ -1559,7 +1560,7 @@ async def create_memo(
         thesis=request.thesis,
         conviction=conviction,
         time_horizon_months=request.time_horizon_months,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         assumptions=AssumptionsSnapshot(
             revenue_growth=request.assumptions.revenue_growth,
             operating_margin=request.assumptions.operating_margin,
@@ -1706,7 +1707,7 @@ async def add_post_mortem(
     post_mortem = PostMortem(
         id=None,
         memo_id=memo_id,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         note=request.note,
         action=action,
         price_at_time=request.price_at_time,

@@ -3,7 +3,7 @@ Tests for Investment Memo feature.
 TDD: Tests written before implementation.
 """
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import tempfile
 import os
 
@@ -60,7 +60,7 @@ class TestMemoModels:
             thesis="Apple will benefit from AI features",
             conviction=Conviction.HIGH,
             time_horizon_months=12,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             assumptions=AssumptionsSnapshot(
                 revenue_growth=0.10,
                 operating_margin=0.30,
@@ -166,7 +166,7 @@ class TestMemoRepository:
             thesis="Apple's integration of AI will drive upgrade cycle",
             conviction=Conviction.HIGH,
             time_horizon_months=12,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             assumptions=AssumptionsSnapshot(
                 revenue_growth=0.08,
                 operating_margin=0.30,
@@ -267,7 +267,7 @@ class TestMemoRepository:
         post_mortem = PostMortem(
             id=None,
             memo_id=saved.id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             note="Q1 earnings beat, AI features resonating",
             action=PostMortemAction.HOLD,
             price_at_time=195.0,
@@ -338,7 +338,7 @@ class TestMemoRepository:
         repo.add_post_mortem(PostMortem(
             id=None,
             memo_id=saved.id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             note="Test",
             action=PostMortemAction.REVIEW,
             price_at_time=185.0,
@@ -352,13 +352,13 @@ class TestMemoRepository:
     def test_memos_ordered_by_created_at(self, repo, sample_memo):
         """Memos should be returned newest first."""
         # Save first memo
-        sample_memo.created_at = datetime.utcnow() - timedelta(days=30)
+        sample_memo.created_at = datetime.now(timezone.utc) - timedelta(days=30)
         repo.save_memo(sample_memo)
         
         # Save second memo (newer)
         sample_memo.id = None
         sample_memo.title = "Newer Memo"
-        sample_memo.created_at = datetime.utcnow()
+        sample_memo.created_at = datetime.now(timezone.utc)
         repo.save_memo(sample_memo)
         
         memos = repo.list_memos()

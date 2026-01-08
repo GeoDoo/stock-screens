@@ -1,5 +1,6 @@
 from typing import Optional, List, Dict
 from datetime import datetime, timezone
+from app.constants import DEFAULT_TAX_RATE
 from app.services.stock_data_client import StockDataClient
 from app.services.data_adapter import stock_data_to_legacy
 from app.services.data_extractor import DataExtractor
@@ -92,7 +93,7 @@ class ValuationService:
                 beta=beta,
                 market_risk_premium=extractor.market_risk_premium(),
                 cost_of_debt=cost_of_debt,
-                tax_rate=tax_rate if tax_rate is not None else 0.25,
+                tax_rate=tax_rate if tax_rate is not None else DEFAULT_TAX_RATE,
                 market_cap=market_cap,
                 total_debt=total_debt if total_debt is not None else 0,
             )
