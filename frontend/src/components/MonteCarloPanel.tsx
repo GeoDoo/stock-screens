@@ -147,7 +147,7 @@ export function MonteCarloPanel({
               <label className="block text-xs text-gray-500 mb-1">
                 Growth Rate
               </label>
-              <div className="flex gap-1">
+              <div className="flex gap-1 items-center">
                 <input
                   type="number"
                   value={(inputs.growth * 100).toFixed(1)}
@@ -155,10 +155,10 @@ export function MonteCarloPanel({
                     ...prev, 
                     growth: parseFloat(e.target.value) / 100 
                   }))}
-                  className="w-16 px-2 py-1 text-sm border rounded"
+                  className="w-20 px-2 py-1 text-sm border rounded"
                   step="0.5"
                 />
-                <span className="text-xs text-gray-400 self-center">±</span>
+                <span className="text-xs text-gray-400">±</span>
                 <input
                   type="number"
                   value={(inputs.growthStd * 100).toFixed(1)}
@@ -166,10 +166,10 @@ export function MonteCarloPanel({
                     ...prev, 
                     growthStd: parseFloat(e.target.value) / 100 
                   }))}
-                  className="w-12 px-2 py-1 text-sm border rounded"
+                  className="w-16 px-2 py-1 text-sm border rounded"
                   step="0.5"
                 />
-                <span className="text-xs text-gray-400 self-center">%</span>
+                <span className="text-xs text-gray-400">%</span>
               </div>
             </div>
             
@@ -177,7 +177,7 @@ export function MonteCarloPanel({
               <label className="block text-xs text-gray-500 mb-1">
                 Op. Margin
               </label>
-              <div className="flex gap-1">
+              <div className="flex gap-1 items-center">
                 <input
                   type="number"
                   value={(inputs.margin * 100).toFixed(1)}
@@ -185,10 +185,10 @@ export function MonteCarloPanel({
                     ...prev, 
                     margin: parseFloat(e.target.value) / 100 
                   }))}
-                  className="w-16 px-2 py-1 text-sm border rounded"
+                  className="w-20 px-2 py-1 text-sm border rounded"
                   step="0.5"
                 />
-                <span className="text-xs text-gray-400 self-center">±</span>
+                <span className="text-xs text-gray-400">±</span>
                 <input
                   type="number"
                   value={(inputs.marginStd * 100).toFixed(1)}
@@ -196,10 +196,10 @@ export function MonteCarloPanel({
                     ...prev, 
                     marginStd: parseFloat(e.target.value) / 100 
                   }))}
-                  className="w-12 px-2 py-1 text-sm border rounded"
+                  className="w-16 px-2 py-1 text-sm border rounded"
                   step="0.5"
                 />
-                <span className="text-xs text-gray-400 self-center">%</span>
+                <span className="text-xs text-gray-400">%</span>
               </div>
             </div>
             
@@ -207,7 +207,7 @@ export function MonteCarloPanel({
               <label className="block text-xs text-gray-500 mb-1">
                 Discount Rate
               </label>
-              <div className="flex gap-1">
+              <div className="flex gap-1 items-center">
                 <input
                   type="number"
                   value={(inputs.discountRate * 100).toFixed(1)}
@@ -215,10 +215,10 @@ export function MonteCarloPanel({
                     ...prev, 
                     discountRate: parseFloat(e.target.value) / 100 
                   }))}
-                  className="w-16 px-2 py-1 text-sm border rounded"
+                  className="w-20 px-2 py-1 text-sm border rounded"
                   step="0.5"
                 />
-                <span className="text-xs text-gray-400 self-center">±</span>
+                <span className="text-xs text-gray-400">±</span>
                 <input
                   type="number"
                   value={(inputs.discountStd * 100).toFixed(1)}
@@ -226,10 +226,10 @@ export function MonteCarloPanel({
                     ...prev, 
                     discountStd: parseFloat(e.target.value) / 100 
                   }))}
-                  className="w-12 px-2 py-1 text-sm border rounded"
+                  className="w-16 px-2 py-1 text-sm border rounded"
                   step="0.5"
                 />
-                <span className="text-xs text-gray-400 self-center">%</span>
+                <span className="text-xs text-gray-400">%</span>
               </div>
             </div>
             
