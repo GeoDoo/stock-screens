@@ -53,7 +53,7 @@ export function MemoDetailView({
     if (!reason) return;
 
     try {
-      await onCloseMemo('closed', reason);
+      await onCloseMemo('closed_neutral', reason);
     } catch (err) {
       console.error('Failed to close memo:', err);
     }
@@ -74,7 +74,7 @@ export function MemoDetailView({
             <span className="text-gray-200">|</span>
             <span className="font-mono text-sm text-gray-500">{memo.symbol}</span>
           </div>
-          {memo.status === 'open' && (
+          {memo.status === 'active' && (
             <button
               onClick={handleCloseMemo}
               className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
@@ -96,10 +96,10 @@ export function MemoDetailView({
             <span>{memo.conviction} conviction</span>
             <span className="text-gray-200">·</span>
             <span>{memo.time_horizon_months}mo horizon</span>
-            {memo.status === 'closed' && (
+            {memo.status !== 'active' && (
               <>
                 <span className="text-gray-200">·</span>
-                <span className="text-gray-400">closed</span>
+                <span className="text-gray-400">{memo.status.replace('_', ' ')}</span>
               </>
             )}
           </div>
@@ -118,16 +118,16 @@ export function MemoDetailView({
               <div>
                 <div className="text-xs text-gray-400">Current</div>
                 <div className="font-mono mt-1">
-                  ${memo.current_performance.current_price?.toFixed(2) || '—'}
+                  ${memo.current_performance.latest_price?.toFixed(2) || '—'}
                 </div>
               </div>
               <div>
                 <div className="text-xs text-gray-400">Return</div>
                 <div className={`font-mono mt-1 ${
-                  memo.current_performance.return_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
+                  memo.current_performance.price_change_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
                 }`}>
-                  {memo.current_performance.return_percent >= 0 ? '+' : ''}
-                  {memo.current_performance.return_percent.toFixed(1)}%
+                  {memo.current_performance.price_change_percent >= 0 ? '+' : ''}
+                  {memo.current_performance.price_change_percent.toFixed(1)}%
                 </div>
               </div>
               <div>
@@ -218,7 +218,7 @@ export function MemoDetailView({
         <div className="border border-gray-200 rounded p-5 bg-white">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs text-gray-400 uppercase tracking-wider">Timeline</h2>
-            {memo.status === 'open' && (
+            {memo.status === 'active' && (
               <button
                 onClick={() => setShowPostMortem(!showPostMortem)}
                 className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
@@ -239,7 +239,7 @@ export function MemoDetailView({
               />
               <div className="flex items-center justify-between">
                 <div className="flex gap-1">
-                  {(['hold', 'add', 'trim', 'exit'] as PostMortemAction[]).map((action) => (
+                  {(['hold', 'add', 'trim', 'close', 'review'] as PostMortemAction[]).map((action) => (
                     <button
                       key={action}
                       onClick={() => setPostMortemAction(action)}
@@ -282,16 +282,16 @@ export function MemoDetailView({
             {memo.post_mortems?.map((pm) => (
               <div key={pm.id} className="flex gap-4">
                 <div className="w-24 flex-shrink-0 text-xs text-gray-400 pt-0.5">
-                  {formatDate(pm.timestamp)}
+                  {formatDate(pm.created_at)}
                 </div>
                 <div className="flex-1 border-l border-gray-100 pl-4 pb-4">
                   <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">
-                    {pm.action_taken}
+                    {pm.action}
                   </div>
-                  <p className="text-sm text-gray-700">{pm.content}</p>
-                  {pm.market_snapshot && (
+                  <p className="text-sm text-gray-700">{pm.note}</p>
+                  {pm.price_at_time && (
                     <div className="text-xs text-gray-400 mt-2">
-                      Price: ${pm.market_snapshot.price.toFixed(2)}
+                      Price: ${pm.price_at_time.toFixed(2)}
                     </div>
                   )}
                 </div>
@@ -299,7 +299,7 @@ export function MemoDetailView({
             ))}
 
             {/* Closed entry */}
-            {memo.status === 'closed' && memo.closed_at && (
+            {memo.status !== 'active' && memo.closed_at && (
               <div className="flex gap-4">
                 <div className="w-24 flex-shrink-0 text-xs text-gray-400 pt-0.5">
                   {formatDate(memo.closed_at)}
@@ -313,7 +313,7 @@ export function MemoDetailView({
             )}
 
             {/* Empty state */}
-            {(!memo.post_mortems || memo.post_mortems.length === 0) && memo.status === 'open' && (
+            {(!memo.post_mortems || memo.post_mortems.length === 0) && memo.status === 'active' && (
               <div className="text-center py-4 text-sm text-gray-400">
                 No updates yet
               </div>

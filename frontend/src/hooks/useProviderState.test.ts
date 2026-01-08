@@ -59,8 +59,8 @@ describe('Provider State Management Logic', () => {
     })
 
     it('should fetch if result provider differs from selected provider', () => {
-      const selectedProvider = 'massive'
-      const resultProvider = 'yahoo'
+      const selectedProvider: string = 'massive'
+      const resultProvider: string = 'yahoo'
       const shouldFetch = resultProvider !== selectedProvider
       expect(shouldFetch).toBe(true)
     })

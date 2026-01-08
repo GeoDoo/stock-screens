@@ -2140,11 +2140,11 @@ export default function App() {
                 symbol={ticker}
                 provider={selectedFundamentalProvider}
                 defaultInputs={{
-                  growth: result.inputs.revenue_growth,
-                  margin: result.inputs.operating_margin,
+                  growth: result.inputs.revenue_growth as number,
+                  margin: result.inputs.operating_margin as number,
                   discountRate: result.discount_rate,
-                  terminalGrowth: result.inputs.terminal_growth_rate,
-                  projectionYears: result.inputs.projection_years,
+                  terminalGrowth: result.inputs.terminal_growth_rate as number,
+                  projectionYears: result.inputs.projection_years as number,
                 }}
                 currentPrice={
                   stockData.data.market_cap && stockData.data.shares_outstanding

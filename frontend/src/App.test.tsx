@@ -13,18 +13,18 @@ const renderWithRouter = (component: React.ReactElement) => {
 }
 
 // Mock fetch
-const mockFetch = vi.fn()
-global.fetch = mockFetch
+const mockFetch = vi.fn();
+(globalThis as unknown as { fetch: typeof fetch }).fetch = mockFetch;
 
 // Mock responses
 const mockProviders = {
   fundamental: [
-    { id: 'yahoo', name: 'Yahoo Finance', available: true, recommended: true },
-    { id: 'fmp', name: 'FMP', available: true, recommended: false },
+    { id: 'yahoo', name: 'Yahoo Finance', description: 'Free tier', available: true, recommended: true },
+    { id: 'fmp', name: 'FMP', description: 'Financial Modeling Prep', available: true, recommended: false },
   ],
   technical: [
-    { id: 'yahoo', name: 'Yahoo Finance', available: true, recommended: true },
-    { id: 'massive', name: 'Massive/Polygon', available: true, recommended: false },
+    { id: 'yahoo', name: 'Yahoo Finance', description: 'Free tier', available: true, recommended: true },
+    { id: 'massive', name: 'Massive/Polygon', description: 'Polygon.io data', available: true, recommended: false },
   ],
 }
 
@@ -361,8 +361,9 @@ describe('App - Unified Analyze Flow', () => {
 
     renderWithRouter(<App />)
     
+    // Wait for providers to load and placeholder to change
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('AAPL')).toBeInTheDocument()
     })
 
     // Enter ticker
@@ -1125,12 +1126,12 @@ describe('Technical Provider Auto-Fallback', () => {
     // Custom providers with FMP in technical list for this test
     const providersWithFmpTechnical = {
       fundamental: [
-        { id: 'yahoo', name: 'Yahoo Finance', available: true, recommended: true },
-        { id: 'fmp', name: 'FMP', available: true, recommended: false },
+        { id: 'yahoo', name: 'Yahoo Finance', description: 'Free tier', available: true, recommended: true },
+        { id: 'fmp', name: 'FMP', description: 'Financial Modeling Prep', available: true, recommended: false },
       ],
       technical: [
-        { id: 'massive', name: 'Massive/Polygon', available: true, recommended: true }, // Massive first
-        { id: 'yahoo', name: 'Yahoo Finance', available: true, recommended: false },
+        { id: 'massive', name: 'Massive/Polygon', description: 'Polygon.io data', available: true, recommended: true }, // Massive first
+        { id: 'yahoo', name: 'Yahoo Finance', description: 'Free tier', available: true, recommended: false },
       ],
     }
 
@@ -1225,14 +1226,14 @@ describe('Technical Provider Auto-Fallback', () => {
     const { getAlternativeProvider } = await import('./providerFallback')
     
     const fundamentalProviders = [
-      { id: 'fmp', name: 'FMP', available: true, recommended: true },
-      { id: 'yahoo', name: 'Yahoo', available: true, recommended: false },
+      { id: 'fmp', name: 'FMP', description: 'Financial Modeling Prep', available: true, recommended: true },
+      { id: 'yahoo', name: 'Yahoo', description: 'Free tier', available: true, recommended: false },
     ]
     
     const technicalProviders = [
-      { id: 'fmp', name: 'FMP', available: true, recommended: true },
-      { id: 'yahoo', name: 'Yahoo', available: true, recommended: false },
-      { id: 'massive', name: 'Massive', available: true, recommended: false },
+      { id: 'fmp', name: 'FMP', description: 'Financial Modeling Prep', available: true, recommended: true },
+      { id: 'yahoo', name: 'Yahoo', description: 'Free tier', available: true, recommended: false },
+      { id: 'massive', name: 'Massive', description: 'Polygon.io data', available: true, recommended: false },
     ]
     
     // Same function works for both
