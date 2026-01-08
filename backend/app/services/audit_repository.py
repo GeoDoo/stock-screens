@@ -3,12 +3,10 @@ Audit Repository - SQLite persistence for assumption audit trail.
 
 Stores and retrieves assumption change history for investment thesis tracking.
 """
-import sqlite3
-import json
 from datetime import datetime
 from typing import List, Optional
-from pathlib import Path
 
+from app.services.database import get_connection, DEFAULT_DB_PATH
 from app.models.assumption_audit import (
     AssumptionField,
     AssumptionChange,
@@ -31,24 +29,14 @@ class AuditRepository:
         Initialize repository with database path.
         
         Args:
-            db_path: Path to SQLite database file. Defaults to .audit_trail.db
+            db_path: Path to SQLite database file. Defaults to stock_screens.db
         """
-        if db_path is None:
-            db_path = str(Path(__file__).parent.parent.parent / ".audit_trail.db")
-        
-        self.db_path = db_path
+        self.db_path = db_path or str(DEFAULT_DB_PATH)
         self._init_db()
-    
-    def _get_connection(self) -> sqlite3.Connection:
-        """Get a database connection."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
     
     def _init_db(self):
         """Initialize database schema if not exists."""
-        conn = self._get_connection()
-        try:
+        with get_connection(self.db_path) as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS audit_entries (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,8 +81,6 @@ class AuditRepository:
             except Exception:
                 pass
             conn.commit()
-        finally:
-            conn.close()
     
     def save_entry(self, entry: AuditEntry) -> AuditEntry:
         """
@@ -106,8 +92,7 @@ class AuditRepository:
         Returns:
             Saved entry with assigned ID
         """
-        conn = self._get_connection()
-        try:
+        with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
             
             # Insert entry
@@ -152,8 +137,6 @@ class AuditRepository:
                 intrinsic_value_at_time=entry.intrinsic_value_at_time,
                 pe_ratio_at_time=entry.pe_ratio_at_time,
             )
-        finally:
-            conn.close()
     
     def get_history(self, symbol: str, limit: int = 50) -> List[AuditEntry]:
         """
@@ -166,8 +149,7 @@ class AuditRepository:
         Returns:
             List of AuditEntry in reverse chronological order
         """
-        conn = self._get_connection()
-        try:
+        with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
             
             # Get entries
@@ -210,8 +192,6 @@ class AuditRepository:
                 ))
             
             return entries
-        finally:
-            conn.close()
     
     def get_latest_snapshot(self, symbol: str) -> Optional[AssumptionSnapshot]:
         """
@@ -252,8 +232,7 @@ class AuditRepository:
         Returns:
             List of changes for that field, most recent first
         """
-        conn = self._get_connection()
-        try:
+        with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
             
             cursor.execute("""
@@ -272,8 +251,6 @@ class AuditRepository:
                 )
                 for row in cursor.fetchall()
             ]
-        finally:
-            conn.close()
     
     def has_history(self, symbol: str) -> bool:
         """
@@ -285,8 +262,7 @@ class AuditRepository:
         Returns:
             True if history exists
         """
-        conn = self._get_connection()
-        try:
+        with get_connection(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT COUNT(*) as count
@@ -295,8 +271,6 @@ class AuditRepository:
             """, (symbol.upper(),))
             
             return cursor.fetchone()["count"] > 0
-        finally:
-            conn.close()
 
 
 # Singleton instance for app-wide use
@@ -309,4 +283,3 @@ def get_audit_repository() -> AuditRepository:
     if _audit_repo is None:
         _audit_repo = AuditRepository()
     return _audit_repo
-

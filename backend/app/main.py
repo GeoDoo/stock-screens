@@ -24,7 +24,7 @@ from app.services.technical_service import TechnicalService
 from app.services.fmp_provider import FMPProvider
 from app.services.yahoo_provider import YahooProvider
 from app.services.massive_provider import MassiveProvider
-from app.services.rate_limiter import rate_limiter
+from app.services.rate_limiter_sqlite import rate_limiter
 from app.services.audit_repository import AuditRepository, get_audit_repository
 from app.models.assumption_audit import (
     AssumptionField,
