@@ -2347,7 +2347,6 @@ export default function App() {
             )}
           </div>
         )}
-      </div>
 
       {/* Discount Rate Modal - shown when WACC is missing */}
       <DiscountRateModal
