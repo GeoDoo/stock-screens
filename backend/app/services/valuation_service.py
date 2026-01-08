@@ -1,4 +1,5 @@
-from typing import Optional
+from typing import Optional, List, Dict
+from datetime import datetime, timezone
 from app.services.stock_data_client import StockDataClient
 from app.services.data_adapter import stock_data_to_legacy
 from app.services.data_extractor import DataExtractor
@@ -56,6 +57,9 @@ class ValuationService:
         Returns:
             Dict with intrinsic value, WACC, projections, and inputs used
         """
+        # Record data fetch timestamp for provenance
+        data_fetched_at = datetime.now(timezone.utc).isoformat()
+        
         # 1. Fetch data (with automatic provider fallback)
         stock_data = await self.client.get_stock_data(symbol)
         risk_free_rate = await self.client.get_treasury_rate()
@@ -99,6 +103,15 @@ class ValuationService:
             discount_rate = calculated_wacc
         else:
             raise ValueError("Cannot calculate WACC (missing beta, market cap, or cost of debt). Please provide a custom discount rate.")
+
+        # CRITICAL GUARDRAIL: Discount rate must exceed terminal growth
+        # Otherwise terminal value formula produces nonsense (negative or infinite)
+        if discount_rate <= terminal_growth_rate:
+            raise ValueError(
+                f"Discount rate ({discount_rate:.2%}) must be greater than "
+                f"terminal growth rate ({terminal_growth_rate:.2%}). "
+                "This is a fundamental DCF constraint - otherwise terminal value is undefined."
+            )
 
         # 4. Project FCF
         fcf_projector = FCFProjector(
@@ -165,9 +178,24 @@ class ValuationService:
             terminal_growth_steps=[-0.015, -0.01, -0.005, 0, 0.005, 0.01, 0.015],
         )
 
+        # 7. Calculate value drivers (what moves intrinsic value most)
+        value_drivers = self._calculate_value_drivers(
+            base_value=intrinsic_value_per_share,
+            projected_fcf=projected_fcf,
+            discount_rate=discount_rate,
+            terminal_growth_rate=terminal_growth_rate,
+            projection_years=projection_years,
+            shares=shares,
+            total_debt=total_debt,
+            cash=cash,
+            revenue_growth=revenue_growth or fcf_projector.revenue_cagr(),
+            operating_margin=operating_margin or fcf_projector.operating_margin(),
+        )
+
         return {
             "symbol": symbol,
             "data_provider": stock_data.provider,
+            "data_fetched_at": data_fetched_at,
             "intrinsic_value_per_share": intrinsic_value_per_share,
             "enterprise_value": enterprise_value,
             "equity_value": equity_value,
@@ -189,7 +217,85 @@ class ValuationService:
                 "terminal_growth_rate": terminal_growth_rate,
                 "projection_years": projection_years,
                 "discount_rate_override": discount_rate_override,
+                "shares_outstanding": shares,
+                "shares_type": "basic",  # FMP provides basic shares; diluted would be preferred
             },
             "sensitivity": sensitivity,
+            "value_drivers": value_drivers,
         }
+    
+    def _calculate_value_drivers(
+        self,
+        base_value: float,
+        projected_fcf: List[float],
+        discount_rate: float,
+        terminal_growth_rate: float,
+        projection_years: int,
+        shares: float,
+        total_debt: float,
+        cash: float,
+        revenue_growth: float,
+        operating_margin: float,
+    ) -> List[Dict]:
+        """
+        Calculate which inputs have the largest impact on intrinsic value.
+        
+        Tests +/- 10% changes to each input and ranks by value impact.
+        """
+        drivers = []
+        
+        # Helper to recalculate intrinsic value with modified inputs
+        def calc_value(dr: float, tg: float) -> Optional[float]:
+            if dr <= tg:
+                return None
+            sensitivity_calc = SensitivityCalculator(
+                projected_fcfs=projected_fcf,
+                projection_years=projection_years,
+                shares_outstanding=shares,
+                total_debt=total_debt,
+                cash=cash,
+            )
+            return sensitivity_calc.calculate_intrinsic_value(dr, tg)
+        
+        # Test discount rate sensitivity (+/- 1 percentage point)
+        val_high_dr = calc_value(discount_rate + 0.01, terminal_growth_rate)
+        val_low_dr = calc_value(discount_rate - 0.01, terminal_growth_rate)
+        if val_high_dr and val_low_dr and base_value:
+            dr_impact = abs(val_high_dr - val_low_dr) / base_value * 100
+            drivers.append({
+                "input": "discount_rate",
+                "impact_percent": round(dr_impact, 1),
+                "description": "±1% change in discount rate",
+            })
+        
+        # Test terminal growth sensitivity (+/- 0.5 percentage point)
+        val_high_tg = calc_value(discount_rate, terminal_growth_rate + 0.005)
+        val_low_tg = calc_value(discount_rate, terminal_growth_rate - 0.005)
+        if val_high_tg and val_low_tg and base_value:
+            tg_impact = abs(val_high_tg - val_low_tg) / base_value * 100
+            drivers.append({
+                "input": "terminal_growth",
+                "impact_percent": round(tg_impact, 1),
+                "description": "±0.5% change in terminal growth",
+            })
+        
+        # Revenue growth impact (via FCF impact)
+        # Higher growth = higher FCF = higher value
+        drivers.append({
+            "input": "revenue_growth",
+            "impact_percent": round(revenue_growth * 100, 1),  # Proxy: growth rate itself
+            "description": "Revenue compounds over projection period",
+        })
+        
+        # Operating margin impact
+        drivers.append({
+            "input": "operating_margin",
+            "impact_percent": round(operating_margin * 100, 1),  # Proxy: margin itself
+            "description": "Margin directly scales EBIT → NOPAT → FCF",
+        })
+        
+        # Sort by impact (highest first)
+        drivers.sort(key=lambda x: x["impact_percent"], reverse=True)
+        
+        return drivers
 

@@ -25,7 +25,25 @@ class DCFCalculator:
         - equity_value: enterprise value - net debt
         - intrinsic_value_per_share: equity value / shares outstanding
         - warning: optional warning message
+        
+        Raises:
+            ValueError: If discount rate <= terminal growth rate (produces nonsense)
+            ValueError: If shares outstanding <= 0
         """
+        # Validate inputs - these are fundamental DCF constraints
+        if self.discount_rate <= self.terminal_growth_rate:
+            raise ValueError(
+                f"Discount rate ({self.discount_rate:.2%}) must be greater than "
+                f"terminal growth rate ({self.terminal_growth_rate:.2%}). "
+                "Otherwise terminal value calculation produces nonsense (negative or infinite)."
+            )
+        
+        if self.shares_outstanding <= 0:
+            raise ValueError(
+                f"Shares outstanding ({self.shares_outstanding}) must be positive. "
+                "Cannot calculate per-share value with zero or negative shares."
+            )
+        
         result = {}
 
         # Project FCF for each year

@@ -149,3 +149,58 @@ class TestDCFCalculator:
 
         assert "distressed" in result.get("warning", "").lower()
 
+    def test_discount_rate_must_exceed_terminal_growth(self):
+        """WACC must be greater than terminal growth rate - fundamental DCF constraint."""
+        calculator = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.03,  # Same as terminal growth
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+        )
+
+        with pytest.raises(ValueError, match="(?i)discount rate.*must be greater.*terminal growth"):
+            calculator.calculate()
+
+    def test_discount_rate_less_than_terminal_growth_raises(self):
+        """WACC less than terminal growth produces nonsense - must error."""
+        calculator = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.02,  # Less than terminal growth
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+        )
+
+        with pytest.raises(ValueError, match="(?i)discount rate.*must be greater.*terminal growth"):
+            calculator.calculate()
+
+    def test_zero_shares_raises_error(self):
+        """Zero shares outstanding must raise explicit error."""
+        calculator = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=0,
+        )
+
+        with pytest.raises(ValueError, match="(?i)shares outstanding.*must be positive"):
+            calculator.calculate()
+
+    def test_negative_shares_raises_error(self):
+        """Negative shares outstanding must raise explicit error."""
+        calculator = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=-10,
+        )
+
+        with pytest.raises(ValueError, match="(?i)shares outstanding.*must be positive"):
+            calculator.calculate()
