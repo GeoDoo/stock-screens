@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import type { InvestmentMemo, PostMortemAction } from '../types';
 import { Layout } from './Layout';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+import { API_BASE } from '../config';
 
 interface MemoDetailPageProps {
   memoId: number;

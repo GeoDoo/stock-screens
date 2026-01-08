@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { MonteCarloResult, MonteCarloRequest } from '../types';
 import { GlossaryRef } from './GlossaryRef';
 
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from '../config';
 
 interface MonteCarloInputs {
   growth: number;

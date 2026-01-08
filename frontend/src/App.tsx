@@ -22,7 +22,7 @@ import { Layout } from './components/Layout';
 import { MonteCarloPanel } from './components/MonteCarloPanel';
 import { MultiStageGrowth } from './components/MultiStageGrowth';
 
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from './config';
 
 // Format seconds into human-readable time (e.g., "5m 30s" or "2h 15m")
 function formatResetTime(seconds: number | null): string {
