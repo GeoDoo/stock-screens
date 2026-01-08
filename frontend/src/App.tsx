@@ -1848,7 +1848,7 @@ export default function App() {
                 <p className="text-sm text-gray-400">Run 5,000 simulations with varying assumptions to see probability distribution</p>
               </div>
               <MonteCarloPanel
-                symbol={symbol}
+                symbol={ticker}
                 provider={selectedFundamentalProvider}
                 defaultInputs={{
                   growth: result.inputs.revenue_growth,
