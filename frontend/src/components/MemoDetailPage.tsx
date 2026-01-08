@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { InvestmentMemo, PostMortemAction } from '../types';
+import type { InvestmentMemo, PostMortemAction, MemoStatus } from '../types';
 import { Layout } from './Layout';
 
 import { API_BASE } from '../config';
@@ -16,6 +16,9 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
   const [postMortemContent, setPostMortemContent] = useState('');
   const [postMortemAction, setPostMortemAction] = useState<PostMortemAction>('hold');
   const [saving, setSaving] = useState(false);
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closeStatus, setCloseStatus] = useState<MemoStatus>('closed_neutral');
+  const [closeReason, setCloseReason] = useState('');
 
   useEffect(() => {
     const fetchMemo = async () => {
@@ -78,14 +81,14 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
   };
 
   const handleCloseMemo = async () => {
-    const reason = prompt('Why are you closing this memo?');
-    if (!reason || !memo) return;
+    if (!closeReason.trim() || !memo) return;
 
+    setSaving(true);
     try {
       const response = await fetch(`${API_BASE}/api/memos/${memo.id}/close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ status: closeStatus, reason: closeReason.trim() }),
       });
 
       if (!response.ok) throw new Error('Failed to close memo');
@@ -94,8 +97,12 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
       if (refreshResponse.ok) {
         setMemo(await refreshResponse.json());
       }
+      setShowCloseModal(false);
+      setCloseReason('');
     } catch (err) {
       console.error('Failed to close memo:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -141,13 +148,89 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
         </div>
         {memo.status === 'active' && (
           <button
-            onClick={handleCloseMemo}
+            onClick={() => setShowCloseModal(true)}
             className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
           >
             Close Memo
           </button>
         )}
       </div>
+
+      {/* Close Memo Modal */}
+      {showCloseModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-medium mb-4">Close Memo</h3>
+            
+            <div className="mb-4">
+              <label className="text-sm text-gray-600 mb-2 block">Outcome</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCloseStatus('closed_win')}
+                  className={`flex-1 py-2 px-3 rounded text-sm transition-colors ${
+                    closeStatus === 'closed_win'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Win
+                </button>
+                <button
+                  onClick={() => setCloseStatus('closed_loss')}
+                  className={`flex-1 py-2 px-3 rounded text-sm transition-colors ${
+                    closeStatus === 'closed_loss'
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Loss
+                </button>
+                <button
+                  onClick={() => setCloseStatus('closed_neutral')}
+                  className={`flex-1 py-2 px-3 rounded text-sm transition-colors ${
+                    closeStatus === 'closed_neutral'
+                      ? 'bg-gray-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Neutral
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="text-sm text-gray-600 mb-2 block">Reason</label>
+              <textarea
+                value={closeReason}
+                onChange={(e) => setCloseReason(e.target.value)}
+                placeholder="Why are you closing this memo?"
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-200 rounded focus:border-gray-400 outline-none text-sm resize-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowCloseModal(false);
+                  setCloseReason('');
+                  setCloseStatus('closed_neutral');
+                }}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCloseMemo}
+                disabled={saving || !closeReason.trim()}
+                className="px-4 py-2 text-sm bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Closing...' : 'Close Memo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Thesis */}
       <p className="text-gray-700 leading-relaxed mb-8">{memo.thesis}</p>
