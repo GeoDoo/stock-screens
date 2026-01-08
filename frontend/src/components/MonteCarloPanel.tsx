@@ -341,6 +341,18 @@ export function MonteCarloPanel({
                     <span>{formatCurrency(result.per_share.percentiles.p50)} (median)</span>
                     <span>{formatCurrency(result.per_share.percentiles.p90)} (90th)</span>
                   </div>
+                  
+                  {/* Current price indicator when outside range */}
+                  {currentPrice > result.per_share.percentiles.max && (
+                    <div className="text-xs text-red-600 mt-1 text-right">
+                      Current price ({formatCurrency(currentPrice)}) exceeds all simulated values →
+                    </div>
+                  )}
+                  {currentPrice < result.per_share.percentiles.min && (
+                    <div className="text-xs text-emerald-600 mt-1 text-left">
+                      ← Current price ({formatCurrency(currentPrice)}) below all simulated values
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -378,6 +390,45 @@ export function MonteCarloPanel({
                   </div>
                 </div>
               </div>
+              
+              {/* Overall Assessment */}
+              {(() => {
+                const p90Upside = getUpside(result.per_share.percentiles.p90);
+                const p10Upside = getUpside(result.per_share.percentiles.p10);
+                const medianUpside = getUpside(result.per_share.percentiles.p50);
+                
+                let assessment = '';
+                let assessmentColor = '';
+                
+                if (p90Upside < -30) {
+                  assessment = 'Significantly Overvalued — Even the most optimistic scenario suggests substantial downside';
+                  assessmentColor = 'text-red-700 bg-red-50';
+                } else if (p90Upside < 0) {
+                  assessment = 'Overvalued — All scenarios suggest the stock is priced above fair value';
+                  assessmentColor = 'text-red-600 bg-red-50';
+                } else if (p10Upside > 30) {
+                  assessment = 'Significantly Undervalued — Even conservative scenarios show substantial upside';
+                  assessmentColor = 'text-emerald-700 bg-emerald-50';
+                } else if (p10Upside > 0) {
+                  assessment = 'Undervalued — All scenarios suggest upside potential';
+                  assessmentColor = 'text-emerald-600 bg-emerald-50';
+                } else if (medianUpside > 10) {
+                  assessment = 'Fairly Valued to Slightly Undervalued — Median suggests moderate upside';
+                  assessmentColor = 'text-emerald-600 bg-emerald-50';
+                } else if (medianUpside < -10) {
+                  assessment = 'Fairly Valued to Slightly Overvalued — Median suggests moderate downside';
+                  assessmentColor = 'text-amber-600 bg-amber-50';
+                } else {
+                  assessment = 'Fairly Valued — Price is within the expected range';
+                  assessmentColor = 'text-gray-600 bg-gray-50';
+                }
+                
+                return (
+                  <div className={`text-sm font-medium px-3 py-2 rounded ${assessmentColor}`}>
+                    {assessment}
+                  </div>
+                );
+              })()}
               
               {/* Interpretation */}
               <div className="text-xs text-gray-500 border-t pt-2">
