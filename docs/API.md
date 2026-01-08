@@ -75,12 +75,15 @@ GET /api/stock/{symbol}
     "beta": 0.0,
     "market_cap": 0.0,
     "total_debt": 0.0,
+    "total_equity": 0.0,
     "cash": 0.0,
     "tax_rate": 0.0,
     "cost_of_debt": 0.0,
     "shares_outstanding": 0.0,
     "risk_free_rate": 0.0,
-    "wacc": 0.0
+    "wacc": 0.0,
+    "revenue": 0.0,
+    "working_capital": 0.0
   },
   "hints": {
     "revenue_growth": 0.0,
@@ -142,7 +145,9 @@ POST /api/stock/{symbol}/valuation
   "discount_rate_override": 0.0,
   "da_ratio": 0.0,
   "capex_ratio": 0.0,
-  "wc_ratio": 0.0
+  "wc_ratio": 0.0,
+  "use_mid_year_discounting": true,
+  "wc_mode": "string"
 }
 ```
 
@@ -157,6 +162,8 @@ POST /api/stock/{symbol}/valuation
 | `da_ratio` | number | null | No |  |
 | `capex_ratio` | number | null | No |  |
 | `wc_ratio` | number | null | No |  |
+| `use_mid_year_discounting` | boolean | No |  |
+| `wc_mode` | string | No |  |
 
 
 ---
