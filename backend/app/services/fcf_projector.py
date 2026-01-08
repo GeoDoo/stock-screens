@@ -1,9 +1,12 @@
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 
 # Default tax rate when company data is missing
 DEFAULT_TAX_RATE = 0.25
+
+# Working capital calculation modes
+WCMode = Literal["level", "incremental"]
 
 
 @dataclass
@@ -18,6 +21,14 @@ class FCFProjector:
     - D&A = Depreciation & Amortization
     - CapEx = Capital Expenditures
     - ΔWC = Change in Working Capital
+    
+    Working Capital Modes:
+    - "level" (default): WC_t = Revenue_t × WC_ratio, ΔWC = WC_t - WC_{t-1}
+      This maintains WC as a % of revenue (traditional approach)
+    
+    - "incremental": ΔWC = ΔRevenue × WC_intensity
+      This ties WC investment directly to revenue growth (institutional approach)
+      Better for high-growth companies and more realistic for stable businesses
     """
     historical_revenue: List[float]
     historical_ebit: List[float]
@@ -25,6 +36,7 @@ class FCFProjector:
     historical_capex: List[float]
     historical_working_capital: List[float]
     tax_rate: Optional[float] = None  # Will use DEFAULT_TAX_RATE if None
+    wc_mode: WCMode = "level"  # Default to level-based for backward compatibility
     
     @property
     def effective_tax_rate(self) -> float:
@@ -118,6 +130,10 @@ class FCFProjector:
         """
         Project FCF for a single year.
         
+        Working capital calculation depends on wc_mode:
+        - "level": WC = Revenue × wc_ratio (maintains WC as % of revenue)
+        - "incremental": ΔWC = ΔRevenue × wc_ratio (ties WC to growth)
+        
         Returns dict with all components for transparency.
         """
         # Project revenue
@@ -135,9 +151,16 @@ class FCFProjector:
         # CapEx as % of revenue
         capex = revenue * capex_ratio
         
-        # Working capital change
-        new_wc = revenue * wc_ratio
-        delta_wc = new_wc - prior_working_capital
+        # Working capital change - depends on mode
+        if self.wc_mode == "incremental":
+            # Incremental: ΔWC = ΔRevenue × WC_intensity
+            delta_revenue = revenue - prior_revenue
+            delta_wc = delta_revenue * wc_ratio
+            new_wc = prior_working_capital + delta_wc
+        else:
+            # Level (default): WC = Revenue × WC_ratio
+            new_wc = revenue * wc_ratio
+            delta_wc = new_wc - prior_working_capital
         
         # FCF = NOPAT + D&A - CapEx - ΔWC
         fcf = nopat + da - capex - delta_wc

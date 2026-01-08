@@ -1,4 +1,37 @@
 from dataclasses import dataclass
+from typing import List, Optional
+
+
+def validate_wacc_inputs(
+    tax_rate: float,
+    total_debt: float,
+    market_cap: float,
+) -> List[str]:
+    """
+    Validate WACC inputs and return list of warnings.
+    
+    Returns:
+        List of warning messages for invalid/unusual inputs
+    """
+    warnings = []
+    
+    if tax_rate < 0:
+        warnings.append(f"Tax rate ({tax_rate:.1%}) is negative - will be treated as 0%")
+    elif tax_rate > 1:
+        warnings.append(f"Tax rate ({tax_rate:.1%}) exceeds 100% - will be capped at 100%")
+    
+    if total_debt < 0:
+        warnings.append(f"Total debt ({total_debt:,.0f}) is negative - will be treated as 0 (net cash position)")
+    
+    if market_cap <= 0:
+        warnings.append(f"Market cap ({market_cap:,.0f}) is zero or negative - WACC calculation may be invalid")
+    
+    return warnings
+
+
+def _clamp(value: float, min_val: float, max_val: float) -> float:
+    """Clamp value to range [min_val, max_val]."""
+    return max(min_val, min(max_val, value))
 
 
 @dataclass
@@ -31,24 +64,41 @@ class WACCCalculator:
         """
         return self.risk_free_rate + self.beta * self.market_risk_premium
 
+    @property
+    def _effective_tax_rate(self) -> float:
+        """Tax rate clamped to valid range [0, 1]."""
+        return _clamp(self.tax_rate, 0.0, 1.0)
+    
+    @property
+    def _effective_debt(self) -> float:
+        """Debt clamped to non-negative (negative debt = net cash position)."""
+        return max(0.0, self.total_debt)
+
     def after_tax_cost_of_debt(self) -> float:
         """
         Calculate after-tax cost of debt.
         Rd * (1 - T)
+        
+        Tax rate is clamped to [0, 1] range.
         """
-        return self.cost_of_debt * (1 - self.tax_rate)
+        return self.cost_of_debt * (1 - self._effective_tax_rate)
 
     def calculate(self) -> float:
         """
         Calculate WACC.
+        
+        Handles edge cases:
+        - Tax rate clamped to [0, 1]
+        - Negative debt treated as 0 (net cash position)
         """
-        total_value = self.market_cap + self.total_debt
+        effective_debt = self._effective_debt
+        total_value = self.market_cap + effective_debt
         
         if total_value == 0:
             return 0.0
 
         equity_weight = self.market_cap / total_value
-        debt_weight = self.total_debt / total_value
+        debt_weight = effective_debt / total_value
 
         wacc = (
             equity_weight * self.cost_of_equity() +

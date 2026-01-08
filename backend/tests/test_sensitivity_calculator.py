@@ -164,4 +164,30 @@ class TestSensitivityCalculator:
         # More cash should result in higher equity value
         assert value_high_cash > value_high_debt
 
+    def test_zero_shares_returns_none(self):
+        """Should return None when shares_outstanding is zero."""
+        calculator = SensitivityCalculator(
+            projected_fcfs=[100, 110, 121],
+            projection_years=3,
+            shares_outstanding=0,  # Invalid
+            total_debt=500,
+            cash=200,
+        )
+        
+        result = calculator.calculate_intrinsic_value(0.10, 0.03)
+        assert result is None
+
+    def test_negative_shares_returns_none(self):
+        """Should return None when shares_outstanding is negative."""
+        calculator = SensitivityCalculator(
+            projected_fcfs=[100, 110, 121],
+            projection_years=3,
+            shares_outstanding=-1000,  # Invalid
+            total_debt=500,
+            cash=200,
+        )
+        
+        result = calculator.calculate_intrinsic_value(0.10, 0.03)
+        assert result is None
+
 

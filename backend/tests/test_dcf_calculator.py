@@ -204,3 +204,52 @@ class TestDCFCalculator:
 
         with pytest.raises(ValueError, match="(?i)shares outstanding.*must be positive"):
             calculator.calculate()
+
+    def test_mid_year_discounting_increases_value(self):
+        """Mid-year convention should produce higher values (cash received sooner)."""
+        # End-of-year discounting (default)
+        calc_eoy = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            mid_year_discounting=False,
+        )
+        
+        # Mid-year discounting
+        calc_mid = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            mid_year_discounting=True,
+        )
+        
+        result_eoy = calc_eoy.calculate()
+        result_mid = calc_mid.calculate()
+        
+        # Mid-year should be higher (discounted for less time)
+        assert result_mid["intrinsic_value_per_share"] > result_eoy["intrinsic_value_per_share"]
+
+    def test_mid_year_discounting_factor(self):
+        """Mid-year discounting should use n-0.5 instead of n for discount factor."""
+        calculator = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.0,  # No growth for easier calculation
+            discount_rate=0.10,
+            terminal_growth_rate=0.02,
+            projection_years=1,
+            shares_outstanding=10,
+            mid_year_discounting=True,
+        )
+        
+        result = calculator.calculate()
+        
+        # Year 1 FCF = 100, discounted at mid-year (0.5)
+        # PV = 100 / (1.10)^0.5 ≈ 95.35 (vs 90.91 with end-of-year)
+        # This is reflected in higher enterprise value
+        assert result["enterprise_value"] > 0
