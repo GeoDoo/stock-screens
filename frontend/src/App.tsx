@@ -1043,9 +1043,9 @@ export default function App() {
                 {loading ? 'Analyzing...' : 'Analyze'}
               </button>
             </div>
-            {error && <p className="mt-3 text-sm text-gray-600">{error}</p>}
+            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
             {fallbackNotice && (
-              <p className="mt-3 text-sm text-gray-500">
+              <p className="mt-3 text-sm text-amber-600">
                 {fallbackNotice}
               </p>
             )}
@@ -1447,8 +1447,8 @@ export default function App() {
                         <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                           <span className="text-sm text-gray-500">vs. Avg</span>
                           <span className={`text-sm font-medium px-2 py-0.5 rounded ${
-                            assessment === 'cheap' ? 'bg-gray-100 text-gray-900' :
-                            assessment === 'expensive' ? 'bg-gray-100 text-gray-500' :
+                            assessment === 'cheap' ? 'bg-emerald-100 text-emerald-700' :
+                            assessment === 'expensive' ? 'bg-red-100 text-red-700' :
                             'bg-gray-100 text-gray-600'
                           }`}>
                             {premium !== null ? `${premium > 0 ? '+' : ''}${(premium * 100).toFixed(0)}%` : '—'} ({assessment})
@@ -1586,8 +1586,8 @@ export default function App() {
                     return (
                       <span className={`text-sm font-semibold px-3 py-1 rounded-md ${
                         upside >= 0 
-                          ? 'text-gray-900 bg-gray-50' 
-                          : 'text-gray-500 bg-gray-50'
+                          ? 'text-emerald-600 bg-emerald-50' 
+                          : 'text-red-600 bg-red-50'
                       }`}>
                         {upside >= 0 ? '+' : ''}{upside.toFixed(1)}% {upside >= 0 ? 'undervalued' : 'overvalued'}
                       </span>
@@ -1672,18 +1672,18 @@ export default function App() {
                             <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.ebit)}</td>
                             <td className="py-3 text-right font-mono text-gray-400">({formatCurrency(Math.abs(taxes))})</td>
                             <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.nopat)}</td>
-                            <td className="py-3 text-right font-mono text-gray-600">+{formatCurrency(p.da)}</td>
-                            <td className="py-3 text-right font-mono text-gray-500">−{formatCurrency(Math.abs(p.capex))}</td>
-                            <td className={`py-3 text-right font-mono ${p.delta_wc >= 0 ? 'text-gray-500' : 'text-gray-600'}`}>
+                            <td className="py-3 text-right font-mono text-emerald-600">+{formatCurrency(p.da)}</td>
+                            <td className="py-3 text-right font-mono text-red-600">−{formatCurrency(Math.abs(p.capex))}</td>
+                            <td className={`py-3 text-right font-mono ${p.delta_wc >= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                               {p.delta_wc >= 0 ? '−' : '+'}{formatCurrency(Math.abs(p.delta_wc))}
                             </td>
-                            <td className={`py-3 text-right font-mono font-medium border-l border-gray-200 pl-3 ${p.fcf >= 0 ? 'text-gray-900' : 'text-gray-500'}`}>
+                            <td className={`py-3 text-right font-mono font-medium border-l border-gray-200 pl-3 ${p.fcf >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                               {formatCurrency(p.fcf)}
                             </td>
                             <td className="py-3 text-right font-mono text-gray-400 text-xs">
                               ÷{discountFactor.toFixed(3)}
                             </td>
-                            <td className={`py-3 text-right font-mono font-medium ${pvFcf >= 0 ? 'text-gray-900' : 'text-gray-500'}`}>
+                            <td className={`py-3 text-right font-mono font-medium ${pvFcf >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                               {formatCurrency(pvFcf)}
                             </td>
                           </tr>
@@ -1700,7 +1700,7 @@ export default function App() {
                           {formatCurrency(result.projections.reduce((sum, p) => sum + p.fcf, 0))}
                         </td>
                         <td></td>
-                        <td className="py-3 text-right font-mono text-gray-900">
+                        <td className="py-3 text-right font-mono text-emerald-600">
                           {formatCurrency(result.projections.reduce((sum, p, i) => {
                             const discountFactor = Math.pow(1 + result.discount_rate, i + 1);
                             return sum + p.fcf / discountFactor;
@@ -1729,7 +1729,7 @@ export default function App() {
                     </div>
                     <div>
                       <span className="text-gray-500">PV of Terminal Value</span>
-                      <p className="font-mono font-medium text-gray-900">
+                      <p className="font-mono font-medium text-emerald-600">
                         {formatCurrency(result.terminal_value / Math.pow(1 + result.discount_rate, result.projections.length))}
                       </p>
                     </div>
@@ -1757,7 +1757,7 @@ export default function App() {
                             key={tg} 
                             className={`py-2 px-3 text-center text-xs font-medium ${
                               Math.abs(tg - result.sensitivity.base_terminal_growth) < 0.001 
-                                ? 'text-gray-900 bg-gray-100' 
+                                ? 'text-emerald-600 bg-emerald-50' 
                                 : 'text-gray-400'
                             }`}
                           >
@@ -1780,7 +1780,7 @@ export default function App() {
                         return (
                           <tr key={rowIdx}>
                             <td className={`py-2 px-3 text-xs font-medium ${
-                              isBaseRow ? 'text-gray-900 bg-gray-100' : 'text-gray-500'
+                              isBaseRow ? 'text-emerald-600 bg-emerald-50' : 'text-gray-500'
                             }`}>
                               {(dr * 100).toFixed(1)}%
                             </td>
@@ -1794,17 +1794,17 @@ export default function App() {
                               if (value !== null && result.market_cap && stockData?.data.shares_outstanding) {
                                 const currentPrice = result.market_cap / stockData.data.shares_outstanding;
                                 const diff = ((value - currentPrice) / currentPrice) * 100;
-                                if (diff > 20) cellClass = 'text-gray-900 bg-gray-50';
-                                else if (diff > 0) cellClass = 'text-gray-800';
-                                else if (diff > -20) cellClass = 'text-gray-500';
-                                else cellClass = 'text-gray-400 bg-gray-50';
+                                if (diff > 20) cellClass = 'text-emerald-700 bg-emerald-50';
+                                else if (diff > 0) cellClass = 'text-emerald-600';
+                                else if (diff > -20) cellClass = 'text-red-500';
+                                else cellClass = 'text-red-600 bg-red-50';
                               }
                               
                               return (
                                 <td 
                                   key={colIdx} 
                                   className={`py-2 px-3 text-center font-mono text-sm ${cellClass} ${
-                                    isCurrentCell ? 'ring-2 ring-gray-900 ring-inset font-bold' : ''
+                                    isCurrentCell ? 'ring-2 ring-emerald-500 ring-inset font-bold' : ''
                                   }`}
                                 >
                                   {value !== null ? `$${value.toFixed(2)}` : '—'}
@@ -1819,9 +1819,9 @@ export default function App() {
                 </div>
                 
                 <div className="mt-4 flex gap-6 text-xs text-gray-400">
-                  <span><span className="inline-block w-3 h-3 bg-gray-100 border border-gray-200 rounded mr-1"></span> Upside</span>
-                  <span><span className="inline-block w-3 h-3 bg-gray-50 border border-gray-200 rounded mr-1"></span> Downside</span>
-                  <span><span className="inline-block w-3 h-3 ring-2 ring-gray-900 rounded mr-1"></span> Current</span>
+                  <span><span className="inline-block w-3 h-3 bg-emerald-50 border border-emerald-200 rounded mr-1"></span> Undervalued</span>
+                  <span><span className="inline-block w-3 h-3 bg-red-50 border border-red-200 rounded mr-1"></span> Overvalued</span>
+                  <span><span className="inline-block w-3 h-3 ring-2 ring-emerald-500 rounded mr-1"></span> Current</span>
                 </div>
               </div>
               )}
@@ -1849,7 +1849,7 @@ export default function App() {
                     if (current === 0) return null;
                     const diff = ((fair - current) / current) * 100;
                     return (
-                      <span className={`text-sm font-medium ${diff >= 0 ? 'text-gray-900' : 'text-gray-500'}`}>
+                      <span className={`text-sm font-medium ${diff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                         {diff >= 0 ? '+' : ''}{diff.toFixed(0)}%
                       </span>
                     );
@@ -1875,8 +1875,8 @@ export default function App() {
                         <td className="py-3 text-right font-mono text-sm">${scenario.intrinsic_value.toFixed(2)}</td>
                         <td className={`py-3 text-right font-mono text-sm ${
                           scenario.upside_percent !== null && scenario.upside_percent >= 0 
-                            ? 'text-gray-900' 
-                            : 'text-gray-500'
+                            ? 'text-emerald-600' 
+                            : 'text-red-600'
                         }`}>
                           {scenario.upside_percent !== null 
                             ? `${scenario.upside_percent >= 0 ? '+' : ''}${scenario.upside_percent.toFixed(0)}%`
@@ -1921,7 +1921,7 @@ export default function App() {
                   <span className="text-sm text-gray-400">implied fair value (peer median)</span>
                   {comparableResult.summary.average_upside_percent !== null && (
                     <span className={`text-sm font-medium ${
-                      comparableResult.summary.average_upside_percent >= 0 ? 'text-gray-900' : 'text-gray-500'
+                      comparableResult.summary.average_upside_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
                     }`}>
                       {comparableResult.summary.average_upside_percent >= 0 ? '+' : ''}
                       {comparableResult.summary.average_upside_percent.toFixed(0)}%
@@ -1966,8 +1966,8 @@ export default function App() {
                           </td>
                           <td className={`py-3 text-right font-mono text-sm ${
                             iv.upside_percent !== null && iv.upside_percent >= 0 
-                              ? 'text-gray-900' 
-                              : 'text-gray-500'
+                              ? 'text-emerald-600' 
+                              : 'text-red-600'
                           }`}>
                             {iv.upside_percent !== null 
                               ? `${iv.upside_percent >= 0 ? '+' : ''}${iv.upside_percent.toFixed(0)}%`
@@ -2126,7 +2126,7 @@ export default function App() {
                   </div>
                   <div className="flex items-baseline gap-3">
                     <span className="text-sm text-gray-500">Change (past {technicalResult.period_days} days)</span>
-                    <span className={`text-lg font-medium ${technicalResult.price_change_pct >= 0 ? 'text-gray-900' : 'text-gray-500'}`}>
+                    <span className={`text-lg font-medium ${technicalResult.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                       {technicalResult.price_change_pct >= 0 ? '+' : ''}{technicalResult.price_change_pct.toFixed(2)}%
                     </span>
                   </div>
@@ -2147,8 +2147,8 @@ export default function App() {
                   <div className="p-4 rounded-lg border border-gray-100">
                     <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Trend</div>
                     <div className={`text-lg font-medium capitalize ${
-                      technicalResult.signals.trend === 'bullish' ? 'text-gray-900' :
-                      technicalResult.signals.trend === 'bearish' ? 'text-gray-500' : 'text-gray-400'
+                      technicalResult.signals.trend === 'bullish' ? 'text-emerald-600' :
+                      technicalResult.signals.trend === 'bearish' ? 'text-red-600' : 'text-gray-400'
                     }`}>
                       {technicalResult.signals.trend}
                     </div>
@@ -2156,8 +2156,8 @@ export default function App() {
                   <div className="p-4 rounded-lg border border-gray-100">
                     <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Momentum</div>
                     <div className={`text-lg font-medium capitalize ${
-                      technicalResult.signals.rsi === 'overbought' ? 'text-gray-500' :
-                      technicalResult.signals.rsi === 'oversold' ? 'text-gray-900' : 'text-gray-400'
+                      technicalResult.signals.rsi === 'overbought' ? 'text-red-600' :
+                      technicalResult.signals.rsi === 'oversold' ? 'text-emerald-600' : 'text-gray-400'
                     }`}>
                       {technicalResult.signals.rsi}
                     </div>
@@ -2165,8 +2165,8 @@ export default function App() {
                   <div className="p-4 rounded-lg border border-gray-100">
                     <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Momentum Trend</div>
                     <div className={`text-lg font-medium capitalize ${
-                      technicalResult.signals.macd === 'bullish' ? 'text-gray-900' :
-                      technicalResult.signals.macd === 'bearish' ? 'text-gray-500' : 'text-gray-400'
+                      technicalResult.signals.macd === 'bullish' ? 'text-emerald-600' :
+                      technicalResult.signals.macd === 'bearish' ? 'text-red-600' : 'text-gray-400'
                     }`}>
                       {technicalResult.signals.macd}
                     </div>
