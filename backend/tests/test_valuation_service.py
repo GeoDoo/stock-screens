@@ -216,3 +216,63 @@ class TestValuationService:
         )
 
         assert result_low_capex["intrinsic_value_per_share"] > result_high_capex["intrinsic_value_per_share"]
+
+    @pytest.mark.asyncio
+    async def test_valuation_rejects_discount_rate_below_terminal_growth(self, mock_client):
+        """WACC/discount rate must be greater than terminal growth rate."""
+        service = ValuationService(client=mock_client)
+
+        with pytest.raises(ValueError, match="(?i)discount rate.*must be greater.*terminal growth"):
+            await service.value_stock(
+                "AAPL",
+                terminal_growth_rate=0.05,
+                discount_rate_override=0.03,  # Less than terminal growth
+            )
+
+    @pytest.mark.asyncio
+    async def test_valuation_rejects_equal_discount_and_terminal_growth(self, mock_client):
+        """WACC equal to terminal growth produces division by zero."""
+        service = ValuationService(client=mock_client)
+
+        with pytest.raises(ValueError, match="(?i)discount rate.*must be greater.*terminal growth"):
+            await service.value_stock(
+                "AAPL",
+                terminal_growth_rate=0.05,
+                discount_rate_override=0.05,  # Equal to terminal growth
+            )
+
+    @pytest.mark.asyncio
+    async def test_valuation_includes_data_timestamp(self, mock_client):
+        """Valuation should include timestamp of when data was fetched."""
+        service = ValuationService(client=mock_client)
+
+        result = await service.value_stock("AAPL")
+
+        assert "data_fetched_at" in result
+        # Should be an ISO format timestamp
+        from datetime import datetime
+        datetime.fromisoformat(result["data_fetched_at"])
+
+    @pytest.mark.asyncio
+    async def test_valuation_includes_shares_type(self, mock_client):
+        """Valuation should indicate which shares figure is used."""
+        service = ValuationService(client=mock_client)
+
+        result = await service.value_stock("AAPL")
+
+        assert "shares_type" in result["inputs"]
+        assert result["inputs"]["shares_type"] in ["basic", "diluted"]
+
+    @pytest.mark.asyncio
+    async def test_valuation_includes_value_drivers(self, mock_client):
+        """Valuation should show which inputs drive value most."""
+        service = ValuationService(client=mock_client)
+
+        result = await service.value_stock("AAPL")
+
+        assert "value_drivers" in result
+        # Should have ranked list of inputs by impact
+        drivers = result["value_drivers"]
+        assert len(drivers) > 0
+        assert "input" in drivers[0]
+        assert "impact_percent" in drivers[0]
