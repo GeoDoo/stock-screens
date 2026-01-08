@@ -1844,7 +1844,7 @@ export default function App() {
             {result && stockData && (
             <section className="pt-12 border-t border-gray-100">
               <div className="mb-8">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Monte Carlo Simulation</h2>
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Monte Carlo Simulation<GlossaryRef id="monte-carlo" /></h2>
                 <p className="text-sm text-gray-400">Run 5,000 simulations with varying assumptions to see probability distribution</p>
               </div>
               <MonteCarloPanel

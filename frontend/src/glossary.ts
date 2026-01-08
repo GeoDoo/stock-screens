@@ -384,6 +384,61 @@ export const glossaryTerms: GlossaryTerm[] = [
     definition: "A relative valuation method that compares a company's trading multiples (P/E, EV/EBITDA) to those of similar companies in the same industry to assess relative value.",
     investopediaUrl: "https://www.investopedia.com/terms/c/comparable-company-analysis-cca.asp",
   },
+  {
+    id: "monte-carlo",
+    term: "Monte Carlo",
+    fullName: "Monte Carlo Simulation",
+    definition: "A computational technique that runs thousands of simulations with randomized inputs to produce a probability distribution of outcomes. In valuation, it varies growth, margin, and discount rate assumptions to show the range of possible intrinsic values.",
+    investopediaUrl: "https://www.investopedia.com/terms/m/montecarlosimulation.asp",
+  },
+  {
+    id: "percentile",
+    term: "Percentile",
+    definition: "A measure indicating the value below which a given percentage of observations fall. The 10th percentile means 10% of values are lower (bear case), while the 90th percentile means only 10% are higher (bull case).",
+    investopediaUrl: "https://www.investopedia.com/terms/p/percentile.asp",
+  },
+
+  // Capital Efficiency Terms
+  {
+    id: "economic-profit",
+    term: "Economic Profit",
+    fullName: "Economic Value Added (EVA)",
+    definition: "The dollar amount of value created or destroyed, calculated as (ROIC - WACC) × Invested Capital. Positive economic profit means the company is creating shareholder value; negative means it's destroying value despite accounting profits.",
+    investopediaUrl: "https://www.investopedia.com/terms/e/economicprofit.asp",
+  },
+  {
+    id: "value-spread",
+    term: "Value Spread",
+    definition: "The difference between ROIC and WACC. A positive spread indicates value creation—each dollar reinvested generates returns above the cost of capital. A negative spread means growth destroys value.",
+    investopediaUrl: "https://www.investopedia.com/terms/r/returnoninvestmentcapital.asp",
+  },
+  {
+    id: "reinvestment-rate",
+    term: "Reinvestment Rate",
+    definition: "The percentage of earnings a company reinvests for growth, calculated as Growth Rate / ROIC. High-ROIC companies can grow with lower reinvestment; low-ROIC companies must reinvest heavily.",
+    investopediaUrl: "https://www.investopedia.com/terms/r/reinvestmentrate.asp",
+  },
+  {
+    id: "invested-capital",
+    term: "Invested Capital",
+    definition: "The total amount of money invested in a company by shareholders and debt holders. It equals equity plus debt minus excess cash, representing the capital base used to generate returns.",
+    investopediaUrl: "https://www.investopedia.com/terms/i/invested-capital.asp",
+  },
+
+  // Growth Model Terms
+  {
+    id: "multi-stage-growth",
+    term: "Multi-Stage Growth",
+    definition: "A DCF approach that uses different growth rates for different periods: typically high growth initially, fading to a stable rate, then terminal growth. More realistic than assuming constant growth forever.",
+    investopediaUrl: "https://www.investopedia.com/terms/m/multistageddm.asp",
+  },
+  {
+    id: "growth-decay",
+    term: "Growth Decay",
+    fullName: "Growth Fade",
+    definition: "The gradual reduction of a company's growth rate over time as it matures. High-growth companies eventually face competition and market saturation, causing growth to fade toward the economy's growth rate.",
+    investopediaUrl: "https://www.investopedia.com/terms/g/growthrates.asp",
+  },
 ];
 
 // Create a lookup map for quick access by ID
