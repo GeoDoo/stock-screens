@@ -1654,7 +1654,7 @@ export default function App() {
                           ? 'text-emerald-600 bg-emerald-50' 
                           : 'text-red-600 bg-red-50'
                       }`}>
-                        {upside >= 0 ? '+' : ''}{upside.toFixed(1)}% {upside >= 0 ? 'undervalued' : 'overvalued'}
+                        {upside >= 0 ? `+${upside.toFixed(1)}% undervalued` : `${Math.abs(upside).toFixed(1)}% overvalued`}
                       </span>
                     );
                   })()}
