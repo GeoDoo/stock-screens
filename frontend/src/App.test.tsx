@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import App from './App'
 import type { ComparableResult } from './types'
+
+const renderWithRouter = (component: React.ReactElement) => {
+  return render(
+    <MemoryRouter>
+      {component}
+    </MemoryRouter>
+  )
+}
 
 // Mock fetch
 const mockFetch = vi.fn()
@@ -176,7 +185,7 @@ describe('App - Unified Analyze Flow', () => {
   })
 
   it('shows single "Analyze" button instead of multiple buttons', async () => {
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -217,7 +226,7 @@ describe('App - Unified Analyze Flow', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -288,7 +297,7 @@ describe('App - Unified Analyze Flow', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -350,7 +359,7 @@ describe('App - Unified Analyze Flow', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -392,7 +401,7 @@ describe('App - Unified Analyze Flow', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -436,7 +445,7 @@ describe('App - Unified Analyze Flow', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -489,7 +498,7 @@ describe('App - Unified Analyze Flow', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -547,7 +556,7 @@ describe('App - Unified Analyze Flow', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -593,7 +602,7 @@ describe('App - Provider Changes', () => {
   })
 
   it('shows "no data" message when stockData is null', async () => {
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -646,7 +655,7 @@ describe('App - Rate Limit Handling', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     // Wait for providers to load and be auto-selected
     await waitFor(() => {
@@ -751,7 +760,7 @@ describe('App - Handles Incomplete API Data (Regression)', () => {
     })
 
     // This should NOT crash
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -798,7 +807,7 @@ describe('App - Handles Incomplete API Data (Regression)', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -837,7 +846,7 @@ describe('App - Handles Incomplete API Data (Regression)', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -903,7 +912,7 @@ describe('Provider Auto-Fallback', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -984,7 +993,7 @@ describe('Provider Auto-Fallback', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -1030,7 +1039,7 @@ describe('Provider Auto-Fallback', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -1076,7 +1085,7 @@ describe('Provider Auto-Fallback', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
@@ -1181,7 +1190,7 @@ describe('Technical Provider Auto-Fallback', () => {
       return Promise.resolve({ ok: false, json: () => Promise.resolve({ detail: 'Not found' }) })
     })
 
-    render(<App />)
+    renderWithRouter(<App />)
     
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Analyze/i })).toBeInTheDocument()
