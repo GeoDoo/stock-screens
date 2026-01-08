@@ -41,9 +41,25 @@ class DataExtractor:
         """Total debt from balance sheet."""
         return self._get_latest(self.balance_sheet, "totalDebt")
 
+    def total_equity(self) -> Optional[float]:
+        """Total stockholders equity from balance sheet."""
+        return self._get_latest(self.balance_sheet, "totalStockholdersEquity")
+
     def cash(self) -> Optional[float]:
         """Cash and equivalents from balance sheet."""
         return self._get_latest(self.balance_sheet, "cashAndCashEquivalents")
+    
+    def latest_revenue(self) -> Optional[float]:
+        """Latest revenue from income statement."""
+        return self._get_latest(self.income_statement, "revenue")
+    
+    def latest_working_capital(self) -> Optional[float]:
+        """Latest working capital (current assets - current liabilities)."""
+        current_assets = self._get_latest(self.balance_sheet, "totalCurrentAssets")
+        current_liabilities = self._get_latest(self.balance_sheet, "totalCurrentLiabilities")
+        if current_assets is None or current_liabilities is None:
+            return None
+        return current_assets - current_liabilities
 
     def tax_rate(self) -> Optional[float]:
         """

@@ -69,12 +69,16 @@ class CompanyData(BaseModel):
     beta: Optional[float]
     market_cap: Optional[float]
     total_debt: Optional[float]
+    total_equity: Optional[float]  # For Invested Capital calculation
     cash: Optional[float]
     tax_rate: Optional[float]
     cost_of_debt: Optional[float]
     shares_outstanding: Optional[float]
     risk_free_rate: float
     wacc: Optional[float]  # Calculated from the above
+    # Derived metrics
+    revenue: Optional[float] = None  # Latest revenue for WC calculations
+    working_capital: Optional[float] = None  # Current assets - current liabilities
 
 
 class HistoricalHints(BaseModel):
@@ -375,12 +379,15 @@ async def get_stock(symbol: str, provider: str):
             beta=extractor.beta(),
             market_cap=extractor.market_cap(),
             total_debt=extractor.total_debt(),
+            total_equity=extractor.total_equity(),
             cash=extractor.cash(),
             tax_rate=extractor.tax_rate(),
             cost_of_debt=extractor.cost_of_debt(),
             shares_outstanding=extractor.shares_outstanding(),
             risk_free_rate=risk_free_rate,
             wacc=wacc,
+            revenue=extractor.latest_revenue(),
+            working_capital=extractor.latest_working_capital(),
         ),
         hints=HistoricalHints(
             revenue_growth=fcf_projector.revenue_cagr() if extractor.revenue_history() else None,
