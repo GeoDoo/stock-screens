@@ -179,6 +179,10 @@ export default function App() {
   const [useCustomDiscountRate, setUseCustomDiscountRate] = useState(false);
   const [customDiscountRate, setCustomDiscountRate] = useState('');
   
+  // Advanced DCF options
+  const [useMidYearDiscounting, setUseMidYearDiscounting] = useState(false);
+  const [wcMode, setWcMode] = useState<'level' | 'incremental'>('level');
+  
   // Scenario Analysis
   const [scenarioResult, setScenarioResult] = useState<ScenarioAnalysisResult | null>(null);
   const [scenarioLoading, setScenarioLoading] = useState(false);
@@ -451,6 +455,9 @@ export default function App() {
       da_ratio: periodHints?.da_ratio ?? null,
       capex_ratio: periodHints?.capex_ratio ?? null,
       wc_ratio: periodHints?.wc_ratio ?? null,
+      // Advanced DCF options
+      use_mid_year_discounting: useMidYearDiscounting,
+      wc_mode: wcMode,
     };
     
     try {
@@ -1472,6 +1479,37 @@ export default function App() {
         </p>
       </div>
                 )}
+              </div>
+
+              {/* Advanced DCF Options */}
+              <div className="mb-8 pt-4 border-t border-gray-100">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Advanced Options</p>
+                <div className="flex flex-wrap gap-6">
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={useMidYearDiscounting}
+                      onChange={(e) => setUseMidYearDiscounting(e.target.checked)}
+                      className="w-4 h-4 accent-gray-600"
+                    />
+                    <span className="text-sm text-gray-500 group-hover:text-gray-700">
+                      Mid-year discounting
+                    </span>
+                    <span className="text-xs text-gray-400">(assumes cash flows occur mid-year)</span>
+                  </label>
+                  
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-500">Working Capital:</span>
+                    <select
+                      value={wcMode}
+                      onChange={(e) => setWcMode(e.target.value as 'level' | 'incremental')}
+                      className="px-2 py-1 text-sm border border-gray-200 rounded bg-white text-gray-700"
+                    >
+                      <option value="level">Level (WC = Revenue × Ratio)</option>
+                      <option value="incremental">Incremental (ΔWC = ΔRevenue × Intensity)</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               {/* Re-run Valuation Button */}

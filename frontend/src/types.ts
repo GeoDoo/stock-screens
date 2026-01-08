@@ -83,6 +83,9 @@ export interface ValuationRequest {
   da_ratio?: number | null;
   capex_ratio?: number | null;
   wc_ratio?: number | null;
+  // Advanced DCF options
+  use_mid_year_discounting?: boolean;
+  wc_mode?: 'level' | 'incremental';
 }
 
 export interface SensitivityMatrix {
