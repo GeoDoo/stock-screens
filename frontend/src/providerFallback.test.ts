@@ -37,9 +37,9 @@ describe('shouldFallback', () => {
 
 describe('getAlternativeProvider', () => {
   const mockProviders: Provider[] = [
-    { id: 'fmp', name: 'FMP', available: true, recommended: true },
-    { id: 'yahoo', name: 'Yahoo Finance', available: true, recommended: false },
-    { id: 'disabled', name: 'Disabled Provider', available: false, recommended: false },
+    { id: 'fmp', name: 'FMP', description: 'Financial Modeling Prep', available: true, recommended: true },
+    { id: 'yahoo', name: 'Yahoo Finance', description: 'Free tier', available: true, recommended: false },
+    { id: 'disabled', name: 'Disabled Provider', description: 'Disabled', available: false, recommended: false },
   ];
 
   it('returns first available alternative', () => {
@@ -49,16 +49,16 @@ describe('getAlternativeProvider', () => {
 
   it('skips unavailable providers', () => {
     const providers: Provider[] = [
-      { id: 'fmp', name: 'FMP', available: true, recommended: true },
-      { id: 'yahoo', name: 'Yahoo', available: false, recommended: false },
-      { id: 'massive', name: 'Massive', available: true, recommended: false },
+      { id: 'fmp', name: 'FMP', description: 'Financial Modeling Prep', available: true, recommended: true },
+      { id: 'yahoo', name: 'Yahoo', description: 'Free tier', available: false, recommended: false },
+      { id: 'massive', name: 'Massive', description: 'Polygon.io data', available: true, recommended: false },
     ];
     expect(getAlternativeProvider('fmp', providers)).toBe('massive');
   });
 
   it('returns null when no alternatives available', () => {
     const singleProvider: Provider[] = [
-      { id: 'fmp', name: 'FMP', available: true, recommended: true },
+      { id: 'fmp', name: 'FMP', description: 'Financial Modeling Prep', available: true, recommended: true },
     ];
     expect(getAlternativeProvider('fmp', singleProvider)).toBe(null);
   });
@@ -75,8 +75,8 @@ describe('getAlternativeProvider', () => {
 
 describe('getProviderDisplayName', () => {
   const mockProviders: Provider[] = [
-    { id: 'fmp', name: 'FMP', available: true, recommended: true },
-    { id: 'yahoo', name: 'Yahoo Finance', available: true, recommended: false },
+    { id: 'fmp', name: 'FMP', description: 'Financial Modeling Prep', available: true, recommended: true },
+    { id: 'yahoo', name: 'Yahoo Finance', description: 'Free tier', available: true, recommended: false },
   ];
 
   it('returns display name for known provider', () => {

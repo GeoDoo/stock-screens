@@ -2,7 +2,7 @@
 
 > **Auto-generated** from package files.
 > 
-> Last updated: 2026-01-08 18:26
+> Last updated: 2026-01-08 18:52
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 

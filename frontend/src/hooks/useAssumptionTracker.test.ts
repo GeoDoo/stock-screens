@@ -8,7 +8,7 @@ import { useAssumptionTracker } from './useAssumptionTracker';
 
 // Mock fetch
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+(globalThis as unknown as { fetch: typeof fetch }).fetch = mockFetch;
 
 describe('useAssumptionTracker', () => {
   beforeEach(() => {

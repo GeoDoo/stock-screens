@@ -8,7 +8,7 @@ export function MemosPage() {
   const [memos, setMemos] = useState<InvestmentMemo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'open' | 'closed'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'closed'>('all');
 
   useEffect(() => {
     const fetchMemos = async () => {
@@ -27,8 +27,8 @@ export function MemosPage() {
   }, []);
 
   const filteredMemos = memos.filter(memo => {
-    if (filter === 'open') return memo.status === 'open';
-    if (filter === 'closed') return memo.status === 'closed';
+    if (filter === 'active') return memo.status === 'active';
+    if (filter === 'closed') return memo.status !== 'active';
     return true;
   });
 
@@ -49,7 +49,7 @@ export function MemosPage() {
 
       {/* Filters */}
       <div className="flex gap-6 mb-8 border-b border-gray-200">
-        {(['all', 'open', 'closed'] as const).map((f) => (
+        {(['all', 'active', 'closed'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -106,20 +106,20 @@ export function MemosPage() {
                 <div className="text-right flex-shrink-0">
                   {memo.current_performance && (
                     <div className={`font-mono text-lg ${
-                      memo.current_performance.return_percent >= 0 
+                      memo.current_performance.price_change_percent >= 0 
                         ? 'text-emerald-600' 
                         : 'text-red-600'
                     }`}>
-                      {memo.current_performance.return_percent >= 0 ? '+' : ''}
-                      {memo.current_performance.return_percent.toFixed(1)}%
+                      {memo.current_performance.price_change_percent >= 0 ? '+' : ''}
+                      {memo.current_performance.price_change_percent.toFixed(1)}%
                     </div>
                   )}
                   <span className={`text-xs px-2 py-0.5 rounded mt-1 inline-block ${
-                    memo.status === 'open' 
+                    memo.status === 'active' 
                       ? 'bg-emerald-50 text-emerald-600' 
                       : 'bg-gray-100 text-gray-500'
                   }`}>
-                    {memo.status}
+                    {memo.status.replace('_', ' ')}
                   </span>
                 </div>
               </div>

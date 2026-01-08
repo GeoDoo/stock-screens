@@ -51,9 +51,10 @@ export function normalizeStockData(data: StockDataResponse | null): StockDataRes
     hints_ttm: hintsTtm,
     validation: {
       ...data.validation,
+      has_errors: data.validation?.has_errors ?? false,
+      has_warnings: data.validation?.has_warnings ?? false,
       errors: data.validation?.errors ?? [],
       warnings: data.validation?.warnings ?? [],
-      issues: data.validation?.issues ?? [],
     },
   };
 }
@@ -70,7 +71,13 @@ export function normalizeValuationResult(data: ValuationResult | null): Valuatio
       terminal_growth_rates: data.sensitivity.terminal_growth_rates ?? [],
       discount_rates: data.sensitivity.discount_rates ?? [],
       matrix: data.sensitivity.matrix ?? [],
-    } : null,
+    } : {
+      terminal_growth_rates: [],
+      discount_rates: [],
+      matrix: [],
+      base_discount_rate: 0,
+      base_terminal_growth: 0,
+    },
   };
 }
 
@@ -119,11 +126,15 @@ export function normalizeTechnicalResult(data: TechnicalAnalysisResult | null): 
       ...data.indicators,
       sma_20: data.indicators.sma_20 ?? [],
       sma_50: data.indicators.sma_50 ?? [],
+      ema_12: data.indicators.ema_12 ?? [],
+      ema_26: data.indicators.ema_26 ?? [],
       rsi_14: data.indicators.rsi_14 ?? [],
       macd: data.indicators.macd ?? [],
     } : {
       sma_20: [],
       sma_50: [],
+      ema_12: [],
+      ema_26: [],
       rsi_14: [],
       macd: [],
     },
