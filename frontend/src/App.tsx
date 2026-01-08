@@ -5,7 +5,6 @@ import { FinancialRatiosTable } from './components/FinancialRatiosTable';
 import { DiscountRateModal } from './components/DiscountRateModal';
 import { AssumptionHistoryDrawer } from './components/AssumptionHistoryDrawer';
 import { AssumptionCommitModal } from './components/AssumptionCommitModal';
-import { AssumptionHistoryIndicator } from './components/AssumptionHistoryIndicator';
 import { formatCurrency, formatPercent, formatNumber, formatShareCount } from './utils';
 import {
   normalizeStockData,
@@ -17,7 +16,7 @@ import {
   formatMetric,
 } from './normalizers';
 import { shouldFallback, getAlternativeProvider, getProviderDisplayName } from './providerFallback';
-import { useAssumptionTracker, AssumptionChange, MarketContext } from './hooks/useAssumptionTracker';
+import { useAssumptionTracker } from './hooks/useAssumptionTracker';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -186,7 +185,6 @@ export default function App() {
   // Assumption Audit Trail
   const [showCommitModal, setShowCommitModal] = useState(false);
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
-  const [fieldHistoryCache, setFieldHistoryCache] = useState<Record<string, AssumptionChange[]>>({});
   
   // Tab navigation
   const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
@@ -199,7 +197,6 @@ export default function App() {
   useEffect(() => {
     if (stockData?.symbol) {
       assumptionTracker.fetchHistory();
-      setFieldHistoryCache({}); // Clear cache on symbol change
     }
   }, [stockData?.symbol]);
   
@@ -402,10 +399,13 @@ export default function App() {
     setLoading(true);
     setError(null);
     
-    // Use hints as defaults if user hasn't entered values yet (prefer TTM)
-    const dataHints = data.hints_ttm || data.hints_annual;
-    const revGrowth = revenueGrowth ? parseFloat(revenueGrowth) / 100 : (dataHints?.revenue_growth ?? 0.05);
-    const opMargin = operatingMargin ? parseFloat(operatingMargin) / 100 : (dataHints?.operating_margin ?? 0.15);
+    // Use hints from SELECTED PERIOD (TTM or Annual) - clean separation
+    const periodHints = fundamentalPeriod === 'ttm' && data.hints_ttm 
+      ? data.hints_ttm 
+      : data.hints_annual;
+    
+    const revGrowth = revenueGrowth ? parseFloat(revenueGrowth) / 100 : (periodHints?.revenue_growth ?? 0.05);
+    const opMargin = operatingMargin ? parseFloat(operatingMargin) / 100 : (periodHints?.operating_margin ?? 0.15);
     
     const request: ValuationRequest = {
       revenue_growth: revGrowth,
@@ -416,6 +416,10 @@ export default function App() {
       discount_rate_override: discountRateOverride ?? (useCustomDiscountRate && customDiscountRate 
         ? parseFloat(customDiscountRate) / 100 
         : null),
+      // Pass FCF ratios from selected period - ensures clean TTM/Annual separation
+      da_ratio: periodHints?.da_ratio ?? null,
+      capex_ratio: periodHints?.capex_ratio ?? null,
+      wc_ratio: periodHints?.wc_ratio ?? null,
     };
     
     try {
@@ -532,7 +536,7 @@ export default function App() {
         ? stockData.data.market_cap / stockData.data.shares_outstanding
         : undefined,
       intrinsic_value_at_time: result?.intrinsic_value_per_share,
-      pe_ratio_at_time: ratiosResult?.valuation?.pe_ratio ?? undefined,
+      pe_ratio_at_time: ratiosResult?.annual?.valuation?.pe_ratio ?? ratiosResult?.ttm?.valuation?.pe_ratio ?? undefined,
     };
     
     try {
@@ -550,20 +554,6 @@ export default function App() {
     await runValuationWithData(stockData, discountOverride);
     await runScenariosWithData(stockData, discountOverride);
   };
-
-  // Fetch field history for inline indicators
-  const fetchFieldHistory = useCallback(async (field: string) => {
-    if (fieldHistoryCache[field]) return fieldHistoryCache[field];
-    
-    try {
-      const history = await assumptionTracker.getFieldHistory(field);
-      setFieldHistoryCache(prev => ({ ...prev, [field]: history }));
-      return history;
-    } catch {
-      return [];
-    }
-  }, [assumptionTracker, fieldHistoryCache]);
-
 
   const runTechnicalAnalysis = async () => {
     if (!stockData || !selectedTechnicalProvider) return;

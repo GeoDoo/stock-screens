@@ -36,6 +36,10 @@ class ValuationService:
         operating_margin: Optional[float] = None,
         market_risk_premium: Optional[float] = None,
         discount_rate_override: Optional[float] = None,
+        # FCF projection ratios - pass from frontend for clean TTM/Annual separation
+        da_ratio: Optional[float] = None,
+        capex_ratio: Optional[float] = None,
+        wc_ratio: Optional[float] = None,
     ) -> dict:
         """
         Perform full DCF valuation for a stock.
@@ -110,6 +114,9 @@ class ValuationService:
             years=projection_years,
             revenue_growth=revenue_growth,
             operating_margin=operating_margin,
+            da_ratio=da_ratio,
+            capex_ratio=capex_ratio,
+            wc_ratio=wc_ratio,
         )
 
         # 5. Run DCF

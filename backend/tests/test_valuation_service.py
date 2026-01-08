@@ -163,3 +163,56 @@ class TestValuationService:
         # Higher discount rate should give lower intrinsic value
         assert result_custom["intrinsic_value_per_share"] < result_default["intrinsic_value_per_share"]
         assert result_custom["using_custom_discount_rate"] is True
+
+    @pytest.mark.asyncio
+    async def test_valuation_with_explicit_fcf_ratios(self, mock_client):
+        """
+        User should be able to pass FCF ratios explicitly.
+        This enables clean TTM/Annual separation - frontend passes ratios from selected period.
+        """
+        service = ValuationService(client=mock_client)
+
+        # Run with explicit ratios (simulating TTM data)
+        result = await service.value_stock(
+            "AAPL",
+            revenue_growth=0.05,
+            operating_margin=0.25,
+            da_ratio=0.03,      # D&A as 3% of revenue
+            capex_ratio=0.03,   # CapEx as 3% of revenue
+            wc_ratio=0.05,      # WC as 5% of revenue
+        )
+
+        assert "intrinsic_value_per_share" in result
+        assert result["intrinsic_value_per_share"] > 0
+        # Should use our ratios, not calculated from historical
+
+    @pytest.mark.asyncio
+    async def test_valuation_fcf_ratios_affect_result(self, mock_client):
+        """Different FCF ratios should produce different valuations."""
+        service = ValuationService(client=mock_client)
+
+        # Low capex = more FCF = higher value
+        result_low_capex = await service.value_stock(
+            "AAPL",
+            revenue_growth=0.05,
+            operating_margin=0.20,
+            da_ratio=0.03,
+            capex_ratio=0.02,  # Low capex
+            wc_ratio=0.05,
+        )
+        
+        # Reset mock
+        mock_client.get_stock_data = AsyncMock(return_value=create_mock_stock_data())
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+        
+        # High capex = less FCF = lower value
+        result_high_capex = await service.value_stock(
+            "AAPL",
+            revenue_growth=0.05,
+            operating_margin=0.20,
+            da_ratio=0.03,
+            capex_ratio=0.15,  # High capex
+            wc_ratio=0.05,
+        )
+
+        assert result_low_capex["intrinsic_value_per_share"] > result_high_capex["intrinsic_value_per_share"]
