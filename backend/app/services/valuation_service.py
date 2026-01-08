@@ -45,6 +45,8 @@ class ValuationService:
         # Advanced DCF options
         use_mid_year_discounting: bool = False,
         wc_mode: str = "level",
+        # Multi-stage growth - if provided, overrides revenue_growth
+        growth_schedule: Optional[List[float]] = None,
     ) -> dict:
         """
         Perform full DCF valuation for a stock.
@@ -135,6 +137,7 @@ class ValuationService:
             capex_ratio=capex_ratio,
             wc_ratio=wc_ratio,
             wc_mode=wc_mode,
+            growth_schedule=growth_schedule,
         )
 
         # 5. Run DCF

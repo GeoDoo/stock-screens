@@ -410,3 +410,73 @@ class TestAdvancedDCFOptions:
             
             # Mid-year discounting should give higher value (cash flows arrive sooner)
             assert value_with > value_without
+    
+    def test_valuation_accepts_multi_stage_growth(self):
+        """Valuation endpoint should accept growth_stages for multi-stage DCF."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={
+                    "revenue_growth": 0.05,  # Should be ignored when stages provided
+                    "operating_margin": 0.25,
+                    "terminal_growth_rate": 0.025,
+                    "market_risk_premium": 0.06,
+                    "projection_years": 10,  # Should be ignored when stages provided
+                    "growth_stages": [
+                        {"name": "High Growth", "years": 3, "growth_rate": 0.20},
+                        {"name": "Fade", "years": 4, "growth_rate": 0.20, "end_growth_rate": 0.08},
+                        {"name": "Mature", "years": 3, "growth_rate": 0.05},
+                    ]
+                }
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert "intrinsic_value_per_share" in data
+            # Should have 10 projections (3 + 4 + 3)
+            assert len(data["projections"]) == 10
+    
+    def test_multi_stage_growth_produces_different_result(self):
+        """Multi-stage growth should produce different value than constant growth."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        base_request = {
+            "operating_margin": 0.25,
+            "terminal_growth_rate": 0.025,
+            "market_risk_premium": 0.06,
+        }
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            # Constant 10% growth for 10 years
+            response_constant = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={**base_request, "revenue_growth": 0.10, "projection_years": 10}
+            )
+            value_constant = response_constant.json()["intrinsic_value_per_share"]
+            
+            # Multi-stage: 20% → 10% → 5% over same period
+            response_stages = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={
+                    **base_request,
+                    "revenue_growth": 0.10,  # Ignored
+                    "projection_years": 10,  # Ignored
+                    "growth_stages": [
+                        {"name": "High", "years": 3, "growth_rate": 0.20},
+                        {"name": "Fade", "years": 4, "growth_rate": 0.20, "end_growth_rate": 0.05},
+                        {"name": "Mature", "years": 3, "growth_rate": 0.05},
+                    ]
+                }
+            )
+            value_stages = response_stages.json()["intrinsic_value_per_share"]
+            
+            # Values should be different (multi-stage has higher early growth)
+            assert value_constant != value_stages

@@ -75,6 +75,13 @@ export interface StockDataResponse {
   validation: ValidationResult;
 }
 
+export interface GrowthStage {
+  name: string;
+  years: number;
+  growth_rate: number;  // e.g., 0.20 for 20%
+  end_growth_rate?: number | null;  // If set, fade linearly to this rate
+}
+
 export interface ValuationRequest {
   revenue_growth: number;
   operating_margin: number;
@@ -89,6 +96,8 @@ export interface ValuationRequest {
   // Advanced DCF options
   use_mid_year_discounting?: boolean;
   wc_mode?: 'level' | 'incremental';
+  // Multi-stage growth - if provided, overrides revenue_growth and projection_years
+  growth_stages?: GrowthStage[] | null;
 }
 
 export interface SensitivityMatrix {
