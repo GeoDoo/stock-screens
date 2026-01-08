@@ -163,6 +163,38 @@ export function AssumptionHistoryDrawer({
                         </span>
                       </div>
                       
+                      {/* Market Context */}
+                      {(entry.price_at_time || entry.intrinsic_value_at_time || entry.pe_ratio_at_time) && (
+                        <div className="mb-2 flex flex-wrap gap-2">
+                          {entry.price_at_time && (
+                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                              Price: ${entry.price_at_time.toFixed(2)}
+                            </span>
+                          )}
+                          {entry.intrinsic_value_at_time && (
+                            <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">
+                              Fair Value: ${entry.intrinsic_value_at_time.toFixed(2)}
+                            </span>
+                          )}
+                          {entry.pe_ratio_at_time && (
+                            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                              P/E: {entry.pe_ratio_at_time.toFixed(1)}x
+                            </span>
+                          )}
+                          {entry.price_at_time && entry.intrinsic_value_at_time && (
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              entry.intrinsic_value_at_time > entry.price_at_time 
+                                ? 'bg-green-50 text-green-700' 
+                                : 'bg-red-50 text-red-700'
+                            }`}>
+                              {entry.intrinsic_value_at_time > entry.price_at_time ? '▲' : '▼'} 
+                              {Math.abs(((entry.intrinsic_value_at_time - entry.price_at_time) / entry.price_at_time) * 100).toFixed(0)}% 
+                              {entry.intrinsic_value_at_time > entry.price_at_time ? 'undervalued' : 'overvalued'}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* Note */}
                       {entry.note && (
                         <p className="text-sm text-gray-700 mb-2 italic">

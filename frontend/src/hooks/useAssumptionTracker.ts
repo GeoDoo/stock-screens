@@ -23,6 +23,10 @@ export interface AuditEntry {
   changes: AssumptionChange[];
   note: string | null;
   is_initial: boolean;
+  // Market context at time of recording (for thesis tracking)
+  price_at_time: number | null;
+  intrinsic_value_at_time: number | null;
+  pe_ratio_at_time: number | null;
 }
 
 export interface Assumptions {
@@ -32,6 +36,12 @@ export interface Assumptions {
   discount_rate?: number;
   projection_years?: number;
   market_risk_premium?: number;
+}
+
+export interface MarketContext {
+  price_at_time?: number;
+  intrinsic_value_at_time?: number;
+  pe_ratio_at_time?: number;
 }
 
 export interface UseAssumptionTrackerResult {
@@ -46,9 +56,12 @@ export interface UseAssumptionTrackerResult {
   
   /**
    * Record assumptions to the audit trail.
+   * @param assumptions - The DCF assumptions to record
+   * @param note - Optional note explaining the change
+   * @param marketContext - Optional market context (price, intrinsic value, P/E)
    * @returns true if changes were recorded, false if nothing changed
    */
-  recordAssumptions: (assumptions: Assumptions, note?: string) => Promise<boolean>;
+  recordAssumptions: (assumptions: Assumptions, note?: string, marketContext?: MarketContext) => Promise<boolean>;
   
   /** Fetch full audit history */
   fetchHistory: () => Promise<void>;
@@ -70,7 +83,8 @@ export function useAssumptionTracker(symbol: string): UseAssumptionTrackerResult
 
   const recordAssumptions = useCallback(async (
     assumptions: Assumptions,
-    note?: string
+    note?: string,
+    marketContext?: MarketContext
   ): Promise<boolean> => {
     try {
       const response = await fetch(`${API_BASE}/api/audit/${symbol}`, {
@@ -79,6 +93,9 @@ export function useAssumptionTracker(symbol: string): UseAssumptionTrackerResult
         body: JSON.stringify({
           assumptions,
           note: note || null,
+          price_at_time: marketContext?.price_at_time || null,
+          intrinsic_value_at_time: marketContext?.intrinsic_value_at_time || null,
+          pe_ratio_at_time: marketContext?.pe_ratio_at_time || null,
         }),
       });
 

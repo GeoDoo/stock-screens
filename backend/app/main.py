@@ -1240,6 +1240,10 @@ class AuditRequest(BaseModel):
     """Request to record assumption changes."""
     assumptions: dict  # Field name -> value
     note: Optional[str] = None
+    # Market context at time of recording (for thesis tracking)
+    price_at_time: Optional[float] = None
+    intrinsic_value_at_time: Optional[float] = None
+    pe_ratio_at_time: Optional[float] = None
 
 
 @app.post("/api/audit/{symbol}", status_code=201)
@@ -1288,6 +1292,9 @@ async def record_assumptions(
         changes=changes,
         note=request.note,
         is_initial=is_initial,
+        price_at_time=request.price_at_time,
+        intrinsic_value_at_time=request.intrinsic_value_at_time,
+        pe_ratio_at_time=request.pe_ratio_at_time,
     )
     
     saved = repo.save_entry(entry)
