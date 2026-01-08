@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats, InvestmentMemo, CreateMemoRequest, PostMortemAction, MemoStatus } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats, CreateMemoRequest } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { FinancialRatiosTable } from './components/FinancialRatiosTable';
 import { DiscountRateModal } from './components/DiscountRateModal';
@@ -18,8 +18,7 @@ import {
 import { shouldFallback, getAlternativeProvider, getProviderDisplayName } from './providerFallback';
 import { useAssumptionTracker } from './hooks/useAssumptionTracker';
 import { MemoCreateModal } from './components/MemoCreateModal';
-import { MemosPage } from './components/MemosPage';
-import { MemoDetailView } from './components/MemoDetailView';
+import { Layout } from './components/Layout';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -215,8 +214,6 @@ export default function App() {
   
   // Investment Memo state
   const [showMemoCreate, setShowMemoCreate] = useState(false);
-  const [showMemosPage, setShowMemosPage] = useState(false);
-  const [selectedMemo, setSelectedMemo] = useState<InvestmentMemo | null>(null);
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
   
   // Tab navigation
@@ -613,42 +610,6 @@ export default function App() {
     return res.json();
   };
 
-  const handleAddPostMortem = async (
-    memoId: number,
-    note: string,
-    action: PostMortemAction,
-    price: number,
-    iv: number
-  ) => {
-    const res = await fetch(`${API_BASE}/api/memos/${memoId}/post-mortems`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ note, action, price_at_time: price, iv_at_time: iv }),
-    });
-    if (!res.ok) {
-      throw new Error('Failed to add post-mortem');
-    }
-  };
-
-  const handleCloseMemo = async (memoId: number, status: MemoStatus, reason: string) => {
-    const res = await fetch(`${API_BASE}/api/memos/${memoId}/close`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, reason }),
-    });
-    if (!res.ok) {
-      throw new Error('Failed to close memo');
-    }
-  };
-
-  const refreshSelectedMemo = async () => {
-    if (!selectedMemo) return;
-    const res = await fetch(`${API_BASE}/api/memos/${selectedMemo.id}`);
-    if (res.ok) {
-      setSelectedMemo(await res.json());
-    }
-  };
-
   const runTechnicalAnalysis = async () => {
     if (!stockData || !selectedTechnicalProvider) return;
     
@@ -878,29 +839,7 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
-      <div className="w-full max-w-[1600px] mx-auto px-8 lg:px-16 py-16">
-        {/* Header */}
-        <header className="mb-12 flex items-start justify-between">
-      <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Stock Analysis</h1>
-            <p className="text-sm text-gray-400 mt-2">Fundamental & Technical Analysis</p>
-          </div>
-<div className="flex gap-2">
-            <button
-              onClick={() => setShowMemosPage(true)}
-              className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-300 transition-colors"
-            >
-              Memos
-            </button>
-            <a
-              href="/glossary"
-              className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-300 transition-colors"
-            >
-              Glossary
-            </a>
-          </div>
-        </header>
+    <Layout>
 
         {/* Provider Selection + Ticker in one cohesive block */}
         <section className="mb-12 space-y-8">
@@ -2465,29 +2404,6 @@ export default function App() {
         />
       )}
 
-      {showMemosPage && (
-        <MemosPage
-          onClose={() => setShowMemosPage(false)}
-          onSelectMemo={(memo) => {
-            setSelectedMemo(memo);
-            setShowMemosPage(false);
-          }}
-        />
-      )}
-
-      {selectedMemo && (
-        <MemoDetailView
-          memo={selectedMemo}
-          onClose={() => setSelectedMemo(null)}
-          onAddPostMortem={(note, action, price, iv) => 
-            handleAddPostMortem(selectedMemo.id, note, action, price, iv)
-          }
-          onCloseMemo={(status, reason) => 
-            handleCloseMemo(selectedMemo.id, status, reason)
-          }
-          onRefresh={refreshSelectedMemo}
-        />
-      )}
-    </div>
+    </Layout>
   );
 }
