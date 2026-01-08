@@ -62,16 +62,32 @@ class TestDataExtractor:
         assert abs(extractor.tax_rate() - 0.25) < 0.001
 
     def test_extract_cost_of_debt(self):
-        """Calculate cost of debt from interest expense and total debt."""
+        """Calculate cost of debt from interest expense and total debt.
+        
+        Cost of debt has a floor of risk-free rate + credit spread (6.5%).
+        """
         data = {
             "profile": {},
-            "income_statement": [{"interestExpense": 5000000}],
+            "income_statement": [{"interestExpense": 8000000}],  # 8M interest
+            "balance_sheet": [{"totalDebt": 100000000}],  # 100M debt
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        # 8M / 100M = 0.08 (8%) - above floor, so actual rate used
+        assert abs(extractor.cost_of_debt() - 0.08) < 0.001
+    
+    def test_cost_of_debt_applies_floor(self):
+        """Cost of debt should not go below floor (risk-free + spread = 6.5%)."""
+        data = {
+            "profile": {},
+            "income_statement": [{"interestExpense": 3000000}],  # Very low interest
             "balance_sheet": [{"totalDebt": 100000000}],
             "cash_flow": [],
         }
         extractor = DataExtractor(data)
-        # 5M / 100M = 0.05 (5%)
-        assert abs(extractor.cost_of_debt() - 0.05) < 0.001
+        # 3M / 100M = 0.03 (3%) - below floor, so floor (6.5%) used
+        # Floor = DEFAULT_TREASURY_RATE (4.5%) + DEFAULT_CREDIT_SPREAD (2%) = 6.5%
+        assert abs(extractor.cost_of_debt() - 0.065) < 0.001
 
     def test_extract_fcf(self):
         """Extract free cash flow from cash flow statement."""
@@ -119,9 +135,10 @@ class TestDataExtractor:
         assert extractor.cost_of_debt() == 0.0
 
     def test_handles_missing_interest_expense_with_debt(self):
-        """Cost of debt should be 0 if company has debt but no interest expense reported.
+        """Cost of debt applies floor when interest expense is missing but debt exists.
         
-        This happens for companies like Apple where interest income exceeds expense.
+        This happens for companies like Apple where interest income exceeds expense,
+        or when data is missing. Using 0% would understate WACC and inflate valuations.
         """
         data = {
             "profile": {},
@@ -130,8 +147,9 @@ class TestDataExtractor:
             "cash_flow": [],
         }
         extractor = DataExtractor(data)
-        # Company has debt but no interest expense - assume 0% effective cost
-        assert extractor.cost_of_debt() == 0.0
+        # Company has debt but no interest expense - apply conservative floor
+        # Floor = DEFAULT_TREASURY_RATE (4.5%) + DEFAULT_CREDIT_SPREAD (2%) = 6.5%
+        assert abs(extractor.cost_of_debt() - 0.065) < 0.001
 
     def test_market_risk_premium_default(self):
         """Market risk premium defaults to 6%."""

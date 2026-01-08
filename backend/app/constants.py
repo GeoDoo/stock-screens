@@ -16,6 +16,11 @@ DEFAULT_MARKET_RISK_PREMIUM = 0.06
 # Default terminal growth rate (long-term GDP growth)
 DEFAULT_TERMINAL_GROWTH = 0.03
 
+# Default credit spread over risk-free rate (2%)
+# Used when interest expense is missing but debt exists
+# Conservative estimate for investment-grade corporate debt
+DEFAULT_CREDIT_SPREAD = 0.02
+
 # Rate limit warning threshold (warn at 80% usage)
 RATE_LIMIT_WARNING_THRESHOLD = 0.8
 
