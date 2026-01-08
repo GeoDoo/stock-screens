@@ -57,7 +57,7 @@ export function DiscountRateModal({ isOpen, onClose, onSubmit, onSkip }: Discoun
           Discount Rate Required
         </h2>
         
-        <p className="text-red-600 mb-6">
+        <p className="text-gray-600 mb-6">
           WACC cannot be calculated due to missing data (e.g., Beta, Cost of Debt). 
           Please provide your own discount rate to continue with DCF valuation, or skip DCF analysis.
         </p>
@@ -77,7 +77,7 @@ export function DiscountRateModal({ isOpen, onClose, onSubmit, onSkip }: Discoun
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500"
           />
           {showWarning && (
-            <p className="mt-2 text-amber-600 text-sm">
+            <p className="mt-2 text-gray-500 text-sm">
               This rate seems unusually high. Typical rates are 8-15%.
             </p>
           )}
