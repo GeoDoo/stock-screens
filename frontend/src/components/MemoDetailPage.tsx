@@ -99,6 +99,7 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
       }
       setShowCloseModal(false);
       setCloseReason('');
+      setCloseStatus('closed_neutral');
     } catch (err) {
       console.error('Failed to close memo:', err);
     } finally {
