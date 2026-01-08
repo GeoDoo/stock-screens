@@ -1,21 +1,24 @@
-# Stock Valuation Tool
+# Stock Analysis Platform
 
-DCF analysis for stock valuation with proper fundamental projections.
+A comprehensive stock valuation and analysis tool combining DCF modeling, technical analysis, and investment memo tracking.
 
-## Features
+## Overview
 
-- **Proper DCF Model**: Revenue-driven FCF projections
-- **WACC Calculator**: Cost of equity (CAPM) + after-tax cost of debt
-- **Historical Hints**: Shows past performance as reference
-- **User Assumptions**: You control growth, margins, and risk premium
+This platform provides professional-grade equity analysis capabilities:
 
-## Tech Stack
-
-- **Backend**: Python, FastAPI
-- **Frontend**: React, TypeScript, Vite
-- **Data**: Financial Modeling Prep API
+- **DCF Valuation** — Revenue-driven free cash flow projections with WACC calculation
+- **Scenario Analysis** — Bull/Base/Bear cases with sensitivity tables
+- **Technical Analysis** — Price trends, moving averages, and momentum indicators
+- **Investment Memos** — Track investment theses with performance monitoring
+- **Multi-Provider Support** — FMP, Yahoo Finance, and Massive with automatic fallback
 
 ## Quick Start
+
+### Prerequisites
+
+- Python 3.12+
+- Node.js 18+
+- API key from [Financial Modeling Prep](https://financialmodelingprep.com/)
 
 ### Backend
 
@@ -25,14 +28,14 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Set your FMP API key
+# Set API key
 export FMP_API_KEY=your_key_here
 
 # Run server
 uvicorn app.main:app --reload
 ```
 
-API runs at `http://localhost:8000`
+Server runs at `http://localhost:8000`
 
 ### Frontend
 
@@ -44,55 +47,154 @@ npm run dev
 
 App runs at `http://localhost:5173`
 
-## API Endpoints
+## Features
 
-### GET /api/stock/{symbol}
+### Fundamental Analysis
 
-Returns company data and historical hints.
+| Feature | Description |
+|---------|-------------|
+| DCF Model | NOPAT-based FCF projections with terminal value |
+| WACC Calculator | CAPM cost of equity + after-tax cost of debt |
+| Scenario Manager | Compare bull/base/bear valuations side by side |
+| Sensitivity Analysis | WACC vs terminal growth matrix |
+| Historical Hints | Auto-populated assumptions from financial history |
+| Financial Ratios | Profitability, liquidity, leverage metrics |
+| Comparable Analysis | P/E, EV/EBITDA, P/S, P/B vs sector peers |
 
-```json
-{
-  "symbol": "AAPL",
-  "company_name": "Apple Inc.",
-  "data": {
-    "beta": 1.25,
-    "market_cap": 3000000000000,
-    "total_debt": 111088000000,
-    "cash": 29965000000,
-    "tax_rate": 0.147,
-    "risk_free_rate": 0.045
-  },
-  "hints": {
-    "revenue_growth": 0.024,
-    "operating_margin": 0.298
-  }
-}
-```
+### Technical Analysis
 
-### POST /api/stock/{symbol}/valuation
+| Feature | Description |
+|---------|-------------|
+| Trend Analysis | 52-week range, moving averages, momentum |
+| Volume Analysis | Average volume, relative volume |
+| Support/Resistance | Key price levels identification |
 
-Run DCF with your assumptions.
+### Investment Tracking
 
-```json
-{
-  "revenue_growth": 0.10,
-  "operating_margin": 0.30,
-  "terminal_growth_rate": 0.03,
-  "market_risk_premium": 0.06,
-  "projection_years": 5
-}
-```
+| Feature | Description |
+|---------|-------------|
+| Investment Memos | Document thesis, assumptions, catalysts, risks |
+| Performance Tracking | Entry price vs current, return calculation |
+| Post-Mortems | Track decisions and learnings over time |
+| Assumption Audit Trail | Version history of DCF inputs with notes |
 
-Returns intrinsic value per share and full breakdown.
-
-## DCF Model
+## Architecture
 
 ```
-FCF = NOPAT + D&A - CapEx - ΔWorking Capital
+┌─────────────────────────────────────────────────────────────┐
+│                        Frontend                             │
+│                   React + TypeScript                        │
+│                                                             │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐       │
+│  │ Analysis│  │  Memos  │  │ Glossary│  │ Layout  │       │
+│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘       │
+└───────┼────────────┼────────────┼────────────┼─────────────┘
+        │            │            │            │
+        └────────────┴─────┬──────┴────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │   REST API  │
+                    │   FastAPI   │
+                    └──────┬──────┘
+                           │
+┌──────────────────────────┼──────────────────────────────────┐
+│                          │           Backend                │
+│         ┌────────────────┼────────────────┐                │
+│         │                │                │                │
+│   ┌─────▼─────┐   ┌──────▼──────┐   ┌─────▼─────┐         │
+│   │ Valuation │   │   Memos     │   │ Technical │         │
+│   │  Service  │   │ Repository  │   │  Service  │         │
+│   └─────┬─────┘   └──────┬──────┘   └─────┬─────┘         │
+│         │                │                │                │
+│   ┌─────▼─────┐   ┌──────▼──────┐   ┌─────▼─────┐         │
+│   │    DCF    │   │   SQLite    │   │ Indicators│         │
+│   │ Calculator│   │  Database   │   │ Calculator│         │
+│   └─────┬─────┘   └─────────────┘   └───────────┘         │
+│         │                                                  │
+│   ┌─────▼─────────────────────────────────────────┐       │
+│   │              Data Providers                    │       │
+│   │  ┌───────┐  ┌───────┐  ┌───────┐             │       │
+│   │  │  FMP  │  │ Yahoo │  │Massive│             │       │
+│   │  └───────┘  └───────┘  └───────┘             │       │
+│   └───────────────────────────────────────────────┘       │
+└────────────────────────────────────────────────────────────┘
 ```
 
-Where:
-- NOPAT = EBIT × (1 - Tax Rate)
-- Terminal Value = Final FCF × (1 + g) / (WACC - g)
-- Equity Value = Enterprise Value - Net Debt
-- Intrinsic Value = Equity Value / Shares Outstanding
+## Project Structure
+
+```
+stock-screens/
+├── backend/
+│   ├── app/
+│   │   ├── main.py              # FastAPI application
+│   │   ├── models/              # Data models
+│   │   │   ├── assumption_audit.py
+│   │   │   └── memo.py
+│   │   └── services/            # Business logic
+│   │       ├── valuation_service.py
+│   │       ├── dcf_calculator.py
+│   │       ├── wacc_calculator.py
+│   │       ├── fcf_projector.py
+│   │       ├── scenario_calculator.py
+│   │       ├── sensitivity_calculator.py
+│   │       ├── technical_service.py
+│   │       ├── memo_repository.py
+│   │       ├── audit_repository.py
+│   │       ├── fmp_provider.py
+│   │       ├── yahoo_provider.py
+│   │       └── ...
+│   ├── tests/                   # Pytest test suite
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx              # Main application
+│   │   ├── components/          # React components
+│   │   │   ├── Layout.tsx
+│   │   │   ├── MemosPage.tsx
+│   │   │   ├── MemoDetailPage.tsx
+│   │   │   ├── GlossaryPage.tsx
+│   │   │   └── ...
+│   │   ├── hooks/               # Custom hooks
+│   │   └── types.ts             # TypeScript types
+│   └── package.json
+└── docs/                        # Documentation
+```
+
+## Documentation
+
+- [API Reference](docs/API.md) — Full endpoint documentation
+- [Architecture](docs/ARCHITECTURE.md) — System design and data flow
+- [Development Guide](docs/DEVELOPMENT.md) — Setup, testing, contributing
+- [DCF Model](docs/DCF_MODEL.md) — Valuation methodology explained
+
+## Testing
+
+### Backend
+
+```bash
+cd backend
+source venv/bin/activate
+pytest -v
+```
+
+64+ tests covering services, calculators, and API endpoints.
+
+### Frontend
+
+```bash
+cd frontend
+npm test
+```
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS |
+| Backend | Python 3.12, FastAPI, SQLite |
+| Data | FMP API, Yahoo Finance, Massive |
+| Testing | Pytest (backend), Vitest (frontend) |
+
+## License
+
+MIT
