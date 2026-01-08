@@ -1,8 +1,11 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { FinancialRatiosTable } from './components/FinancialRatiosTable';
 import { DiscountRateModal } from './components/DiscountRateModal';
+import { AssumptionHistoryDrawer } from './components/AssumptionHistoryDrawer';
+import { AssumptionCommitModal } from './components/AssumptionCommitModal';
+import { AssumptionHistoryIndicator } from './components/AssumptionHistoryIndicator';
 import { formatCurrency, formatPercent, formatNumber, formatShareCount } from './utils';
 import {
   normalizeStockData,
@@ -14,6 +17,7 @@ import {
   formatMetric,
 } from './normalizers';
 import { shouldFallback, getAlternativeProvider, getProviderDisplayName } from './providerFallback';
+import { useAssumptionTracker, AssumptionChange } from './hooks/useAssumptionTracker';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -179,9 +183,25 @@ export default function App() {
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [pendingAnalysis, setPendingAnalysis] = useState<StockDataResponse | null>(null);
   
+  // Assumption Audit Trail
+  const [showCommitModal, setShowCommitModal] = useState(false);
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+  const [fieldHistoryCache, setFieldHistoryCache] = useState<Record<string, AssumptionChange[]>>({});
+  
   // Tab navigation
   const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
   const [fundamentalPeriod, setFundamentalPeriod] = useState<'annual' | 'ttm'>('ttm'); // Default to TTM (more current)
+  
+  // Assumption Audit Trail hook
+  const assumptionTracker = useAssumptionTracker(stockData?.symbol || '');
+  
+  // Fetch audit history when stock changes
+  useEffect(() => {
+    if (stockData?.symbol) {
+      assumptionTracker.fetchHistory();
+      setFieldHistoryCache({}); // Clear cache on symbol change
+    }
+  }, [stockData?.symbol]);
   
   // Computed: Get hints for the selected period
   const currentHints = stockData ? 
@@ -447,6 +467,94 @@ export default function App() {
     }
   };
 
+  // === Assumption Audit Trail Functions ===
+  
+  // Get current assumptions as an object for audit trail
+  const getCurrentAssumptions = useCallback(() => {
+    const dataHints = stockData?.hints_ttm || stockData?.hints_annual;
+    return {
+      revenue_growth: revenueGrowth ? parseFloat(revenueGrowth) / 100 : (dataHints?.revenue_growth ?? 0.05),
+      operating_margin: operatingMargin ? parseFloat(operatingMargin) / 100 : (dataHints?.operating_margin ?? 0.15),
+      terminal_growth: parseFloat(terminalGrowth) / 100,
+      discount_rate: useCustomDiscountRate && customDiscountRate 
+        ? parseFloat(customDiscountRate) / 100 
+        : (stockData?.data.wacc ?? 0.10),
+      projection_years: parseInt(projectionYears),
+      market_risk_premium: parseFloat(marketRiskPremium) / 100,
+    };
+  }, [revenueGrowth, operatingMargin, terminalGrowth, customDiscountRate, useCustomDiscountRate, projectionYears, marketRiskPremium, stockData]);
+
+  // Detect which fields changed from the last recorded snapshot
+  const getChangedFields = useCallback((): string[] => {
+    if (!assumptionTracker.hasHistory) return [];
+    
+    // Compare current values to what's in history
+    const current = getCurrentAssumptions();
+    const history = assumptionTracker.history;
+    
+    if (history.length === 0) return Object.keys(current);
+    
+    // Build latest snapshot from history
+    const latestValues: Record<string, number | null> = {};
+    for (const entry of [...history].reverse()) {
+      for (const change of entry.changes) {
+        latestValues[change.field] = change.new_value;
+      }
+    }
+    
+    // Find differences
+    const changed: string[] = [];
+    for (const [field, value] of Object.entries(current)) {
+      const prev = latestValues[field];
+      if (prev === undefined || Math.abs((prev || 0) - (value || 0)) > 0.0001) {
+        changed.push(field);
+      }
+    }
+    
+    return changed;
+  }, [getCurrentAssumptions, assumptionTracker.history, assumptionTracker.hasHistory]);
+
+  // Handle "Re-run Valuation" button - shows commit modal
+  const handleRerunValuation = () => {
+    setShowCommitModal(true);
+  };
+
+  // Handle commit confirmation - record assumptions then run valuation
+  const handleCommitAndRun = async (note: string | null) => {
+    setShowCommitModal(false);
+    
+    if (!stockData) return;
+    
+    // Record assumptions to audit trail
+    const assumptions = getCurrentAssumptions();
+    try {
+      await assumptionTracker.recordAssumptions(assumptions, note || undefined);
+    } catch (err) {
+      console.error('Failed to record assumptions:', err);
+      // Continue with valuation even if audit fails
+    }
+    
+    // Run valuation and scenarios
+    const discountOverride = useCustomDiscountRate && customDiscountRate 
+      ? parseFloat(customDiscountRate) / 100 
+      : undefined;
+    
+    await runValuationWithData(stockData, discountOverride);
+    await runScenariosWithData(stockData, discountOverride);
+  };
+
+  // Fetch field history for inline indicators
+  const fetchFieldHistory = useCallback(async (field: string) => {
+    if (fieldHistoryCache[field]) return fieldHistoryCache[field];
+    
+    try {
+      const history = await assumptionTracker.getFieldHistory(field);
+      setFieldHistoryCache(prev => ({ ...prev, [field]: history }));
+      return history;
+    } catch {
+      return [];
+    }
+  }, [assumptionTracker, fieldHistoryCache]);
 
 
   const runTechnicalAnalysis = async () => {
@@ -1247,7 +1355,18 @@ export default function App() {
 
             {/* Assumptions */}
             <section className="mb-16 pt-8 border-t border-gray-100">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Your Assumptions</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Your Assumptions</h2>
+                {assumptionTracker.hasHistory && (
+                  <button
+                    onClick={() => setShowHistoryDrawer(true)}
+                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  >
+                    <span>🕐</span>
+                    <span>View History ({assumptionTracker.history.length})</span>
+                  </button>
+                )}
+              </div>
               <p className="text-sm text-gray-400 mb-8">Adjust these based on your analysis</p>
               
               <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-8">
@@ -1306,6 +1425,32 @@ export default function App() {
       </div>
                 )}
               </div>
+
+              {/* Re-run Valuation Button */}
+              {result && (
+                <div className="mt-8 pt-6 border-t border-gray-100 flex items-center gap-4">
+                  <button
+                    onClick={handleRerunValuation}
+                    disabled={loading}
+                    className="px-6 py-3 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                        Running...
+                      </>
+                    ) : (
+                      <>
+                        <span>📊</span>
+                        Re-run Valuation
+                      </>
+                    )}
+                  </button>
+                  <span className="text-sm text-gray-400">
+                    Updates will be tracked in your assumption history
+                  </span>
+                </div>
+              )}
 
             </section>
 
@@ -2081,6 +2226,24 @@ export default function App() {
         }}
         onSubmit={handleDiscountRateSubmit}
         onSkip={handleDiscountRateSkip}
+      />
+
+      {/* Assumption Commit Modal - shown when re-running valuation */}
+      <AssumptionCommitModal
+        isOpen={showCommitModal}
+        onClose={() => setShowCommitModal(false)}
+        onCommit={handleCommitAndRun}
+        isInitial={!assumptionTracker.hasHistory}
+        changedFields={getChangedFields()}
+      />
+
+      {/* Assumption History Drawer */}
+      <AssumptionHistoryDrawer
+        isOpen={showHistoryDrawer}
+        onClose={() => setShowHistoryDrawer(false)}
+        symbol={stockData?.symbol || ''}
+        history={assumptionTracker.history}
+        isLoading={assumptionTracker.isLoading}
       />
     </div>
   );
