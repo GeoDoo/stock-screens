@@ -1,5 +1,5 @@
 from typing import Any, List, Optional
-from app.constants import DEFAULT_MARKET_RISK_PREMIUM
+from app.constants import DEFAULT_MARKET_RISK_PREMIUM, DEFAULT_TREASURY_RATE, DEFAULT_CREDIT_SPREAD
 
 
 class DataExtractor:
@@ -79,8 +79,8 @@ class DataExtractor:
         Cost of debt calculated from interest expense and total debt.
         cost_of_debt = interest_expense / total_debt
         
-        For companies with no interest expense reported (e.g., Apple has more 
-        interest income than expense), returns 0.0 if they have debt.
+        When interest expense is missing but debt exists, applies a conservative
+        floor (risk-free rate + credit spread) to avoid understating WACC.
         """
         interest_expense = self._get_latest(self.income_statement, "interestExpense")
         total_debt = self.total_debt()
@@ -89,13 +89,18 @@ class DataExtractor:
             return None
         if total_debt == 0:
             return 0.0  # No debt, no cost
-        if interest_expense is None:
-            # Company has debt but no interest expense reported
+        if interest_expense is None or interest_expense <= 0:
+            # Company has debt but no/negative interest expense reported
             # (e.g., interest income exceeds expense, or data is missing)
-            # Return 0.0 as they effectively have no net borrowing cost
-            return 0.0
-
-        return interest_expense / total_debt
+            # Apply conservative floor: risk-free rate + credit spread
+            # This prevents artificially low WACC that inflates valuations
+            return DEFAULT_TREASURY_RATE + DEFAULT_CREDIT_SPREAD
+        
+        calculated_rate = interest_expense / total_debt
+        
+        # Apply floor to prevent unrealistically low cost of debt
+        floor_rate = DEFAULT_TREASURY_RATE + DEFAULT_CREDIT_SPREAD
+        return max(calculated_rate, floor_rate)
 
     def free_cash_flow(self) -> Optional[float]:
         """Free cash flow from cash flow statement."""
