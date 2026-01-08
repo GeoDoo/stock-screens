@@ -1485,18 +1485,25 @@ export default function App() {
               <div className="mb-8 pt-4 border-t border-gray-100">
                 <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Advanced Options</p>
                 <div className="flex flex-wrap gap-6">
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={useMidYearDiscounting}
-                      onChange={(e) => setUseMidYearDiscounting(e.target.checked)}
-                      className="w-4 h-4 accent-gray-600"
-                    />
-                    <span className="text-sm text-gray-500 group-hover:text-gray-700">
-                      Mid-year discounting
-                    </span>
-                    <span className="text-xs text-gray-400">(assumes cash flows occur mid-year)</span>
-                  </label>
+                  <div className="flex flex-col">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={useMidYearDiscounting}
+                        onChange={(e) => setUseMidYearDiscounting(e.target.checked)}
+                        className="w-4 h-4 accent-gray-600"
+                      />
+                      <span className="text-sm text-gray-500 group-hover:text-gray-700">
+                        Mid-year discounting
+                      </span>
+                      <span className="text-xs text-gray-400">(assumes cash flows occur mid-year)</span>
+                    </label>
+                    {useMidYearDiscounting && (
+                      <div className="ml-7 mt-1 text-xs text-emerald-600">
+                        +2-5% value increase (cash flows arrive 6 months earlier)
+                      </div>
+                    )}
+                  </div>
                   
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-gray-500">Working Capital:</span>
@@ -1508,6 +1515,34 @@ export default function App() {
                       <option value="level">Level (WC = Revenue × Ratio)</option>
                       <option value="incremental">Incremental (ΔWC = ΔRevenue × Intensity)</option>
                     </select>
+                  </div>
+                </div>
+                
+                {/* WC Mode Explanation */}
+                <div className={`mt-4 p-4 rounded-lg border ${wcMode === 'level' ? 'bg-blue-50 border-blue-100' : 'bg-amber-50 border-amber-100'}`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`w-2 h-2 rounded-full mt-1.5 ${wcMode === 'level' ? 'bg-blue-400' : 'bg-amber-400'}`} />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-700 mb-1">
+                        {wcMode === 'level' ? 'Level Mode Active' : 'Incremental Mode Active'}
+                      </p>
+                      <p className="text-xs text-gray-600 mb-2">
+                        {wcMode === 'level' 
+                          ? 'Working capital is reset to target ratio each year. If current WC differs from target, Year 1 will show a large adjustment (cash release or investment).'
+                          : 'Working capital grows incrementally with revenue. Preserves current WC level and only adds the portion needed for growth.'}
+                      </p>
+                      <div className="text-xs text-gray-500 space-y-1">
+                        <p><strong>Formula:</strong> {wcMode === 'level' 
+                          ? 'WC = Revenue × Ratio, then ΔWC = WC_new − WC_old'
+                          : 'ΔWC = (Revenue_new − Revenue_old) × Intensity'}</p>
+                        <p><strong>Best for:</strong> {wcMode === 'level'
+                          ? 'Companies with WC that needs to normalize to industry standards'
+                          : 'Stable companies or when current WC level is appropriate'}</p>
+                        <p className="text-gray-400 italic">
+                          Note: Both modes give similar results when actual WC ≈ Revenue × Ratio
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
