@@ -38,388 +38,6 @@ GET /api/providers
 
 ---
 
-### Get Stock
-
-Get stock data and historical hints.
-
-Args:
-    symbol: Stock ticker symbol
-    provider: Data provider to use (fmp or yahoo) - REQUIRED
-
-Returns:
-- data: Read-only values (beta, debt, cash, etc.)
-- hints: Historical averages for reference (user decides what to use)
-
-```
-GET /api/stock/{symbol}
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `symbol` | string | Yes |  |
-| `provider` | string | Yes |  |
-
-
-**Response**
-
-```json
-{
-  "symbol": "string",
-  "company_name": "string",
-  "industry": "string",
-  "sector": "string",
-  "data_provider": "string",
-  "data": {
-    "beta": 0.0,
-    "market_cap": 0.0,
-    "total_debt": 0.0,
-    "total_equity": 0.0,
-    "cash": 0.0,
-    "tax_rate": 0.0,
-    "cost_of_debt": 0.0,
-    "shares_outstanding": 0.0,
-    "risk_free_rate": 0.0,
-    "wacc": 0.0,
-    "revenue": 0.0,
-    "working_capital": 0.0
-  },
-  "hints": {
-    "revenue_growth": 0.0,
-    "operating_margin": 0.0,
-    "da_ratio": 0.0,
-    "capex_ratio": 0.0,
-    "wc_ratio": 0.0
-  },
-  "validation": {
-    "has_errors": true,
-    "has_warnings": true,
-    "errors": [
-      {
-        "field": "string",
-        "message": "string"
-      }
-    ],
-    "warnings": [
-      {
-        "field": "string",
-        "message": "string"
-      }
-    ]
-  }
-}
-```
-
----
-
-### Run Valuation
-
-Run DCF valuation with user-provided assumptions.
-
-Supports two modes:
-1. Single growth rate: Uses revenue_growth for all projection_years
-2. Multi-stage growth: Uses growth_stages to define phases (overrides revenue_growth)
-
-Args:
-    symbol: Stock ticker symbol
-    provider: Data provider to use (fmp or yahoo) - REQUIRED
-    request: Valuation assumptions from user
-
-```
-POST /api/stock/{symbol}/valuation
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `symbol` | string | Yes |  |
-| `provider` | string | Yes |  |
-
-**Request Body**
-
-```json
-{
-  "revenue_growth": 0.0,
-  "operating_margin": 0.0,
-  "terminal_growth_rate": 0.0,
-  "market_risk_premium": 0.0,
-  "projection_years": 0,
-  "discount_rate_override": 0.0,
-  "da_ratio": 0.0,
-  "capex_ratio": 0.0,
-  "wc_ratio": 0.0,
-  "use_mid_year_discounting": true,
-  "wc_mode": "string",
-  "growth_stages": [
-    {
-      "name": "string",
-      "years": 0,
-      "growth_rate": 0.0,
-      "end_growth_rate": 0.0
-    }
-  ]
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `revenue_growth` | number | Yes |  |
-| `operating_margin` | number | Yes |  |
-| `terminal_growth_rate` | number | Yes |  |
-| `market_risk_premium` | number | Yes |  |
-| `projection_years` | integer | Yes |  |
-| `discount_rate_override` | number | null | No |  |
-| `da_ratio` | number | null | No |  |
-| `capex_ratio` | number | null | No |  |
-| `wc_ratio` | number | null | No |  |
-| `use_mid_year_discounting` | boolean | No |  |
-| `wc_mode` | string | No |  |
-| `growth_stages` | array | null | No |  |
-
-
----
-
-### Run Scenarios
-
-Run scenario analysis (Bear/Base/Bull cases).
-
-Args:
-    symbol: Stock ticker symbol
-    provider: Data provider to use (fmp or yahoo) - REQUIRED
-    request: Scenario parameters
-
-If no scenarios provided, generates smart defaults based on historical data.
-Returns intrinsic values for each scenario and probability-weighted average.
-
-```
-POST /api/stock/{symbol}/scenarios
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `symbol` | string | Yes |  |
-| `provider` | string | Yes |  |
-
-**Request Body**
-
-```json
-{
-  "scenarios": [
-    {
-      "name": "string",
-      "revenue_growth": 0.0,
-      "operating_margin": 0.0,
-      "terminal_growth": 0.0,
-      "probability": 0.0,
-      "description": "string"
-    }
-  ],
-  "projection_years": 0,
-  "market_risk_premium": 0.0,
-  "discount_rate_override": 0.0,
-  "revenue_growth_hint": 0.0,
-  "operating_margin_hint": 0.0,
-  "da_ratio": 0.0,
-  "capex_ratio": 0.0,
-  "wc_ratio": 0.0
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `scenarios` | array | null | No |  |
-| `projection_years` | integer | No |  |
-| `market_risk_premium` | number | No |  |
-| `discount_rate_override` | number | null | No |  |
-| `revenue_growth_hint` | number | null | No |  |
-| `operating_margin_hint` | number | null | No |  |
-| `da_ratio` | number | null | No |  |
-| `capex_ratio` | number | null | No |  |
-| `wc_ratio` | number | null | No |  |
-
-
----
-
-### Get Comparables
-
-Run comparable company analysis.
-
-Args:
-    symbol: Stock ticker symbol
-    provider: Data provider to use (fmp or yahoo) - REQUIRED
-    max_peers: Maximum number of peer companies to include
-
-Compares the stock against sector peers using valuation multiples:
-- P/E (Price to Earnings)
-- EV/EBITDA (Enterprise Value to EBITDA)
-- P/S (Price to Sales)
-- P/B (Price to Book)
-
-Returns implied fair value based on peer median multiples.
-
-```
-GET /api/stock/{symbol}/comparables
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `symbol` | string | Yes |  |
-| `provider` | string | Yes |  |
-| `max_peers` | integer | No |  (default: `5`) |
-
-
-
----
-
-### Get Ratios
-
-Get comprehensive financial ratios for a stock.
-
-Args:
-    symbol: Stock ticker symbol
-    provider: Data provider to use (fmp or yahoo) - REQUIRED
-
-Returns ratios organized by category:
-- Valuation: P/E, Earnings Yield, P/S, P/B, EV/EBITDA, EV/Revenue
-- Dividend: Dividend Yield, Payout Ratio
-- Profitability: Gross/Operating/Net Margins, ROE, ROA, ROIC
-- Liquidity: Current Ratio, Quick Ratio, Debt/Equity, Interest Coverage
-- Efficiency: Asset Turnover, Inventory Turnover
-
-```
-GET /api/stock/{symbol}/ratios
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `symbol` | string | Yes |  |
-| `provider` | string | Yes |  |
-
-
-
----
-
-### Get Dividends
-
-Get dividend history and metrics for a stock.
-
-Args:
-    symbol: Stock ticker symbol
-    provider: Data provider to use (yahoo recommended for dividend data)
-
-Returns dividend analysis including:
-- Current annual dividend and yield
-- Dividend growth rate (CAGR)
-- Consecutive years of payments
-- Annual dividend history
-
-```
-GET /api/stock/{symbol}/dividends
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `symbol` | string | Yes |  |
-| `provider` | string | Yes |  |
-
-
-
----
-
-### Get Historical Valuation
-
-Get historical valuation context for a stock.
-
-Args:
-    symbol: Stock ticker symbol
-    provider: Data provider to use (fmp or yahoo)
-
-Compares current valuation multiples (P/E, P/S, P/B, EV/EBITDA)
-to 5-year averages to assess if stock is cheap or expensive
-relative to its own history.
-
-```
-GET /api/stock/{symbol}/historical-valuation
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `symbol` | string | Yes |  |
-| `provider` | string | Yes |  |
-
-
-
----
-
-### Get Technical Analysis
-
-Run technical analysis on a stock.
-
-Args:
-    symbol: Stock ticker symbol
-    provider: Technical analysis provider (yahoo, fmp, massive)
-    days: Days of historical data (default 365)
-
-Returns:
-    Price data, moving averages, RSI, MACD, and trend signals.
-
-```
-GET /api/stock/{symbol}/technical
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `symbol` | string | Yes |  |
-| `provider` | string | No |  (default: `massive`) |
-| `days` | integer | No |  (default: `365`) |
-
-
-
----
-
-### Batch Analyze
-
-Batch analyze endpoint - returns all fundamental data in a single call.
-
-This reduces API calls by fetching stock data once and computing all
-derived metrics (ratios, dividends, historical valuation) from that data.
-
-Returns:
-    - stock: Basic stock data and validation
-    - ratios: Financial ratios
-    - dividends: Dividend history and metrics
-    - historical_valuation: Historical valuation context
-    - rate_limit: Current rate limit status for the provider
-
-```
-GET /api/stock/{symbol}/analyze
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `symbol` | string | Yes |  |
-| `provider` | string | Yes |  |
-
-
-
----
-
 ### Get Rate Limits
 
 Get current rate limit statistics for all providers.
@@ -445,6 +63,49 @@ POST /api/rate-limits/reset
 
 
 ---
+
+### Analyze Capital Efficiency
+
+Analyze capital efficiency and value creation.
+
+Key metrics:
+- ROIC: Return on Invested Capital (profitability of capital)
+- Reinvestment Rate: % of earnings needed to fund growth
+- Value Spread: ROIC - WACC (positive = value creation)
+- Economic Profit (EVA): Dollar value created/destroyed
+
+Interpretation:
+- ROIC > WACC: Growth creates shareholder value
+- ROIC < WACC: Growth destroys shareholder value (despite earnings!)
+- High ROIC + Low reinvestment = Excellent capital efficiency
+
+```
+POST /api/capital-efficiency
+```
+
+
+**Request Body**
+
+```json
+{
+  "nopat": 0.0,
+  "invested_capital": 0.0,
+  "revenue_growth": 0.0,
+  "wacc": 0.0
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nopat` | number | Yes |  |
+| `invested_capital` | number | Yes |  |
+| `revenue_growth` | number | Yes |  |
+| `wacc` | number | Yes |  |
+
+
+---
+
+## audit
 
 ### Record Assumptions
 
@@ -568,6 +229,8 @@ GET /api/audit/{symbol}/field/{field}
 
 
 ---
+
+## memos
 
 ### Create Memo
 
@@ -877,23 +540,352 @@ POST /api/memos/{memo_id}/snapshots
 
 ---
 
+## stock
+
+### Get Stock
+
+Get stock data and historical hints.
+
+Args:
+    symbol: Stock ticker symbol
+    provider: Data provider to use (fmp or yahoo) - REQUIRED
+
+Returns:
+- data: Read-only values (beta, debt, cash, etc.)
+- hints: Historical averages for reference (user decides what to use)
+
+```
+GET /api/stock/{symbol}
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+
+**Response**
+
+```json
+{
+  "symbol": "string",
+  "company_name": "string",
+  "industry": "string",
+  "sector": "string",
+  "data_provider": "string",
+  "data": {
+    "beta": 0.0,
+    "market_cap": 0.0,
+    "total_debt": 0.0,
+    "total_equity": 0.0,
+    "cash": 0.0,
+    "tax_rate": 0.0,
+    "cost_of_debt": 0.0,
+    "shares_outstanding": 0.0,
+    "risk_free_rate": 0.0,
+    "wacc": 0.0,
+    "revenue": 0.0,
+    "working_capital": 0.0
+  },
+  "hints": {
+    "revenue_growth": 0.0,
+    "operating_margin": 0.0,
+    "da_ratio": 0.0,
+    "capex_ratio": 0.0,
+    "wc_ratio": 0.0
+  },
+  "validation": {
+    "has_errors": true,
+    "has_warnings": true,
+    "errors": [
+      {
+        "field": "string",
+        "message": "string"
+      }
+    ],
+    "warnings": [
+      {
+        "field": "string",
+        "message": "string"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### Run Valuation
+
+Run DCF valuation with user-provided assumptions.
+
+Supports two modes:
+1. Single growth rate: Uses revenue_growth for all projection_years
+2. Multi-stage growth: Uses growth_stages to define phases (overrides revenue_growth)
+
+```
+POST /api/stock/{symbol}/valuation
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+**Request Body**
+
+```json
+{
+  "revenue_growth": 0.0,
+  "operating_margin": 0.0,
+  "terminal_growth_rate": 0.0,
+  "market_risk_premium": 0.0,
+  "projection_years": 0,
+  "discount_rate_override": 0.0,
+  "da_ratio": 0.0,
+  "capex_ratio": 0.0,
+  "wc_ratio": 0.0,
+  "use_mid_year_discounting": true,
+  "wc_mode": "string",
+  "growth_stages": [
+    {
+      "name": "string",
+      "years": 0,
+      "growth_rate": 0.0,
+      "end_growth_rate": 0.0
+    }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `revenue_growth` | number | Yes |  |
+| `operating_margin` | number | Yes |  |
+| `terminal_growth_rate` | number | Yes |  |
+| `market_risk_premium` | number | Yes |  |
+| `projection_years` | integer | Yes |  |
+| `discount_rate_override` | number | null | No |  |
+| `da_ratio` | number | null | No |  |
+| `capex_ratio` | number | null | No |  |
+| `wc_ratio` | number | null | No |  |
+| `use_mid_year_discounting` | boolean | No |  |
+| `wc_mode` | string | No |  |
+| `growth_stages` | array | null | No |  |
+
+
+---
+
+### Run Scenarios
+
+Run scenario analysis (Bear/Base/Bull cases).
+
+If no scenarios provided, generates smart defaults based on historical data.
+Returns intrinsic values for each scenario and probability-weighted average.
+
+```
+POST /api/stock/{symbol}/scenarios
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+**Request Body**
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "string",
+      "revenue_growth": 0.0,
+      "operating_margin": 0.0,
+      "terminal_growth": 0.0,
+      "probability": 0.0,
+      "description": "string"
+    }
+  ],
+  "projection_years": 0,
+  "market_risk_premium": 0.0,
+  "discount_rate_override": 0.0,
+  "revenue_growth_hint": 0.0,
+  "operating_margin_hint": 0.0,
+  "da_ratio": 0.0,
+  "capex_ratio": 0.0,
+  "wc_ratio": 0.0
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `scenarios` | array | null | No |  |
+| `projection_years` | integer | No |  |
+| `market_risk_premium` | number | No |  |
+| `discount_rate_override` | number | null | No |  |
+| `revenue_growth_hint` | number | null | No |  |
+| `operating_margin_hint` | number | null | No |  |
+| `da_ratio` | number | null | No |  |
+| `capex_ratio` | number | null | No |  |
+| `wc_ratio` | number | null | No |  |
+
+
+---
+
+### Get Comparables
+
+Run comparable company analysis.
+
+Compares the stock against sector peers using valuation multiples.
+Returns implied fair value based on peer median multiples.
+
+```
+GET /api/stock/{symbol}/comparables
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+| `max_peers` | integer | No |  (default: `5`) |
+
+
+
+---
+
+### Get Ratios
+
+Get comprehensive financial ratios for a stock.
+
+Returns ratios organized by category:
+- Valuation: P/E, Earnings Yield, P/S, P/B, EV/EBITDA, EV/Revenue
+- Dividend: Dividend Yield, Payout Ratio
+- Profitability: Gross/Operating/Net Margins, ROE, ROA, ROIC
+- Liquidity: Current Ratio, Quick Ratio, Debt/Equity, Interest Coverage
+- Efficiency: Asset Turnover, Inventory Turnover
+
+```
+GET /api/stock/{symbol}/ratios
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+
+
+---
+
+### Get Dividends
+
+Get dividend history and metrics for a stock.
+
+Returns dividend analysis including:
+- Current annual dividend and yield
+- Dividend growth rate (CAGR)
+- Consecutive years of payments
+- Annual dividend history
+
+```
+GET /api/stock/{symbol}/dividends
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+
+
+---
+
+### Get Historical Valuation
+
+Get historical valuation context for a stock.
+
+Compares current valuation multiples (P/E, P/S, P/B, EV/EBITDA)
+to 5-year averages to assess if stock is cheap or expensive
+relative to its own history.
+
+```
+GET /api/stock/{symbol}/historical-valuation
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+
+
+---
+
+### Get Technical Analysis
+
+Run technical analysis on a stock.
+
+Returns:
+    Price data, moving averages, RSI, MACD, and trend signals.
+
+```
+GET /api/stock/{symbol}/technical
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | No |  (default: `massive`) |
+| `days` | integer | No |  (default: `365`) |
+
+
+
+---
+
+### Batch Analyze
+
+Batch analyze endpoint - returns all fundamental data in a single call.
+
+This reduces API calls by fetching stock data once and computing all
+derived metrics (ratios, dividends, historical valuation) from that data.
+
+```
+GET /api/stock/{symbol}/analyze
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+
+
+---
+
 ### Run Monte Carlo
 
-Run Monte Carlo simulation on DCF valuation.
+Run Monte Carlo simulation on DCF valuation (simplified/quick mode).
 
 Varies growth, margin, and discount rate to produce a probability
 distribution of intrinsic values.
-
-Returns:
-- mean: Expected intrinsic value
-- std_dev: Standard deviation of values
-- percentiles: p5, p10, p25, p50 (median), p75, p90, p95
-- valid_simulations: Number of successful iterations
-
-Example interpretation:
-- "50% chance the stock is worth more than $X" (p50)
-- "90% chance it's worth more than $Y" (p10)
-- "Only 10% chance it's worth more than $Z" (p90)
 
 ```
 POST /api/stock/{symbol}/monte-carlo
@@ -946,15 +938,6 @@ This is the DECISION-GRADE Monte Carlo that:
 2. Samples ALL DCF inputs with bounded distributions
 3. Implements correlations between inputs (growth↔margin, growth↔reinvestment)
 4. Computes comprehensive decision-support outputs
-
-Returns:
-- Per-share value distribution (mean, median, percentiles)
-- Decision metrics:
-  - P(upside > 0%): Probability stock is undervalued
-  - P(upside > 20%): Probability of significant upside
-  - P(downside > 20%): Probability of significant loss
-  - CVaR 10%: Expected value of worst 10% outcomes
-  - Margin of safety distribution
 
 Use this for actual investment decisions.
 Use /monte-carlo (simplified) for quick intuition only.
@@ -1017,47 +1000,6 @@ POST /api/stock/{symbol}/monte-carlo-full
 | `iterations` | integer | No |  |
 | `growth_margin_correlation` | number | No |  |
 | `growth_capex_correlation` | number | No |  |
-
-
----
-
-### Analyze Capital Efficiency
-
-Analyze capital efficiency and value creation.
-
-Key metrics:
-- ROIC: Return on Invested Capital (profitability of capital)
-- Reinvestment Rate: % of earnings needed to fund growth
-- Value Spread: ROIC - WACC (positive = value creation)
-- Economic Profit (EVA): Dollar value created/destroyed
-
-Interpretation:
-- ROIC > WACC: Growth creates shareholder value
-- ROIC < WACC: Growth destroys shareholder value (despite earnings!)
-- High ROIC + Low reinvestment = Excellent capital efficiency
-
-```
-POST /api/capital-efficiency
-```
-
-
-**Request Body**
-
-```json
-{
-  "nopat": 0.0,
-  "invested_capital": 0.0,
-  "revenue_growth": 0.0,
-  "wacc": 0.0
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `nopat` | number | Yes |  |
-| `invested_capital` | number | Yes |  |
-| `revenue_growth` | number | Yes |  |
-| `wacc` | number | Yes |  |
 
 
 ---

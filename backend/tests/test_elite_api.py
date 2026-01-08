@@ -54,7 +54,7 @@ class TestMonteCarloAPI:
             provider="yahoo",
         )
     
-    @patch("app.main.get_client_for_provider")
+    @patch("app.routers.stock.get_client_for_provider")
     def test_monte_carlo_returns_distribution(self, mock_get_client, mock_stock_data):
         """Monte Carlo endpoint returns value distribution."""
         # Setup mock
@@ -101,7 +101,7 @@ class TestMonteCarloAPI:
         assert percentiles["p10"] <= percentiles["p50"]
         assert percentiles["p50"] <= percentiles["p90"]
     
-    @patch("app.main.get_client_for_provider")
+    @patch("app.routers.stock.get_client_for_provider")
     def test_monte_carlo_includes_inputs(self, mock_get_client, mock_stock_data):
         """Monte Carlo response includes the input parameters used."""
         mock_client = MagicMock()
