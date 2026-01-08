@@ -1773,12 +1773,29 @@ async def run_monte_carlo(
     - "90% chance it's worth more than $Y" (p10)
     - "Only 10% chance it's worth more than $Z" (p90)
     """
+    # Check rate limit and auto-fallback if needed
+    actual_provider = provider
+    if rate_limiter.is_rate_limited(provider):
+        actual_provider = "yahoo"  # Fallback to Yahoo
+    
     # Get stock data to find base revenue
-    client = get_client_for_provider(provider)
-    rate_limiter.record_call(provider)
+    client = get_client_for_provider(actual_provider)
+    rate_limiter.record_call(actual_provider)
     
     try:
         stock_data = await client.get_stock_data(symbol.upper())
+    except (RateLimitError, DataNotAvailableError) as e:
+        # Auto-fallback to Yahoo on rate limit or data not available
+        if actual_provider != "yahoo":
+            client = get_client_for_provider("yahoo")
+            rate_limiter.record_call("yahoo")
+            try:
+                stock_data = await client.get_stock_data(symbol.upper())
+                actual_provider = "yahoo"
+            except Exception as fallback_e:
+                raise HTTPException(status_code=429, detail=f"Rate limit exceeded for {provider}. Try again later or switch provider.")
+        else:
+            raise HTTPException(status_code=429, detail=str(e))
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
