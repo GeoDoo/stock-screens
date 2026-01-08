@@ -108,7 +108,7 @@ def check_required_sections():
     """Verify required documentation sections exist."""
     required = {
         "README.md": ["Quick Start", "Features", "Architecture"],
-        "API.md": ["Stock Analysis", "Investment Memos"],
+        "API.md": [],  # Auto-generated, just check it exists and has content
         "ARCHITECTURE.md": ["Overview", "Data Flow", "Database Schema"],
         "DEVELOPMENT.md": ["Prerequisites", "Testing", "Code Style"],
         "DCF_MODEL.md": ["Free Cash Flow", "WACC", "Terminal Value"],
@@ -122,6 +122,12 @@ def check_required_sections():
             continue
         
         content = filepath.read_text()
+        
+        # For API.md, just check it has meaningful content (auto-generated)
+        if filename == "API.md":
+            if len(content) < 100:
+                error(f"{filename} is too short - may not have been generated properly")
+            continue
         
         for section in sections:
             # Check for ## Section or # Section

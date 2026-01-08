@@ -35,13 +35,14 @@ jobs:
       - name: Validate documentation
         run: python scripts/validate_docs.py
       
-      - name: Check for stale generated docs
+      - name: Check for stale API docs
         run: |
           python scripts/generate_api_docs.py
-          if git diff --exit-code docs/API_GENERATED.md; then
-            echo "✅ Generated docs are up-to-date"
+          if git diff --exit-code docs/API.md; then
+            echo "✅ API docs are up-to-date"
           else
-            echo "❌ Generated docs are stale. Run: python scripts/generate_api_docs.py"
+            echo "❌ API docs are stale. Run: python scripts/generate_api_docs.py"
+            git diff docs/API.md
             exit 1
           fi
 

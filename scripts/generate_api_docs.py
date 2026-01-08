@@ -241,11 +241,18 @@ def generate_docs() -> str:
 def main():
     docs = generate_docs()
     
-    output_path = Path(__file__).parent.parent / "docs" / "API_GENERATED.md"
+    # Output directly to API.md (single source of truth)
+    output_path = Path(__file__).parent.parent / "docs" / "API.md"
     output_path.write_text(docs)
     
     print(f"✓ Generated {output_path}")
     print(f"  {len(docs.splitlines())} lines")
+    
+    # Clean up old generated file if it exists
+    old_generated = Path(__file__).parent.parent / "docs" / "API_GENERATED.md"
+    if old_generated.exists():
+        old_generated.unlink()
+        print(f"✓ Removed old {old_generated.name}")
 
 
 if __name__ == "__main__":
