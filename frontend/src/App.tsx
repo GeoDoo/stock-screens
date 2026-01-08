@@ -44,8 +44,17 @@ export default function App() {
   const [selectedFundamentalProvider, setSelectedFundamentalProvider] = useState<string>('');
   const [selectedTechnicalProvider, setSelectedTechnicalProvider] = useState<string>('');
   const [providersLoading, setProvidersLoading] = useState(true);
-  // Accurate rate limit tracking from backend
-  const [rateLimits, setRateLimits] = useState<Record<string, RateLimitStats>>({});
+  // Accurate rate limit tracking from backend (with localStorage cache for instant display)
+  const [rateLimits, setRateLimits] = useState<Record<string, RateLimitStats>>(() => {
+    // Load from localStorage on initial render for instant display
+    try {
+      const cached = localStorage.getItem('rateLimits');
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [rateLimitsLoading, setRateLimitsLoading] = useState(true);
   
   const [ticker, setTicker] = useState('');
   const [stockData, setStockData] = useState<StockDataResponse | null>(null);
@@ -66,9 +75,17 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setRateLimits(data);
+        // Cache to localStorage for instant display on next page load
+        try {
+          localStorage.setItem('rateLimits', JSON.stringify(data));
+        } catch {
+          // localStorage might be full or disabled
+        }
       }
     } catch (err) {
       console.error('Failed to fetch rate limits:', err);
+    } finally {
+      setRateLimitsLoading(false);
     }
   };
 
@@ -138,6 +155,14 @@ export default function App() {
       }
     };
     fetchProviders();
+  }, []);
+  
+  // Periodic refresh of rate limits (every 30 seconds) to keep UI in sync
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchRateLimits();
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
   
   // User inputs
@@ -854,19 +879,23 @@ export default function App() {
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {fundamentalProviders.find(p => p.id === selectedFundamentalProvider)?.description}
-                  {selectedFundamentalProvider && rateLimits[selectedFundamentalProvider] && (
-                    <span className={`ml-2 ${
-                      rateLimits[selectedFundamentalProvider].api_limited || rateLimits[selectedFundamentalProvider].remaining === 0
-                        ? 'text-red-500'
-                        : rateLimits[selectedFundamentalProvider].percentage >= 80
-                        ? 'text-amber-600'
-                        : 'text-gray-400'
-                    }`}>
-                      {rateLimits[selectedFundamentalProvider].api_limited 
-                        ? `⊘ Limited — resets in ${formatResetTime(rateLimits[selectedFundamentalProvider].reset_in_seconds)}`
-                        : `(${rateLimits[selectedFundamentalProvider].remaining}/${rateLimits[selectedFundamentalProvider].limit} calls left${rateLimits[selectedFundamentalProvider].reset_schedule === 'daily' ? '/day' : '/min'})`
-                      }
-                    </span>
+                  {selectedFundamentalProvider && (
+                    rateLimits[selectedFundamentalProvider] ? (
+                      <span className={`ml-2 ${
+                        rateLimits[selectedFundamentalProvider].api_limited || rateLimits[selectedFundamentalProvider].remaining === 0
+                          ? 'text-red-500'
+                          : rateLimits[selectedFundamentalProvider].percentage >= 80
+                          ? 'text-amber-600'
+                          : 'text-gray-400'
+                      }`}>
+                        {rateLimits[selectedFundamentalProvider].api_limited 
+                          ? `⊘ Limited — resets in ${formatResetTime(rateLimits[selectedFundamentalProvider].reset_in_seconds)}`
+                          : `(${rateLimits[selectedFundamentalProvider].remaining}/${rateLimits[selectedFundamentalProvider].limit} calls left${rateLimits[selectedFundamentalProvider].reset_schedule === 'daily' ? '/day' : '/min'})`
+                        }
+                      </span>
+                    ) : rateLimitsLoading ? (
+                      <span className="ml-2 text-gray-300">(...)</span>
+                    ) : null
                   )}
                 </p>
               </div>
@@ -904,19 +933,23 @@ export default function App() {
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {technicalProviders.find(p => p.id === selectedTechnicalProvider)?.description}
-                  {selectedTechnicalProvider && rateLimits[selectedTechnicalProvider] && (
-                    <span className={`ml-2 ${
-                      rateLimits[selectedTechnicalProvider].api_limited || rateLimits[selectedTechnicalProvider].remaining === 0
-                        ? 'text-red-500'
-                        : rateLimits[selectedTechnicalProvider].percentage >= 80
-                        ? 'text-amber-600'
-                        : 'text-gray-400'
-                    }`}>
-                      {rateLimits[selectedTechnicalProvider].api_limited 
-                        ? `⊘ Limited — resets in ${formatResetTime(rateLimits[selectedTechnicalProvider].reset_in_seconds)}`
-                        : `(${rateLimits[selectedTechnicalProvider].remaining}/${rateLimits[selectedTechnicalProvider].limit} calls left${rateLimits[selectedTechnicalProvider].reset_schedule === 'daily' ? '/day' : '/min'})`
-                      }
-                    </span>
+                  {selectedTechnicalProvider && (
+                    rateLimits[selectedTechnicalProvider] ? (
+                      <span className={`ml-2 ${
+                        rateLimits[selectedTechnicalProvider].api_limited || rateLimits[selectedTechnicalProvider].remaining === 0
+                          ? 'text-red-500'
+                          : rateLimits[selectedTechnicalProvider].percentage >= 80
+                          ? 'text-amber-600'
+                          : 'text-gray-400'
+                      }`}>
+                        {rateLimits[selectedTechnicalProvider].api_limited 
+                          ? `⊘ Limited — resets in ${formatResetTime(rateLimits[selectedTechnicalProvider].reset_in_seconds)}`
+                          : `(${rateLimits[selectedTechnicalProvider].remaining}/${rateLimits[selectedTechnicalProvider].limit} calls left${rateLimits[selectedTechnicalProvider].reset_schedule === 'daily' ? '/day' : '/min'})`
+                        }
+                      </span>
+                    ) : rateLimitsLoading ? (
+                      <span className="ml-2 text-gray-300">(...)</span>
+                    ) : null
                   )}
                 </p>
               </div>
