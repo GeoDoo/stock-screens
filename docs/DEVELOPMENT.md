@@ -2,7 +2,7 @@
 
 > **Auto-generated** from package files.
 > 
-> Last updated: 2026-01-08 21:53
+> Last updated: 2026-01-08 22:19
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -65,7 +65,7 @@ pytest --tb=short -q      # Quick summary
 pytest tests/test_api.py  # Specific file
 ```
 
-### Frontend Tests (11 test files)
+### Frontend Tests (13 test files)
 
 ```bash
 cd frontend

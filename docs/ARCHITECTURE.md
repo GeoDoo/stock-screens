@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-08 21:53
+> Last updated: 2026-01-08 22:19
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -126,6 +126,8 @@ Weighted Average Cost of Capital calculator.
 | Hook | Purpose |
 |------|---------|
 | `useAssumptionTracker.ts` | Assumptiontracker |
+| `useProviders.ts` | Providers |
+| `useStockAnalysis.ts` | Stockanalysis |
 
 ## Data Flow
 
@@ -148,7 +150,7 @@ Weighted Average Cost of Capital calculator.
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
 | Backend | 27 test files | pytest |
-| Frontend | 11 test files | vitest |
+| Frontend | 13 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)
 
