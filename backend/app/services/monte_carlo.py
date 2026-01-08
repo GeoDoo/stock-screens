@@ -178,7 +178,14 @@ def run_monte_carlo_valuation(
     seed: Optional[int] = None,
 ) -> MonteCarloResult:
     """
-    Run Monte Carlo simulation on a simplified DCF model.
+    Run Monte Carlo simulation on a SIMPLIFIED DCF model.
+    
+    WARNING: This is intentionally simplified for speed and uncertainty visualization.
+    Uses: FCF ≈ Revenue × Margin × 0.75 (hardcoded 25% tax proxy)
+    Does NOT include: CapEx, Working Capital changes, D&A
+    
+    Use the full DCF model for precise single-point valuations.
+    This is best for: understanding ranges, visualizing uncertainty, stress testing.
     
     Varies:
     - Revenue growth rate (normal distribution)

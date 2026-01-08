@@ -141,6 +141,13 @@ export function MonteCarloPanel({
       
       {expanded && (
         <>
+          {/* Simplified Model Disclaimer */}
+          <div className="text-xs text-gray-500 mb-4 p-2 bg-gray-50 rounded border-l-2 border-gray-300">
+            <strong>Simplified Model:</strong> Uses revenue × margin × 0.75 as FCF proxy. 
+            Does not include full CapEx/WC projections. Best for visualizing uncertainty ranges, 
+            not precise valuations.
+          </div>
+          
           {/* Input Controls */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div>
@@ -431,12 +438,16 @@ export function MonteCarloPanel({
               })()}
               
               {/* Interpretation */}
-              <div className="text-xs text-gray-500 border-t pt-2">
+              <div className="text-xs text-gray-500 border-t pt-2 space-y-1">
                 <p>
                   <strong>Interpretation:</strong> There's a 90% chance the stock is worth more than{' '}
                   <span className="font-medium">{formatCurrency(result.per_share.percentiles.p10)}</span>{' '}
                   and a 50% chance it's worth more than{' '}
                   <span className="font-medium">{formatCurrency(result.per_share.percentiles.p50)}</span>.
+                </p>
+                <p className="text-gray-400 italic">
+                  Note: This is a simplified model for uncertainty visualization. 
+                  Use the full DCF above for precise valuations.
                 </p>
               </div>
             </div>

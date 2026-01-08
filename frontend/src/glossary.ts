@@ -388,7 +388,7 @@ export const glossaryTerms: GlossaryTerm[] = [
     id: "monte-carlo",
     term: "Monte Carlo",
     fullName: "Monte Carlo Simulation",
-    definition: "A computational technique that runs thousands of simulations with randomized inputs to produce a probability distribution of outcomes. In valuation, it varies growth, margin, and discount rate assumptions to show the range of possible intrinsic values.",
+    definition: "A computational technique that runs thousands of simulations with randomized inputs to produce a probability distribution of outcomes. In valuation, it varies growth, margin, and discount rate assumptions to show the range of possible intrinsic values. Note: Our implementation uses a simplified FCF model (revenue × margin × 0.75) for speed—best for visualizing uncertainty, not precise valuations.",
     investopediaUrl: "https://www.investopedia.com/terms/m/montecarlosimulation.asp",
   },
   {
