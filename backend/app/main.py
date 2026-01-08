@@ -129,6 +129,10 @@ class ScenarioRequest(BaseModel):
     projection_years: int = 10
     market_risk_premium: float = 0.06
     discount_rate_override: Optional[float] = None  # Custom discount rate (bypasses WACC)
+    # FCF ratios - passed from frontend for clean TTM/Annual separation
+    da_ratio: Optional[float] = None
+    capex_ratio: Optional[float] = None
+    wc_ratio: Optional[float] = None
 
 
 @app.get("/health")
@@ -480,6 +484,10 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
         base_wacc=base_wacc,
         projection_years=request.projection_years,
         current_price=current_price,
+        # FCF ratio overrides - for clean TTM/Annual separation
+        da_ratio=request.da_ratio,
+        capex_ratio=request.capex_ratio,
+        wc_ratio=request.wc_ratio,
     )
     
     # Build scenarios
@@ -1009,9 +1017,9 @@ async def batch_analyze(symbol: str, provider: str):
         "hints_annual": {
             "revenue_growth": fcf_projector.revenue_cagr(),
             "operating_margin": fcf_projector.operating_margin(),
-            "da_to_revenue": fcf_projector.da_to_revenue_ratio(),
-            "capex_to_revenue": fcf_projector.capex_to_revenue_ratio(),
-            "wc_to_revenue": fcf_projector.wc_to_revenue_ratio(),
+            "da_ratio": fcf_projector.da_to_revenue_ratio(),
+            "capex_ratio": fcf_projector.capex_to_revenue_ratio(),  # Already positive from function
+            "wc_ratio": fcf_projector.wc_to_revenue_ratio(),
         },
         "hints_ttm": None,  # Will be populated below for Yahoo
         "validation": validation_result.to_dict(),
@@ -1129,9 +1137,9 @@ async def batch_analyze(symbol: str, provider: str):
             hints_ttm = {
                 "revenue_growth": stock_response["hints_annual"]["revenue_growth"],  # Use annual CAGR (TTM YoY is complex)
                 "operating_margin": (ttm_operating_income / ttm_revenue) if ttm_revenue and ttm_operating_income else None,
-                "da_to_revenue": (ttm_da / ttm_revenue) if ttm_revenue and ttm_da else None,
-                "capex_to_revenue": (abs(ttm_capex) / ttm_revenue) if ttm_revenue and ttm_capex else None,  # CapEx is negative
-                "wc_to_revenue": (ttm_wc / ttm_revenue) if ttm_revenue and ttm_wc else None,
+                "da_ratio": (ttm_da / ttm_revenue) if ttm_revenue and ttm_da else None,
+                "capex_ratio": (abs(ttm_capex) / ttm_revenue) if ttm_revenue and ttm_capex else None,  # Always positive %
+                "wc_ratio": (ttm_wc / ttm_revenue) if ttm_revenue and ttm_wc else None,
             }
     
     # Update stock_response with TTM hints

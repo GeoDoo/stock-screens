@@ -448,6 +448,11 @@ export default function App() {
     setScenarioLoading(true);
     setScenarioResult(null);
     
+    // Use hints from SELECTED PERIOD (TTM or Annual) - clean separation
+    const periodHints = fundamentalPeriod === 'ttm' && data.hints_ttm 
+      ? data.hints_ttm 
+      : data.hints_annual;
+    
     try {
       const res = await fetch(`${API_BASE}/api/stock/${data.symbol}/scenarios?provider=${provider}`, {
         method: 'POST',
@@ -456,6 +461,10 @@ export default function App() {
           projection_years: parseInt(projectionYears) || 10,
           market_risk_premium: parseFloat(marketRiskPremium) / 100 || 0.06,
           discount_rate_override: discountRateOverride ?? null,
+          // Pass FCF ratios from selected period - ensures clean TTM/Annual separation
+          da_ratio: periodHints?.da_ratio ?? null,
+          capex_ratio: periodHints?.capex_ratio ?? null,
+          wc_ratio: periodHints?.wc_ratio ?? null,
         }),
       });
       if (!res.ok) {
