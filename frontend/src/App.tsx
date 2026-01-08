@@ -176,15 +176,18 @@ export default function App() {
     
     const symbol = ticker.toUpperCase();
     
-    // Track which provider actually served the data (may change due to fallback)
-    let actualProvider = selectedFundamentalProvider;
-    
     // Use hook for fetching with fallback support
+    // onSuccess receives the actual provider that served the data
     await analyzeStockHook(
       symbol,
       selectedFundamentalProvider,
       fundamentalProviders,
-      async (stockResponse: StockDataResponse) => {
+      async (stockResponse: StockDataResponse, actualProvider: string) => {
+        // Update selected provider if fallback occurred
+        if (actualProvider !== selectedFundamentalProvider) {
+          setSelectedFundamentalProvider(actualProvider);
+        }
+        
         // Pre-fill inputs with hints (prefer TTM if available, else annual)
         const hintsToUse = stockResponse.hints_ttm || stockResponse.hints_annual;
         if (hintsToUse?.revenue_growth !== null && hintsToUse?.revenue_growth !== undefined) {
@@ -195,6 +198,7 @@ export default function App() {
         }
         
         // Fetch comparables separately (requires peer data fetching)
+        // Use actualProvider which is correct even after fallback
         fetchComparables(symbol, actualProvider);
         
         // Check if WACC is available for DCF
@@ -214,11 +218,6 @@ export default function App() {
         } else if (hasExtremeInputs) {
           setFallbackNotice(`Historical operating margin (${(opMargin! * 100).toFixed(0)}%) is extreme. Please adjust assumptions before running DCF valuation.`);
         }
-      },
-      // Update selected provider when fallback occurs
-      (newProvider: string) => {
-        actualProvider = newProvider;
-        setSelectedFundamentalProvider(newProvider);
       },
     );
   };

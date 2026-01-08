@@ -55,8 +55,7 @@ export interface UseStockAnalysisResult {
     ticker: string,
     provider: string,
     providers: Provider[],
-    onSuccess?: (data: StockDataResponse) => void,
-    onProviderFallback?: (newProvider: string) => void,
+    onSuccess?: (data: StockDataResponse, actualProvider: string) => void,
   ) => Promise<void>;
   fetchComparables: (symbol: string, provider: string) => Promise<void>;
   fetchTechnical: (
@@ -129,8 +128,7 @@ export function useStockAnalysis(
     ticker: string,
     provider: string,
     providers: Provider[],
-    onSuccess?: (data: StockDataResponse) => void,
-    onProviderFallback?: (newProvider: string) => void,
+    onSuccess?: (data: StockDataResponse, actualProvider: string) => void,
   ) => {
     if (!ticker.trim() || !provider) return;
     
@@ -140,6 +138,9 @@ export function useStockAnalysis(
     setHasAttemptedAnalysis(true);
     
     const symbol = ticker.toUpperCase();
+    
+    // Track which provider actually served the data
+    let actualProvider = provider;
     
     // Try provider with fallback
     const tryProvider = async (prov: string, isFallback = false): Promise<boolean> => {
@@ -154,15 +155,15 @@ export function useStockAnalysis(
           if (!isFallback && shouldFallback(errorMsg)) {
             const altProvider = getAlternativeProvider(prov, providers);
             if (altProvider) {
+              // Update actualProvider BEFORE the recursive call
+              // so onSuccess receives the correct provider
+              actualProvider = altProvider;
+              
               const success = await tryProvider(altProvider, true);
               if (success) {
                 const primaryName = getProviderDisplayName(prov, providers);
                 const altName = getProviderDisplayName(altProvider, providers);
                 setFallbackNotice(`${primaryName} unavailable for ${symbol}. Using ${altName} instead.`);
-                // Notify parent about provider change
-                if (onProviderFallback) {
-                  onProviderFallback(altProvider);
-                }
                 return true;
               }
             }
@@ -185,7 +186,8 @@ export function useStockAnalysis(
         setHistoricalValuation(normalizeHistoricalValuation(batchData.historical_valuation));
         
         if (onSuccess) {
-          onSuccess(stockResponse);
+          // Pass the actual provider that served the data
+          onSuccess(stockResponse, actualProvider);
         }
         
         return true;

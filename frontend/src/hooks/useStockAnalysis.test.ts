@@ -136,7 +136,7 @@ describe('useStockAnalysis', () => {
     expect(result.current.stockData?.symbol).toBe('MSFT');
   });
 
-  it('calls onSuccess callback with stock data', async () => {
+  it('calls onSuccess callback with stock data and provider', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve(mockStockResponse),
@@ -149,7 +149,8 @@ describe('useStockAnalysis', () => {
       await result.current.analyzeStock('AAPL', 'fmp', mockProviders, onSuccess);
     });
 
-    expect(onSuccess).toHaveBeenCalledWith(mockStockResponse.stock);
+    // onSuccess receives both the stock data and the actual provider used
+    expect(onSuccess).toHaveBeenCalledWith(mockStockResponse.stock, 'fmp');
   });
 
   it('fetches comparables', async () => {
