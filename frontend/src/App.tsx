@@ -461,7 +461,9 @@ export default function App() {
           projection_years: parseInt(projectionYears) || 10,
           market_risk_premium: parseFloat(marketRiskPremium) / 100 || 0.06,
           discount_rate_override: discountRateOverride ?? null,
-          // Pass FCF ratios from selected period - ensures clean TTM/Annual separation
+          // Pass hints from selected period - ensures clean TTM/Annual separation
+          revenue_growth_hint: periodHints?.revenue_growth ?? null,
+          operating_margin_hint: periodHints?.operating_margin ?? null,
           da_ratio: periodHints?.da_ratio ?? null,
           capex_ratio: periodHints?.capex_ratio ?? null,
           wc_ratio: periodHints?.wc_ratio ?? null,

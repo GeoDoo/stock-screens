@@ -129,6 +129,9 @@ class ScenarioRequest(BaseModel):
     projection_years: int = 10
     market_risk_premium: float = 0.06
     discount_rate_override: Optional[float] = None  # Custom discount rate (bypasses WACC)
+    # Hints for default scenario generation - passed from frontend for clean TTM/Annual separation
+    revenue_growth_hint: Optional[float] = None  # If provided, use this instead of annual CAGR
+    operating_margin_hint: Optional[float] = None  # If provided, use this instead of annual margin
     # FCF ratios - passed from frontend for clean TTM/Annual separation
     da_ratio: Optional[float] = None
     capex_ratio: Optional[float] = None
@@ -456,7 +459,7 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
     # Get current price
     current_price = stock_data.profile.price
     
-    # Historical hints for default scenarios
+    # Historical hints for default scenarios - prefer frontend hints (TTM/Annual) over annual calc
     fcf_projector = FCFProjector(
         historical_revenue=extractor.revenue_history() or [0],
         historical_ebit=extractor.ebit_history() or [0],
@@ -466,8 +469,9 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
         tax_rate=tax_rate,
     )
     hints = {
-        "revenue_growth": fcf_projector.revenue_cagr(),
-        "operating_margin": fcf_projector.operating_margin(),
+        # Use frontend-provided hints if available (enables clean TTM/Annual separation)
+        "revenue_growth": request.revenue_growth_hint if request.revenue_growth_hint is not None else fcf_projector.revenue_cagr(),
+        "operating_margin": request.operating_margin_hint if request.operating_margin_hint is not None else fcf_projector.operating_margin(),
     }
     
     # Initialize calculator
