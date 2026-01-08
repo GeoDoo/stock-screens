@@ -94,6 +94,10 @@ class ScenarioCalculator:
         base_wacc: float,
         projection_years: int = 10,
         current_price: Optional[float] = None,
+        # FCF ratio overrides - for clean TTM/Annual separation
+        da_ratio: Optional[float] = None,
+        capex_ratio: Optional[float] = None,
+        wc_ratio: Optional[float] = None,
     ):
         self.historical_revenue = historical_revenue
         self.historical_ebit = historical_ebit
@@ -107,6 +111,10 @@ class ScenarioCalculator:
         self.base_wacc = base_wacc
         self.projection_years = projection_years
         self.current_price = current_price
+        # FCF ratio overrides
+        self.da_ratio = da_ratio
+        self.capex_ratio = capex_ratio
+        self.wc_ratio = wc_ratio
     
     def get_default_scenarios(self, hints: dict) -> List[Scenario]:
         """
@@ -165,6 +173,9 @@ class ScenarioCalculator:
             years=self.projection_years,
             revenue_growth=scenario.revenue_growth,
             operating_margin=scenario.operating_margin,
+            da_ratio=self.da_ratio,
+            capex_ratio=self.capex_ratio,
+            wc_ratio=self.wc_ratio,
         )
         
         projected_fcfs = [p["fcf"] for p in projections]

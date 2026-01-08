@@ -132,6 +132,11 @@ export interface ScenarioRequest {
   scenarios?: ScenarioInput[];
   projection_years: number;
   market_risk_premium: number;
+  discount_rate_override?: number | null;
+  // FCF ratios - passed from frontend for clean TTM/Annual separation
+  da_ratio?: number | null;
+  capex_ratio?: number | null;
+  wc_ratio?: number | null;
 }
 
 export interface ScenarioResultItem {

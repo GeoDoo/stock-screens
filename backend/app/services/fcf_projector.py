@@ -79,12 +79,13 @@ class FCFProjector:
     def capex_to_revenue_ratio(self) -> float:
         """
         Calculate average CapEx as percentage of revenue.
+        Always returns positive value (CapEx is an expense).
         """
         if not self.historical_revenue or not self.historical_capex:
             return 0.0
         
         ratios = [
-            capex / rev 
+            abs(capex) / rev  # Use abs() - historical capex is often stored as negative (outflow)
             for capex, rev in zip(self.historical_capex, self.historical_revenue)
             if rev > 0
         ]

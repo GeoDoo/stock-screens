@@ -10,12 +10,12 @@ class TestScenarioCalculator:
             historical_revenue=[100, 110, 121],  # ~10% growth
             historical_ebit=[20, 22, 24.2],  # ~20% margin
             historical_da=[5, 5.5, 6],
-            historical_capex=[-8, -8.8, -9.6],
+            historical_capex=[-8, -8.8, -9.6],  # Stored as negative (outflows)
             historical_working_capital=[10, 11, 12.1],
             tax_rate=0.25,
             shares_outstanding=1000,
-            total_debt=500,
-            cash=200,
+            total_debt=50,   # Reduced debt for realistic equity value
+            cash=100,        # More cash
             base_wacc=0.10,
             projection_years=5,
             current_price=50,
@@ -166,5 +166,109 @@ class TestScenarioCalculator:
         assert len(result.projections) == 5  # projection_years
         assert "revenue" in result.projections[0]
         assert "fcf" in result.projections[0]
+
+    def test_explicit_fcf_ratios_used(self):
+        """
+        Explicit FCF ratios should override historical averages.
+        This enables clean TTM/Annual separation.
+        """
+        # Calculator with HIGH historical capex
+        calc_high_capex = ScenarioCalculator(
+            historical_revenue=[100, 110, 121],
+            historical_ebit=[20, 22, 24.2],
+            historical_da=[5, 5.5, 6],
+            historical_capex=[-20, -22, -24],  # High capex (~20% of revenue)
+            historical_working_capital=[10, 11, 12.1],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+            # NO explicit ratios - uses historical
+        )
+        
+        # Calculator with LOW explicit capex_ratio (override)
+        calc_low_capex = ScenarioCalculator(
+            historical_revenue=[100, 110, 121],
+            historical_ebit=[20, 22, 24.2],
+            historical_da=[5, 5.5, 6],
+            historical_capex=[-20, -22, -24],  # Same high historical capex
+            historical_working_capital=[10, 11, 12.1],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+            # Explicit LOW capex_ratio
+            da_ratio=0.05,
+            capex_ratio=0.02,  # Low capex
+            wc_ratio=0.05,
+        )
+        
+        scenario = Scenario(
+            name="Test",
+            revenue_growth=0.08,
+            operating_margin=0.20,
+            terminal_growth=0.03,
+        )
+        
+        result_high = calc_high_capex.run_scenario(scenario)
+        result_low = calc_low_capex.run_scenario(scenario)
+        
+        # Lower capex = higher FCF = higher intrinsic value
+        assert result_low.intrinsic_value > result_high.intrinsic_value
+
+    def test_different_fcf_ratios_produce_different_values(self):
+        """Sanity check: changing WC ratio affects valuation."""
+        # Low WC ratio
+        calc_low_wc = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+            da_ratio=0.05,
+            capex_ratio=0.05,
+            wc_ratio=0.05,  # Low WC ratio
+        )
+        
+        # High WC ratio (absorbs more cash)
+        calc_high_wc = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+            da_ratio=0.05,
+            capex_ratio=0.05,
+            wc_ratio=0.30,  # High WC ratio
+        )
+        
+        scenario = Scenario(
+            name="Test",
+            revenue_growth=0.08,
+            operating_margin=0.20,
+            terminal_growth=0.03,
+        )
+        
+        result_low = calc_low_wc.run_scenario(scenario)
+        result_high = calc_high_wc.run_scenario(scenario)
+        
+        # Lower WC = less cash absorbed = higher value
+        assert result_low.intrinsic_value > result_high.intrinsic_value
 
 
