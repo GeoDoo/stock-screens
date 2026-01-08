@@ -28,12 +28,15 @@ export interface CompanyData {
   beta: number | null;
   market_cap: number | null;
   total_debt: number | null;
+  total_equity: number | null;
   cash: number | null;
   tax_rate: number | null;
   cost_of_debt: number | null;
   shares_outstanding: number | null;
   risk_free_rate: number;
   wacc: number | null;
+  revenue: number | null;
+  working_capital: number | null;
 }
 
 export interface HistoricalHints {

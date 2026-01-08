@@ -1965,6 +1965,141 @@ export default function App() {
           </section>
             )}
 
+            {/* Capital Efficiency Section */}
+            {result && stockData && stockData.data.total_equity !== null && (
+            <section className="pt-12 border-t border-gray-100">
+              <div className="mb-8">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                  Capital Efficiency<GlossaryRef id="roic" />
+                </h2>
+                <p className="text-sm text-gray-400">Is growth creating or destroying shareholder value?</p>
+              </div>
+              
+              {(() => {
+                // Calculate capital efficiency metrics
+                const nopat = result.projections[0]?.nopat || 0;
+                const totalEquity = stockData.data.total_equity || 0;
+                const totalDebt = stockData.data.total_debt || 0;
+                const cash = stockData.data.cash || 0;
+                const investedCapital = totalEquity + totalDebt - cash;
+                const wacc = result.discount_rate;
+                const revenueGrowthRate = (result.inputs.revenue_growth as number) || 0;
+                
+                // Calculate metrics
+                const roic = investedCapital > 0 ? nopat / investedCapital : null;
+                const reinvestmentRate = roic && roic > 0 && revenueGrowthRate > 0 
+                  ? revenueGrowthRate / roic 
+                  : null;
+                const valueSpread = roic !== null ? roic - wacc : null;
+                const economicProfit = valueSpread !== null ? valueSpread * investedCapital : null;
+                const isValueCreating = roic !== null && roic > wacc;
+                
+                // Assessment
+                let assessment = '';
+                let assessmentColor = 'text-gray-600';
+                if (roic === null) {
+                  assessment = 'Unable to calculate (invalid invested capital)';
+                } else if (valueSpread !== null) {
+                  if (valueSpread > 0.10) {
+                    assessment = 'Strong value creator';
+                    assessmentColor = 'text-emerald-600';
+                  } else if (valueSpread > 0.02) {
+                    assessment = 'Modest value creator';
+                    assessmentColor = 'text-emerald-500';
+                  } else if (valueSpread > -0.02) {
+                    assessment = 'Value neutral';
+                    assessmentColor = 'text-amber-500';
+                  } else {
+                    assessment = 'Value destroyer - growth reduces shareholder value';
+                    assessmentColor = 'text-red-600';
+                  }
+                }
+                
+                return (
+                  <div className="space-y-6">
+                    {/* Key Insight Banner */}
+                    <div className={`p-4 rounded-lg border ${isValueCreating ? 'bg-emerald-50 border-emerald-200' : valueSpread !== null && valueSpread > -0.02 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
+                      <p className={`text-sm font-medium ${assessmentColor}`}>{assessment}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {roic !== null && (
+                          <>ROIC ({(roic * 100).toFixed(1)}%) {roic > wacc ? '>' : '<'} WACC ({(wacc * 100).toFixed(1)}%)</>
+                        )}
+                      </p>
+                    </div>
+                    
+                    {/* Metrics Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                      <div className="p-4 bg-gray-50 rounded-lg">
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                          ROIC<GlossaryRef id="roic" />
+                        </p>
+                        <p className="text-xl font-mono font-medium">
+                          {roic !== null ? `${(roic * 100).toFixed(1)}%` : '—'}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">Return on Invested Capital</p>
+                      </div>
+                      
+                      <div className="p-4 bg-gray-50 rounded-lg">
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                          Value Spread<GlossaryRef id="value-spread" />
+                        </p>
+                        <p className={`text-xl font-mono font-medium ${valueSpread !== null ? (valueSpread > 0 ? 'text-emerald-600' : valueSpread < -0.02 ? 'text-red-600' : 'text-amber-600') : ''}`}>
+                          {valueSpread !== null ? `${valueSpread > 0 ? '+' : ''}${(valueSpread * 100).toFixed(1)}%` : '—'}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">ROIC minus WACC</p>
+                      </div>
+                      
+                      <div className="p-4 bg-gray-50 rounded-lg">
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                          Economic Profit<GlossaryRef id="economic-profit" />
+                        </p>
+                        <p className={`text-xl font-mono font-medium ${economicProfit !== null ? (economicProfit > 0 ? 'text-emerald-600' : 'text-red-600') : ''}`}>
+                          {economicProfit !== null ? formatCurrency(economicProfit) : '—'}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">Value created/destroyed annually</p>
+                      </div>
+                      
+                      <div className="p-4 bg-gray-50 rounded-lg">
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                          Reinvestment Rate<GlossaryRef id="reinvestment-rate" />
+                        </p>
+                        <p className="text-xl font-mono font-medium">
+                          {reinvestmentRate !== null ? `${(reinvestmentRate * 100).toFixed(0)}%` : '—'}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">Earnings needed for growth</p>
+                      </div>
+                    </div>
+                    
+                    {/* Invested Capital Breakdown */}
+                    <div className="p-4 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-3">
+                        Invested Capital<GlossaryRef id="invested-capital" /> Breakdown
+                      </p>
+                      <div className="grid grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500">Total Equity</p>
+                          <p className="font-mono">{formatCurrency(totalEquity)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">+ Total Debt</p>
+                          <p className="font-mono">{formatCurrency(totalDebt)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">- Cash</p>
+                          <p className="font-mono">{formatCurrency(cash)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 font-medium">= Invested Capital</p>
+                          <p className="font-mono font-medium">{formatCurrency(investedCapital)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </section>
+            )}
+
             {/* Monte Carlo Simulation Section */}
             {result && stockData && (
             <section className="pt-12 border-t border-gray-100">
