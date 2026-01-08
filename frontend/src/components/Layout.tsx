@@ -9,8 +9,15 @@ export function Layout({ children }: LayoutProps) {
     <div className="min-h-screen bg-white flex">
       {/* Sidebar */}
       <nav className="w-52 border-r border-gray-100 p-6 flex-shrink-0">
-        <a href="/" className="text-lg font-semibold text-gray-900 block mb-8">
-          Stock Analysis
+        <a href="/" className="flex items-center gap-2 mb-8">
+          {/* Logo icon - rising bars */}
+          <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
+            <rect x="2" y="14" width="4" height="8" rx="1" fill="#6b7280"/>
+            <rect x="8" y="10" width="4" height="12" rx="1" fill="#9ca3af"/>
+            <rect x="14" y="6" width="4" height="16" rx="1" fill="#d1d5db"/>
+            <rect x="20" y="2" width="4" height="20" rx="1" fill="#10b981"/>
+          </svg>
+          <span className="text-lg font-semibold text-gray-900">Screens</span>
         </a>
         <div className="space-y-1">
           <a 
