@@ -1,774 +1,959 @@
 # API Reference
 
+> **Auto-generated** from FastAPI OpenAPI schema.
+> 
+> Do not edit manually. Run `python scripts/generate_api_docs.py` to regenerate.
+
 Base URL: `http://localhost:8000`
 
-## Stock Analysis
+## Other
 
-### Get Basic Stock Data
-
-Returns basic company data (lightweight endpoint).
+### Health Check
 
 ```
-GET /api/stock/{symbol}
+GET /health
 ```
 
-**Response**
 
-```json
-{
-  "symbol": "AAPL",
-  "company_name": "Apple Inc.",
-  "profile": {
-    "sector": "Technology",
-    "industry": "Consumer Electronics",
-    "price": 178.50,
-    "market_cap": 2800000000000
-  }
-}
-```
+
 
 ---
 
-### Get Full Analysis Data
+### Get Providers
 
-Fetches company fundamentals and historical hints for DCF inputs.
+Get list of available data providers with their capabilities.
 
-```
-GET /api/stock/{symbol}/analyze
-```
+Returns providers for:
+- Fundamental analysis (financials, DCF, comparables)
+- Technical analysis (price charts, indicators)
 
-**Query Parameters**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `provider` | string | `fmp` | Data provider (`fmp`, `yahoo`, `massive`) |
-
-**Response**
-
-```json
-{
-  "symbol": "AAPL",
-  "company_name": "Apple Inc.",
-  "profile": {
-    "sector": "Technology",
-    "industry": "Consumer Electronics",
-    "description": "...",
-    "price": 178.50,
-    "market_cap": 2800000000000
-  },
-  "data": {
-    "beta": 1.25,
-    "market_cap": 2800000000000,
-    "total_debt": 111088000000,
-    "cash": 29965000000,
-    "shares_outstanding": 15700000000,
-    "tax_rate": 0.147,
-    "risk_free_rate": 0.045,
-    "historical_revenue": [394328000000, 383285000000, 365817000000],
-    "historical_ebit": [119437000000, 114301000000, 111852000000],
-    "historical_da": [11519000000, 11104000000, 11284000000],
-    "historical_capex": [-10708000000, -10959000000, -11085000000],
-    "historical_working_capital": [-1234000000, -1456000000, -1678000000]
-  },
-  "hints_annual": {
-    "revenue_growth": 0.024,
-    "operating_margin": 0.298,
-    "da_ratio": 0.029,
-    "capex_ratio": 0.027,
-    "wc_ratio": -0.003
-  },
-  "hints_ttm": {
-    "revenue_growth": 0.031,
-    "operating_margin": 0.305,
-    "da_ratio": 0.028,
-    "capex_ratio": 0.026,
-    "wc_ratio": -0.002
-  },
-  "provider_used": "fmp",
-  "fallback_reason": null
-}
-```
-
----
-
-### Run DCF Valuation
-
-Calculates intrinsic value using provided assumptions.
-
-```
-POST /api/stock/{symbol}/valuation
-```
-
-**Query Parameters**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `provider` | string | `fmp` | Data provider |
-
-**Request Body**
-
-```json
-{
-  "revenue_growth": 0.10,
-  "operating_margin": 0.30,
-  "terminal_growth_rate": 0.03,
-  "market_risk_premium": 0.06,
-  "projection_years": 10,
-  "da_ratio": 0.029,
-  "capex_ratio": 0.027,
-  "wc_ratio": -0.003,
-  "discount_rate_override": null
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `revenue_growth` | float | Yes | Annual revenue growth rate (0.10 = 10%) |
-| `operating_margin` | float | Yes | EBIT as % of revenue (0.30 = 30%) |
-| `terminal_growth_rate` | float | Yes | Perpetual growth rate (0.03 = 3%) |
-| `market_risk_premium` | float | Yes | Equity risk premium (0.06 = 6%) |
-| `projection_years` | int | Yes | Years to project (typically 5-10) |
-| `da_ratio` | float | No | D&A as % of revenue |
-| `capex_ratio` | float | No | CapEx as % of revenue |
-| `wc_ratio` | float | No | Working capital change as % of revenue |
-| `discount_rate_override` | float | No | Custom WACC override |
-
-**Response**
-
-```json
-{
-  "intrinsic_value_per_share": 185.50,
-  "current_price": 178.50,
-  "upside_percent": 3.9,
-  "enterprise_value": 3100000000000,
-  "equity_value": 2920000000000,
-  "terminal_value": 2500000000000,
-  "discount_rate": 0.095,
-  "projections": [
-    {
-      "revenue": 433760800000,
-      "ebit": 130128240000,
-      "nopat": 111079476000,
-      "da": 12579064000,
-      "capex": -11711542000,
-      "working_capital": -1301282400,
-      "delta_wc": 67174600,
-      "fcf": 112014172600
-    }
-  ],
-  "wacc_components": {
-    "cost_of_equity": 0.1175,
-    "cost_of_debt": 0.045,
-    "weight_equity": 0.85,
-    "weight_debt": 0.15,
-    "tax_rate": 0.147
-  }
-}
-```
-
----
-
-### Run Scenario Analysis
-
-Runs multiple scenarios (bull/base/bear) and returns comparison.
-
-```
-POST /api/stock/{symbol}/scenarios
-```
-
-**Request Body**
-
-```json
-{
-  "scenarios": [
-    {
-      "name": "Bear",
-      "revenue_growth": 0.05,
-      "operating_margin": 0.25
-    },
-    {
-      "name": "Base",
-      "revenue_growth": 0.10,
-      "operating_margin": 0.30
-    },
-    {
-      "name": "Bull",
-      "revenue_growth": 0.15,
-      "operating_margin": 0.35
-    }
-  ],
-  "projection_years": 10,
-  "market_risk_premium": 0.06,
-  "discount_rate_override": null,
-  "revenue_growth_hint": 0.10,
-  "operating_margin_hint": 0.30,
-  "da_ratio": 0.029,
-  "capex_ratio": 0.027,
-  "wc_ratio": -0.003
-}
-```
-
-If `scenarios` is null, default scenarios are generated from hints.
-
-**Response**
-
-```json
-{
-  "scenarios": [
-    {
-      "name": "Bear",
-      "revenue_growth": 0.05,
-      "operating_margin": 0.25,
-      "intrinsic_value": 145.00,
-      "upside_percent": -18.8,
-      "terminal_value": 1800000000000
-    },
-    {
-      "name": "Base",
-      "revenue_growth": 0.10,
-      "operating_margin": 0.30,
-      "intrinsic_value": 185.50,
-      "upside_percent": 3.9,
-      "terminal_value": 2500000000000
-    },
-    {
-      "name": "Bull",
-      "revenue_growth": 0.15,
-      "operating_margin": 0.35,
-      "intrinsic_value": 245.00,
-      "upside_percent": 37.3,
-      "terminal_value": 3500000000000
-    }
-  ],
-  "discount_rate": 0.095
-}
-```
-
----
-
-### Get Financial Ratios
-
-Returns comprehensive financial ratios.
-
-```
-GET /api/stock/{symbol}/ratios
-```
-
-**Response**
-
-```json
-{
-  "annual": {
-    "profitability": {
-      "gross_margin": 0.438,
-      "operating_margin": 0.298,
-      "net_margin": 0.253,
-      "roe": 1.472,
-      "roa": 0.283
-    },
-    "liquidity": {
-      "current_ratio": 0.988,
-      "quick_ratio": 0.813
-    },
-    "leverage": {
-      "debt_to_equity": 1.99,
-      "debt_to_assets": 0.31,
-      "interest_coverage": 29.5
-    },
-    "valuation": {
-      "pe_ratio": 28.5,
-      "price_to_book": 42.0,
-      "price_to_sales": 7.2,
-      "ev_to_ebitda": 21.5
-    }
-  },
-  "ttm": {
-    "profitability": {},
-    "liquidity": {},
-    "leverage": {},
-    "valuation": {}
-  }
-}
-```
-
----
-
-### Get Comparable Analysis
-
-Returns peer comparison data.
-
-```
-GET /api/stock/{symbol}/comparables
-```
-
-**Response**
-
-```json
-{
-  "target": {
-    "symbol": "AAPL",
-    "pe_ratio": 28.5,
-    "ev_ebitda": 21.5,
-    "price_to_sales": 7.2,
-    "price_to_book": 42.0
-  },
-  "peers": [
-    {
-      "symbol": "MSFT",
-      "pe_ratio": 32.1,
-      "ev_ebitda": 24.3,
-      "price_to_sales": 11.5,
-      "price_to_book": 10.8
-    }
-  ],
-  "sector_median": {
-    "pe_ratio": 25.0,
-    "ev_ebitda": 18.0,
-    "price_to_sales": 5.0,
-    "price_to_book": 8.0
-  }
-}
-```
-
----
-
-### Get Dividend History
-
-```
-GET /api/stock/{symbol}/dividends
-```
-
-**Response**
-
-```json
-{
-  "symbol": "AAPL",
-  "dividends": [
-    {
-      "date": "2024-02-09",
-      "amount": 0.24
-    }
-  ],
-  "dividend_yield": 0.005,
-  "payout_ratio": 0.15
-}
-```
-
----
-
-### Get Historical Valuation
-
-Returns historical P/E, P/B, and other multiples.
-
-```
-GET /api/stock/{symbol}/historical-valuation
-```
-
-**Response**
-
-```json
-{
-  "symbol": "AAPL",
-  "history": [
-    {
-      "date": "2024-01-15",
-      "pe_ratio": 28.5,
-      "pb_ratio": 42.0,
-      "ps_ratio": 7.2
-    }
-  ]
-}
-```
-
----
-
-## Technical Analysis
-
-### Get Technical Indicators
-
-```
-GET /api/stock/{symbol}/technical
-```
-
-**Response**
-
-```json
-{
-  "price_data": {
-    "current": 178.50,
-    "change_percent": 1.25,
-    "high_52w": 199.62,
-    "low_52w": 124.17,
-    "volume": 52000000,
-    "avg_volume": 58000000
-  },
-  "moving_averages": {
-    "sma_20": 175.30,
-    "sma_50": 172.50,
-    "sma_200": 168.00,
-    "ema_12": 176.80,
-    "ema_26": 174.20
-  },
-  "momentum": {
-    "rsi_14": 58.5,
-    "macd": 2.6,
-    "macd_signal": 1.8,
-    "macd_histogram": 0.8
-  },
-  "trend": {
-    "direction": "bullish",
-    "strength": "moderate"
-  }
-}
-```
-
----
-
-## Investment Memos
-
-### List Memos
-
-```
-GET /api/memos
-```
-
-**Response**
-
-```json
-[
-  {
-    "id": 1,
-    "symbol": "AAPL",
-    "title": "Apple Q4 2024 Thesis",
-    "thesis": "Strong services growth offsetting hardware...",
-    "conviction": "high",
-    "time_horizon_months": 12,
-    "created_at": "2024-01-15T10:30:00Z",
-    "status": "open",
-    "current_performance": {
-      "current_price": 185.50,
-      "return_percent": 3.9
-    }
-  }
-]
-```
-
----
-
-### Create Memo
-
-```
-POST /api/memos
-```
-
-**Request Body**
-
-```json
-{
-  "symbol": "AAPL",
-  "title": "Apple Q4 2024 Thesis",
-  "thesis": "Strong services growth offsetting hardware headwinds...",
-  "conviction": "high",
-  "time_horizon_months": 12,
-  "target_price": 200.00,
-  "catalysts": "iPhone 16 launch, AI features, services growth",
-  "risks": "China exposure, regulatory pressure",
-  "what_would_change_mind": "Services growth below 10%, margin compression",
-  "assumptions": {
-    "revenue_growth": 0.10,
-    "operating_margin": 0.30,
-    "terminal_growth_rate": 0.03,
-    "discount_rate": 0.095,
-    "projection_years": 10
-  },
-  "scenarios": [],
-  "initial_market": {
-    "price": 178.50,
-    "intrinsic_value": 185.50,
-    "pe_ratio": 28.5
-  }
-}
-```
-
----
-
-### Get Memo
-
-```
-GET /api/memos/{id}
-```
-
----
-
-### Update Memo
-
-```
-PUT /api/memos/{id}
-```
-
-**Request Body**
-
-Same fields as Create Memo (partial updates supported).
-
----
-
-### Delete Memo
-
-```
-DELETE /api/memos/{id}
-```
-
----
-
-### Add Market Snapshot
-
-Records current market data for tracking.
-
-```
-POST /api/memos/{id}/snapshots
-```
-
----
-
-### Add Post-Mortem
-
-```
-POST /api/memos/{id}/post-mortems
-```
-
-**Request Body**
-
-```json
-{
-  "content": "Q4 earnings beat expectations. Raising conviction.",
-  "action_taken": "add"
-}
-```
-
-| `action_taken` | Description |
-|----------------|-------------|
-| `hold` | Maintaining position |
-| `add` | Adding to position |
-| `trim` | Reducing position |
-| `exit` | Exiting position |
-
----
-
-### Close Memo
-
-```
-POST /api/memos/{id}/close
-```
-
-**Request Body**
-
-```json
-{
-  "reason": "Thesis played out. Target reached."
-}
-```
-
----
-
-## Assumption Audit Trail
-
-### Get Audit History
-
-```
-GET /api/audit/{symbol}/history
-```
-
-**Response**
-
-```json
-{
-  "symbol": "AAPL",
-  "entries": [
-    {
-      "id": 1,
-      "timestamp": "2024-01-15T10:30:00Z",
-      "changes": [
-        {
-          "field": "revenue_growth",
-          "old_value": 0.08,
-          "new_value": 0.10
-        }
-      ],
-      "note": "Updated growth assumption after Q4 earnings",
-      "is_initial": false,
-      "price_at_time": 178.50,
-      "intrinsic_value_at_time": 185.50,
-      "pe_ratio_at_time": 28.5
-    }
-  ]
-}
-```
-
----
-
-### Get Current Snapshot
-
-```
-GET /api/audit/{symbol}/snapshot
-```
-
-**Response**
-
-```json
-{
-  "symbol": "AAPL",
-  "revenue_growth": 0.10,
-  "operating_margin": 0.30,
-  "terminal_growth_rate": 0.03,
-  "projection_years": 10
-}
-```
-
----
-
-### Get Field History
-
-```
-GET /api/audit/{symbol}/field/{field}
-```
-
-**Query Parameters**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `field` | string | Field name (e.g., `revenue_growth`, `operating_margin`) |
-
-**Response**
-
-```json
-{
-  "field": "revenue_growth",
-  "history": [
-    {
-      "timestamp": "2024-01-15T10:30:00Z",
-      "value": 0.10,
-      "note": "Updated for Q4"
-    },
-    {
-      "timestamp": "2024-01-01T09:00:00Z",
-      "value": 0.08,
-      "note": "Initial analysis"
-    }
-  ]
-}
-```
-
----
-
-### Record Assumptions
-
-```
-POST /api/audit/{symbol}
-```
-
-**Request Body**
-
-```json
-{
-  "assumptions": {
-    "revenue_growth": 0.10,
-    "operating_margin": 0.30,
-    "terminal_growth_rate": 0.03,
-    "projection_years": 10
-  },
-  "note": "Initial analysis",
-  "price_at_time": 178.50,
-  "intrinsic_value_at_time": 185.50,
-  "pe_ratio_at_time": 28.5
-}
-```
-
----
-
-## Providers
-
-### List Providers
+User picks one provider for each analysis type.
 
 ```
 GET /api/providers
 ```
 
-**Response**
 
-```json
-{
-  "fundamental": [
-    {
-      "id": "fmp",
-      "name": "Financial Modeling Prep",
-      "description": "Professional financial data API"
-    },
-    {
-      "id": "yahoo",
-      "name": "Yahoo Finance",
-      "description": "Free financial data from Yahoo"
-    }
-  ],
-  "technical": [
-    {
-      "id": "massive",
-      "name": "Massive",
-      "description": "Technical analysis data"
-    }
-  ]
-}
-```
+
 
 ---
 
-### Get Rate Limits
+### Get Stock
+
+Get stock data and historical hints.
+
+Args:
+    symbol: Stock ticker symbol
+    provider: Data provider to use (fmp or yahoo) - REQUIRED
+
+Returns:
+- data: Read-only values (beta, debt, cash, etc.)
+- hints: Historical averages for reference (user decides what to use)
 
 ```
-GET /api/rate-limits
+GET /api/stock/{symbol}
 ```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
 
 **Response**
 
 ```json
 {
-  "fmp": {
-    "calls_today": 150,
-    "limit": 250,
-    "reset_in_seconds": 43200
+  "symbol": "string",
+  "company_name": "string",
+  "industry": "string",
+  "sector": "string",
+  "data_provider": "string",
+  "data": {
+    "beta": 0.0,
+    "market_cap": 0.0,
+    "total_debt": 0.0,
+    "cash": 0.0,
+    "tax_rate": 0.0,
+    "cost_of_debt": 0.0,
+    "shares_outstanding": 0.0,
+    "risk_free_rate": 0.0,
+    "wacc": 0.0
   },
-  "yahoo": {
-    "calls_today": 50,
-    "limit": null,
-    "reset_in_seconds": null
+  "hints": {
+    "revenue_growth": 0.0,
+    "operating_margin": 0.0,
+    "da_ratio": 0.0,
+    "capex_ratio": 0.0,
+    "wc_ratio": 0.0
+  },
+  "validation": {
+    "has_errors": true,
+    "has_warnings": true,
+    "errors": [
+      {
+        "field": "string",
+        "message": "string"
+      }
+    ],
+    "warnings": [
+      {
+        "field": "string",
+        "message": "string"
+      }
+    ]
   }
 }
 ```
 
 ---
 
+### Run Valuation
+
+Run DCF valuation with user-provided assumptions.
+
+Args:
+    symbol: Stock ticker symbol
+    provider: Data provider to use (fmp or yahoo) - REQUIRED
+    request: Valuation assumptions from user
+
+```
+POST /api/stock/{symbol}/valuation
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+**Request Body**
+
+```json
+{
+  "revenue_growth": 0.0,
+  "operating_margin": 0.0,
+  "terminal_growth_rate": 0.0,
+  "market_risk_premium": 0.0,
+  "projection_years": 0,
+  "discount_rate_override": 0.0,
+  "da_ratio": 0.0,
+  "capex_ratio": 0.0,
+  "wc_ratio": 0.0
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `revenue_growth` | number | Yes |  |
+| `operating_margin` | number | Yes |  |
+| `terminal_growth_rate` | number | Yes |  |
+| `market_risk_premium` | number | Yes |  |
+| `projection_years` | integer | Yes |  |
+| `discount_rate_override` | number | null | No |  |
+| `da_ratio` | number | null | No |  |
+| `capex_ratio` | number | null | No |  |
+| `wc_ratio` | number | null | No |  |
+
+
+---
+
+### Run Scenarios
+
+Run scenario analysis (Bear/Base/Bull cases).
+
+Args:
+    symbol: Stock ticker symbol
+    provider: Data provider to use (fmp or yahoo) - REQUIRED
+    request: Scenario parameters
+
+If no scenarios provided, generates smart defaults based on historical data.
+Returns intrinsic values for each scenario and probability-weighted average.
+
+```
+POST /api/stock/{symbol}/scenarios
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+**Request Body**
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "string",
+      "revenue_growth": 0.0,
+      "operating_margin": 0.0,
+      "terminal_growth": 0.0,
+      "probability": 0.0,
+      "description": "string"
+    }
+  ],
+  "projection_years": 0,
+  "market_risk_premium": 0.0,
+  "discount_rate_override": 0.0,
+  "revenue_growth_hint": 0.0,
+  "operating_margin_hint": 0.0,
+  "da_ratio": 0.0,
+  "capex_ratio": 0.0,
+  "wc_ratio": 0.0
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `scenarios` | array | null | No |  |
+| `projection_years` | integer | No |  |
+| `market_risk_premium` | number | No |  |
+| `discount_rate_override` | number | null | No |  |
+| `revenue_growth_hint` | number | null | No |  |
+| `operating_margin_hint` | number | null | No |  |
+| `da_ratio` | number | null | No |  |
+| `capex_ratio` | number | null | No |  |
+| `wc_ratio` | number | null | No |  |
+
+
+---
+
+### Get Comparables
+
+Run comparable company analysis.
+
+Args:
+    symbol: Stock ticker symbol
+    provider: Data provider to use (fmp or yahoo) - REQUIRED
+    max_peers: Maximum number of peer companies to include
+
+Compares the stock against sector peers using valuation multiples:
+- P/E (Price to Earnings)
+- EV/EBITDA (Enterprise Value to EBITDA)
+- P/S (Price to Sales)
+- P/B (Price to Book)
+
+Returns implied fair value based on peer median multiples.
+
+```
+GET /api/stock/{symbol}/comparables
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+| `max_peers` | integer | No |  (default: `5`) |
+
+
+
+---
+
+### Get Ratios
+
+Get comprehensive financial ratios for a stock.
+
+Args:
+    symbol: Stock ticker symbol
+    provider: Data provider to use (fmp or yahoo) - REQUIRED
+
+Returns ratios organized by category:
+- Valuation: P/E, Earnings Yield, P/S, P/B, EV/EBITDA, EV/Revenue
+- Dividend: Dividend Yield, Payout Ratio
+- Profitability: Gross/Operating/Net Margins, ROE, ROA, ROIC
+- Liquidity: Current Ratio, Quick Ratio, Debt/Equity, Interest Coverage
+- Efficiency: Asset Turnover, Inventory Turnover
+
+```
+GET /api/stock/{symbol}/ratios
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+
+
+---
+
+### Get Dividends
+
+Get dividend history and metrics for a stock.
+
+Args:
+    symbol: Stock ticker symbol
+    provider: Data provider to use (yahoo recommended for dividend data)
+
+Returns dividend analysis including:
+- Current annual dividend and yield
+- Dividend growth rate (CAGR)
+- Consecutive years of payments
+- Annual dividend history
+
+```
+GET /api/stock/{symbol}/dividends
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+
+
+---
+
+### Get Historical Valuation
+
+Get historical valuation context for a stock.
+
+Args:
+    symbol: Stock ticker symbol
+    provider: Data provider to use (fmp or yahoo)
+
+Compares current valuation multiples (P/E, P/S, P/B, EV/EBITDA)
+to 5-year averages to assess if stock is cheap or expensive
+relative to its own history.
+
+```
+GET /api/stock/{symbol}/historical-valuation
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+
+
+---
+
+### Get Technical Analysis
+
+Run technical analysis on a stock.
+
+Args:
+    symbol: Stock ticker symbol
+    provider: Technical analysis provider (yahoo, fmp, massive)
+    days: Days of historical data (default 365)
+
+Returns:
+    Price data, moving averages, RSI, MACD, and trend signals.
+
+```
+GET /api/stock/{symbol}/technical
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | No |  (default: `massive`) |
+| `days` | integer | No |  (default: `365`) |
+
+
+
+---
+
+### Batch Analyze
+
+Batch analyze endpoint - returns all fundamental data in a single call.
+
+This reduces API calls by fetching stock data once and computing all
+derived metrics (ratios, dividends, historical valuation) from that data.
+
+Returns:
+    - stock: Basic stock data and validation
+    - ratios: Financial ratios
+    - dividends: Dividend history and metrics
+    - historical_valuation: Historical valuation context
+    - rate_limit: Current rate limit status for the provider
+
+```
+GET /api/stock/{symbol}/analyze
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+
+
+---
+
+### Get Rate Limits
+
+Get current rate limit statistics for all providers.
+
+```
+GET /api/rate-limits
+```
+
+
+
+
+---
+
 ### Reset Rate Limits
 
-Clears rate limit counters (for testing/development).
+Reset all rate limit counters (e.g., for a new day).
 
 ```
 POST /api/rate-limits/reset
 ```
 
+
+
+
 ---
 
-## Error Responses
+### Record Assumptions
 
-All endpoints return errors in this format:
+Record assumption changes for a stock.
+
+Args:
+    symbol: Stock ticker symbol
+    request: New assumptions and optional note
+
+On first call for a symbol, creates an initial entry (baseline).
+On subsequent calls, only records fields that changed from previous snapshot.
+
+Returns:
+    - 201 with saved audit entry when changes recorded
+    - 200 with empty changes if nothing changed
+
+```
+POST /api/audit/{symbol}
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+
+**Request Body**
 
 ```json
 {
-  "detail": "Error message describing what went wrong"
+  "assumptions": {},
+  "note": "string",
+  "price_at_time": 0.0,
+  "intrinsic_value_at_time": 0.0,
+  "pe_ratio_at_time": 0.0
 }
 ```
 
-| Status Code | Description |
-|-------------|-------------|
-| 400 | Bad request (invalid parameters) |
-| 404 | Resource not found |
-| 429 | Rate limit exceeded |
-| 500 | Internal server error |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `assumptions` | object | Yes |  |
+| `note` | string | null | No |  |
+| `price_at_time` | number | null | No |  |
+| `intrinsic_value_at_time` | number | null | No |  |
+| `pe_ratio_at_time` | number | null | No |  |
+
+
+---
+
+### Get Audit History
+
+Get assumption change history for a stock.
+
+Args:
+    symbol: Stock ticker symbol
+    limit: Maximum entries to return (default 50)
+
+Returns:
+    List of audit entries, most recent first.
+
+```
+GET /api/audit/{symbol}/history
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `limit` | integer | No |  (default: `50`) |
+
+
+
+---
+
+### Get Audit Snapshot
+
+Get the current assumption snapshot for a stock.
+
+Reconstructs the current state by replaying all changes.
+
+Returns:
+    Current assumption values, or 404 if no history exists.
+
+```
+GET /api/audit/{symbol}/snapshot
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+
+
+
+---
+
+### Get Field History
+
+Get change history for a specific assumption field.
+
+Args:
+    symbol: Stock ticker symbol
+    field: Field name (revenue_growth, operating_margin, etc.)
+
+Returns:
+    List of changes for that field, most recent first.
+
+```
+GET /api/audit/{symbol}/field/{field}
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `field` | string | Yes |  |
+
+
+
+---
+
+### Create Memo
+
+Create a new investment memo.
+
+Captures thesis, assumptions, scenarios, and market context at creation time.
+
+```
+POST /api/memos
+```
+
+
+**Request Body**
+
+```json
+{
+  "symbol": "string",
+  "title": "string",
+  "thesis": "string",
+  "conviction": "string",
+  "time_horizon_months": 0,
+  "assumptions": {
+    "revenue_growth": 0.0,
+    "operating_margin": 0.0,
+    "terminal_growth_rate": 0.0,
+    "discount_rate": 0.0,
+    "projection_years": 0,
+    "da_ratio": 0.0,
+    "capex_ratio": 0.0,
+    "wc_ratio": 0.0
+  },
+  "scenarios": [
+    {
+      "name": "string",
+      "revenue_growth": 0.0,
+      "operating_margin": 0.0,
+      "intrinsic_value": 0.0,
+      "upside_percent": 0.0
+    }
+  ],
+  "initial_market": {
+    "price": 0.0,
+    "intrinsic_value": 0.0,
+    "pe_ratio": 0.0
+  },
+  "target_price": 0.0,
+  "risks": "string",
+  "catalysts": "string",
+  "what_would_change_mind": "string"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `title` | string | Yes |  |
+| `thesis` | string | Yes |  |
+| `conviction` | string | Yes |  |
+| `time_horizon_months` | integer | Yes |  |
+| `assumptions` | MemoAssumptions | Yes |  |
+| `scenarios` | array | Yes |  |
+| `initial_market` | MemoMarket | Yes |  |
+| `target_price` | number | null | No |  |
+| `risks` | string | null | No |  |
+| `catalysts` | string | null | No |  |
+| `what_would_change_mind` | string | null | No |  |
+
+
+---
+
+### List Memos
+
+List investment memos with optional filtering.
+
+Args:
+    symbol: Filter by stock symbol
+    status: Filter by status (active, closed_win, closed_loss, closed_neutral)
+
+```
+GET /api/memos
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | null | No |  |
+| `status` | string | null | No |  |
+
+
+
+---
+
+### Get Memo
+
+Get a single investment memo by ID.
+
+```
+GET /api/memos/{memo_id}
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `memo_id` | integer | Yes |  |
+
+
+
+---
+
+### Update Memo
+
+Update an existing memo.
+
+```
+PUT /api/memos/{memo_id}
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `memo_id` | integer | Yes |  |
+
+**Request Body**
+
+```json
+{
+  "symbol": "string",
+  "title": "string",
+  "thesis": "string",
+  "conviction": "string",
+  "time_horizon_months": 0,
+  "assumptions": {
+    "revenue_growth": 0.0,
+    "operating_margin": 0.0,
+    "terminal_growth_rate": 0.0,
+    "discount_rate": 0.0,
+    "projection_years": 0,
+    "da_ratio": 0.0,
+    "capex_ratio": 0.0,
+    "wc_ratio": 0.0
+  },
+  "scenarios": [
+    {
+      "name": "string",
+      "revenue_growth": 0.0,
+      "operating_margin": 0.0,
+      "intrinsic_value": 0.0,
+      "upside_percent": 0.0
+    }
+  ],
+  "initial_market": {
+    "price": 0.0,
+    "intrinsic_value": 0.0,
+    "pe_ratio": 0.0
+  },
+  "target_price": 0.0,
+  "risks": "string",
+  "catalysts": "string",
+  "what_would_change_mind": "string"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `title` | string | Yes |  |
+| `thesis` | string | Yes |  |
+| `conviction` | string | Yes |  |
+| `time_horizon_months` | integer | Yes |  |
+| `assumptions` | MemoAssumptions | Yes |  |
+| `scenarios` | array | Yes |  |
+| `initial_market` | MemoMarket | Yes |  |
+| `target_price` | number | null | No |  |
+| `risks` | string | null | No |  |
+| `catalysts` | string | null | No |  |
+| `what_would_change_mind` | string | null | No |  |
+
+
+---
+
+### Delete Memo
+
+Delete an investment memo.
+
+```
+DELETE /api/memos/{memo_id}
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `memo_id` | integer | Yes |  |
+
+
+
+---
+
+### Add Post Mortem
+
+Add a post-mortem review to a memo.
+
+Post-mortems track how reality is unfolding vs the original thesis.
+
+```
+POST /api/memos/{memo_id}/post-mortems
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `memo_id` | integer | Yes |  |
+
+**Request Body**
+
+```json
+{
+  "note": "string",
+  "action": "string",
+  "price_at_time": 0.0,
+  "iv_at_time": 0.0
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `note` | string | Yes |  |
+| `action` | string | Yes |  |
+| `price_at_time` | number | Yes |  |
+| `iv_at_time` | number | Yes |  |
+
+
+---
+
+### Close Memo
+
+Close a memo with final status and reason.
+
+Status should reflect whether the thesis played out:
+- closed_win: Thesis was correct
+- closed_loss: Thesis was wrong
+- closed_neutral: Closed for other reasons
+
+```
+POST /api/memos/{memo_id}/close
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `memo_id` | integer | Yes |  |
+
+**Request Body**
+
+```json
+{
+  "status": "string",
+  "reason": "string"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `status` | string | Yes |  |
+| `reason` | string | Yes |  |
+
+
+---
+
+### Add Market Snapshot
+
+Add a market snapshot to track performance over time.
+
+Call this periodically to track how price and intrinsic value evolve.
+
+```
+POST /api/memos/{memo_id}/snapshots
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `memo_id` | integer | Yes |  |
+
+**Request Body**
+
+```json
+{
+  "price": 0.0,
+  "intrinsic_value": 0.0,
+  "pe_ratio": 0.0
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `price` | number | Yes |  |
+| `intrinsic_value` | number | Yes |  |
+| `pe_ratio` | number | null | No |  |
+
+
+---
+
+### Run Monte Carlo
+
+Run Monte Carlo simulation on DCF valuation.
+
+Varies growth, margin, and discount rate to produce a probability
+distribution of intrinsic values.
+
+Returns:
+- mean: Expected intrinsic value
+- std_dev: Standard deviation of values
+- percentiles: p5, p10, p25, p50 (median), p75, p90, p95
+- valid_simulations: Number of successful iterations
+
+Example interpretation:
+- "50% chance the stock is worth more than $X" (p50)
+- "90% chance it's worth more than $Y" (p10)
+- "Only 10% chance it's worth more than $Z" (p90)
+
+```
+POST /api/stock/{symbol}/monte-carlo
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | No |  (default: `yahoo`) |
+
+**Request Body**
+
+```json
+{
+  "base_growth": 0.0,
+  "growth_std": 0.0,
+  "base_margin": 0.0,
+  "margin_std": 0.0,
+  "base_discount_rate": 0.0,
+  "discount_std": 0.0,
+  "terminal_growth": 0.0,
+  "projection_years": 0,
+  "iterations": 0
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_growth` | number | Yes |  |
+| `growth_std` | number | No |  |
+| `base_margin` | number | Yes |  |
+| `margin_std` | number | No |  |
+| `base_discount_rate` | number | Yes |  |
+| `discount_std` | number | No |  |
+| `terminal_growth` | number | No |  |
+| `projection_years` | integer | No |  |
+| `iterations` | integer | No |  |
+
+
+---
+
+### Analyze Capital Efficiency
+
+Analyze capital efficiency and value creation.
+
+Key metrics:
+- ROIC: Return on Invested Capital (profitability of capital)
+- Reinvestment Rate: % of earnings needed to fund growth
+- Value Spread: ROIC - WACC (positive = value creation)
+- Economic Profit (EVA): Dollar value created/destroyed
+
+Interpretation:
+- ROIC > WACC: Growth creates shareholder value
+- ROIC < WACC: Growth destroys shareholder value (despite earnings!)
+- High ROIC + Low reinvestment = Excellent capital efficiency
+
+```
+POST /api/capital-efficiency
+```
+
+
+**Request Body**
+
+```json
+{
+  "nopat": 0.0,
+  "invested_capital": 0.0,
+  "revenue_growth": 0.0,
+  "wacc": 0.0
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `nopat` | number | Yes |  |
+| `invested_capital` | number | Yes |  |
+| `revenue_growth` | number | Yes |  |
+| `wacc` | number | Yes |  |
+
+
+---
