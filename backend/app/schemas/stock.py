@@ -109,6 +109,27 @@ class MonteCarloRequest(BaseModel):
     iterations: int = 5000  # Number of simulations (default 5000 for speed)
 
 
+class WACCComponentsInput(BaseModel):
+    """WACC calculation from components (alternative to fixed discount rate)."""
+    risk_free_rate: float  # e.g., 0.045 for 4.5%
+    beta: float  # Stock's beta
+    market_risk_premium: float  # e.g., 0.055 for 5.5%
+    cost_of_debt: float  # e.g., 0.05 for 5%
+    market_cap: float  # Market capitalization
+    # Optional: std devs for sampling WACC inputs
+    beta_std: Optional[float] = None  # If set, sample beta with this std dev
+    market_risk_premium_std: Optional[float] = None  # If set, sample MRP
+
+
+class GrowthStageInput(BaseModel):
+    """A single growth stage for multi-stage growth model."""
+    name: str
+    years: int
+    growth_rate: float  # e.g., 0.20 for 20%
+    end_growth_rate: Optional[float] = None  # If set, fade linearly to this rate
+    growth_std: Optional[float] = None  # Per-stage std dev (defaults to global)
+
+
 class FullMonteCarloRequest(BaseModel):
     """
     Request for Full-Model Monte Carlo simulation (decision-grade).
@@ -116,16 +137,20 @@ class FullMonteCarloRequest(BaseModel):
     Uses the complete DCF engine with FCF projections including:
     NOPAT, D&A, CapEx, Working Capital changes, and proper terminal value.
     
-    Supports bounded distributions and correlations between inputs.
+    Supports:
+    - Bounded distributions and correlations between inputs
+    - WACC from components (alternative to fixed discount rate)
+    - Multi-stage growth (alternative to single growth rate)
+    - Mid-year discounting (more realistic timing)
     """
     # Base assumptions (will be means of distributions)
-    base_growth: float  # Revenue growth rate
+    base_growth: Optional[float] = None  # Required unless growth_stages provided
     base_margin: float  # Operating margin (EBIT/Revenue)
     base_da_ratio: float  # D&A as % of revenue
     base_capex_ratio: float  # CapEx as % of revenue
     base_wc_ratio: float  # Working capital as % of revenue
     base_tax_rate: float = DEFAULT_TAX_RATE
-    base_discount_rate: float  # WACC
+    base_discount_rate: Optional[float] = None  # Required unless wacc_components provided
     base_terminal_growth: float = DEFAULT_TERMINAL_GROWTH
     
     # Standard deviations for sampling
@@ -144,6 +169,15 @@ class FullMonteCarloRequest(BaseModel):
     # Correlations (defaults based on typical market behavior)
     growth_margin_correlation: float = -0.2  # Negative: high growth often compresses margins
     growth_capex_correlation: float = 0.3  # Positive: growth requires investment
+    
+    # NEW: WACC from components (alternative to base_discount_rate)
+    wacc_components: Optional[WACCComponentsInput] = None
+    
+    # NEW: Multi-stage growth (alternative to base_growth)
+    growth_stages: Optional[List[GrowthStageInput]] = None
+    
+    # NEW: Mid-year discounting
+    use_mid_year_discounting: bool = False
 
 
 class CapitalEfficiencyRequest(BaseModel):

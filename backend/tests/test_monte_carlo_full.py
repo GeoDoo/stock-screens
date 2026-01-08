@@ -366,6 +366,313 @@ class TestRunFullMonteCarlo:
         assert result.valid_simulations >= 0
 
 
+class TestFullMonteCarloWACCFromComponents:
+    """Tests for WACC calculation from components (instead of fixed discount rate)."""
+    
+    @pytest.fixture
+    def sample_historical_data(self):
+        """Sample historical data for a company."""
+        return {
+            "historical_revenue": [100e9, 110e9, 120e9, 130e9, 140e9],
+            "historical_ebit": [20e9, 22e9, 24e9, 26e9, 28e9],
+            "historical_da": [5e9, 5.5e9, 6e9, 6.5e9, 7e9],
+            "historical_capex": [8e9, 8.8e9, 9.6e9, 10.4e9, 11.2e9],
+            "historical_working_capital": [10e9, 11e9, 12e9, 13e9, 14e9],
+            "shares_outstanding": 5e9,
+            "total_debt": 20e9,
+            "cash": 30e9,
+            "current_price": 30.0,
+        }
+    
+    def test_wacc_from_components_runs(self, sample_historical_data):
+        """Monte Carlo should run when WACC components are provided."""
+        result = run_full_monte_carlo(
+            **sample_historical_data,
+            base_growth=0.08,
+            base_margin=0.20,
+            base_da_ratio=0.05,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_terminal_growth=0.03,
+            # WACC components instead of base_discount_rate
+            wacc_components={
+                "risk_free_rate": 0.045,
+                "beta": 1.2,
+                "market_risk_premium": 0.055,
+                "cost_of_debt": 0.05,
+                "market_cap": 150e9,
+            },
+            iterations=100,
+            seed=42,
+        )
+        
+        assert result.valid_simulations > 50
+        assert result.mean > 0
+        
+    def test_wacc_components_with_uncertainty(self, sample_historical_data):
+        """WACC inputs should be sampled with their own standard deviations."""
+        result = run_full_monte_carlo(
+            **sample_historical_data,
+            base_growth=0.08,
+            base_margin=0.20,
+            base_da_ratio=0.05,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_terminal_growth=0.03,
+            wacc_components={
+                "risk_free_rate": 0.045,
+                "beta": 1.2,
+                "market_risk_premium": 0.055,
+                "cost_of_debt": 0.05,
+                "market_cap": 150e9,
+                # Add std devs for sampling
+                "beta_std": 0.2,
+                "market_risk_premium_std": 0.01,
+            },
+            iterations=500,
+            seed=42,
+        )
+        
+        # Should have reasonable spread due to WACC uncertainty
+        assert result.std_dev > 0
+        
+    def test_higher_beta_increases_discount_rate_lowers_value(self, sample_historical_data):
+        """Higher beta → higher discount rate → lower intrinsic value."""
+        base_kwargs = {
+            **sample_historical_data,
+            "base_growth": 0.08,
+            "base_margin": 0.20,
+            "base_da_ratio": 0.05,
+            "base_capex_ratio": 0.08,
+            "base_wc_ratio": 0.10,
+            "base_tax_rate": 0.25,
+            "base_terminal_growth": 0.03,
+            "iterations": 300,
+            "seed": 42,
+        }
+        
+        low_beta = run_full_monte_carlo(
+            **base_kwargs,
+            wacc_components={
+                "risk_free_rate": 0.045,
+                "beta": 0.8,  # Low beta
+                "market_risk_premium": 0.055,
+                "cost_of_debt": 0.05,
+                "market_cap": 150e9,
+            },
+        )
+        
+        high_beta = run_full_monte_carlo(
+            **base_kwargs,
+            wacc_components={
+                "risk_free_rate": 0.045,
+                "beta": 1.5,  # High beta
+                "market_risk_premium": 0.055,
+                "cost_of_debt": 0.05,
+                "market_cap": 150e9,
+            },
+        )
+        
+        # Higher beta → higher WACC → lower value
+        assert low_beta.mean > high_beta.mean
+
+
+class TestFullMonteCarloMultiStageGrowth:
+    """Tests for multi-stage growth support in Monte Carlo."""
+    
+    @pytest.fixture
+    def sample_historical_data(self):
+        """Sample historical data for a company."""
+        return {
+            "historical_revenue": [100e9, 110e9, 120e9, 130e9, 140e9],
+            "historical_ebit": [20e9, 22e9, 24e9, 26e9, 28e9],
+            "historical_da": [5e9, 5.5e9, 6e9, 6.5e9, 7e9],
+            "historical_capex": [8e9, 8.8e9, 9.6e9, 10.4e9, 11.2e9],
+            "historical_working_capital": [10e9, 11e9, 12e9, 13e9, 14e9],
+            "shares_outstanding": 5e9,
+            "total_debt": 20e9,
+            "cash": 30e9,
+            "current_price": 30.0,
+        }
+    
+    def test_multi_stage_growth_runs(self, sample_historical_data):
+        """Monte Carlo should run with multi-stage growth."""
+        result = run_full_monte_carlo(
+            **sample_historical_data,
+            base_margin=0.20,
+            base_da_ratio=0.05,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            # Multi-stage growth instead of single base_growth
+            growth_stages=[
+                {"name": "High Growth", "years": 3, "growth_rate": 0.20},
+                {"name": "Fade", "years": 3, "growth_rate": 0.20, "end_growth_rate": 0.08},
+                {"name": "Mature", "years": 4, "growth_rate": 0.05},
+            ],
+            iterations=100,
+            seed=42,
+        )
+        
+        assert result.valid_simulations > 50
+        assert result.mean > 0
+        
+    def test_multi_stage_with_uncertainty(self, sample_historical_data):
+        """Growth stage rates should be sampled with uncertainty."""
+        result = run_full_monte_carlo(
+            **sample_historical_data,
+            base_margin=0.20,
+            base_da_ratio=0.05,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            growth_stages=[
+                {"name": "High", "years": 3, "growth_rate": 0.15, "growth_std": 0.05},
+                {"name": "Mature", "years": 7, "growth_rate": 0.05, "growth_std": 0.02},
+            ],
+            iterations=300,
+            seed=42,
+        )
+        
+        assert result.std_dev > 0
+        
+    def test_high_growth_stage_increases_value(self, sample_historical_data):
+        """Multi-stage with high initial growth should produce higher values."""
+        base_kwargs = {
+            **sample_historical_data,
+            "base_margin": 0.20,
+            "base_da_ratio": 0.05,
+            "base_capex_ratio": 0.08,
+            "base_wc_ratio": 0.10,
+            "base_tax_rate": 0.25,
+            "base_discount_rate": 0.10,
+            "base_terminal_growth": 0.03,
+            "iterations": 300,
+            "seed": 42,
+        }
+        
+        low_growth = run_full_monte_carlo(
+            **base_kwargs,
+            growth_stages=[
+                {"name": "Slow", "years": 5, "growth_rate": 0.05},
+                {"name": "Mature", "years": 5, "growth_rate": 0.03},
+            ],
+        )
+        
+        high_growth = run_full_monte_carlo(
+            **base_kwargs,
+            growth_stages=[
+                {"name": "Fast", "years": 5, "growth_rate": 0.25},
+                {"name": "Mature", "years": 5, "growth_rate": 0.05},
+            ],
+        )
+        
+        assert high_growth.mean > low_growth.mean
+
+
+class TestFullMonteCarloMidYearDiscounting:
+    """Tests for mid-year discounting option."""
+    
+    @pytest.fixture
+    def sample_historical_data(self):
+        """Sample historical data for a company."""
+        return {
+            "historical_revenue": [100e9, 110e9, 120e9, 130e9, 140e9],
+            "historical_ebit": [20e9, 22e9, 24e9, 26e9, 28e9],
+            "historical_da": [5e9, 5.5e9, 6e9, 6.5e9, 7e9],
+            "historical_capex": [8e9, 8.8e9, 9.6e9, 10.4e9, 11.2e9],
+            "historical_working_capital": [10e9, 11e9, 12e9, 13e9, 14e9],
+            "shares_outstanding": 5e9,
+            "total_debt": 20e9,
+            "cash": 30e9,
+            "current_price": 30.0,
+        }
+    
+    def test_mid_year_discounting_runs(self, sample_historical_data):
+        """Monte Carlo should run with mid-year discounting enabled."""
+        result = run_full_monte_carlo(
+            **sample_historical_data,
+            base_growth=0.08,
+            base_margin=0.20,
+            base_da_ratio=0.05,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            use_mid_year_discounting=True,
+            iterations=100,
+            seed=42,
+        )
+        
+        assert result.valid_simulations > 50
+        assert result.mean > 0
+        
+    def test_mid_year_discounting_increases_value(self, sample_historical_data):
+        """Mid-year discounting should produce higher values (cash received sooner)."""
+        base_kwargs = {
+            **sample_historical_data,
+            "base_growth": 0.08,
+            "base_margin": 0.20,
+            "base_da_ratio": 0.05,
+            "base_capex_ratio": 0.08,
+            "base_wc_ratio": 0.10,
+            "base_tax_rate": 0.25,
+            "base_discount_rate": 0.10,
+            "base_terminal_growth": 0.03,
+            "iterations": 300,
+            "seed": 42,
+        }
+        
+        end_year = run_full_monte_carlo(**base_kwargs, use_mid_year_discounting=False)
+        mid_year = run_full_monte_carlo(**base_kwargs, use_mid_year_discounting=True)
+        
+        # Mid-year should be higher (cash flows discounted less)
+        assert mid_year.mean > end_year.mean
+        
+    def test_mid_year_effect_larger_at_high_discount(self, sample_historical_data):
+        """Mid-year effect should be more pronounced at higher discount rates."""
+        base_kwargs = {
+            **sample_historical_data,
+            "base_growth": 0.08,
+            "base_margin": 0.20,
+            "base_da_ratio": 0.05,
+            "base_capex_ratio": 0.08,
+            "base_wc_ratio": 0.10,
+            "base_tax_rate": 0.25,
+            "base_terminal_growth": 0.03,
+            "iterations": 300,
+            "seed": 42,
+        }
+        
+        # Low discount rate (5%)
+        low_discount_end = run_full_monte_carlo(
+            **base_kwargs, base_discount_rate=0.05, use_mid_year_discounting=False
+        )
+        low_discount_mid = run_full_monte_carlo(
+            **base_kwargs, base_discount_rate=0.05, use_mid_year_discounting=True
+        )
+        low_discount_diff = (low_discount_mid.mean - low_discount_end.mean) / low_discount_end.mean
+        
+        # High discount rate (15%)
+        high_discount_end = run_full_monte_carlo(
+            **base_kwargs, base_discount_rate=0.15, use_mid_year_discounting=False
+        )
+        high_discount_mid = run_full_monte_carlo(
+            **base_kwargs, base_discount_rate=0.15, use_mid_year_discounting=True
+        )
+        high_discount_diff = (high_discount_mid.mean - high_discount_end.mean) / high_discount_end.mean
+        
+        # Effect should be larger at high discount rates
+        assert high_discount_diff > low_discount_diff
+
+
 # Helper function for correlation calculation
 def _pearson_correlation(x: list, y: list) -> float:
     """Calculate Pearson correlation coefficient."""

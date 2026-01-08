@@ -8,15 +8,22 @@ Unlike the simplified version, this:
 3. Implements correlations between inputs (growth↔margin, growth↔reinvestment)
 4. Computes comprehensive decision-support outputs (CVaR, P(upside), etc.)
 
+Enhanced features:
+- WACC calculation from components (risk-free rate, beta, MRP, cost of debt)
+- Multi-stage growth support (high growth → fade → mature)
+- Mid-year discounting (more realistic timing assumption)
+
 Use this for actual investment decisions. Use the simplified version for quick intuition.
 """
 import math
 import random
 import statistics
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 from app.services.fcf_projector import FCFProjector
+from app.services.wacc_calculator import WACCCalculator
+from app.services.multi_stage_growth import GrowthStage, calculate_growth_schedule
 
 
 @dataclass
@@ -218,14 +225,14 @@ def run_full_monte_carlo(
     current_price: float,
     
     # Base assumptions (means)
-    base_growth: float,
-    base_margin: float,
-    base_da_ratio: float,
-    base_capex_ratio: float,
-    base_wc_ratio: float,
-    base_tax_rate: float,
-    base_discount_rate: float,
-    base_terminal_growth: float,
+    base_growth: Optional[float] = None,  # Optional if growth_stages provided
+    base_margin: float = 0.15,
+    base_da_ratio: float = 0.05,
+    base_capex_ratio: float = 0.08,
+    base_wc_ratio: float = 0.10,
+    base_tax_rate: float = 0.25,
+    base_discount_rate: Optional[float] = None,  # Optional if wacc_components provided
+    base_terminal_growth: float = 0.03,
     
     # Standard deviations
     growth_std: float = 0.03,
@@ -244,6 +251,15 @@ def run_full_monte_carlo(
     # Correlations
     growth_margin_correlation: float = -0.2,  # Negative: high growth often compresses margins
     growth_capex_correlation: float = 0.3,    # Positive: growth requires investment
+    
+    # NEW: WACC from components (alternative to base_discount_rate)
+    wacc_components: Optional[Dict[str, Any]] = None,
+    
+    # NEW: Multi-stage growth (alternative to base_growth)
+    growth_stages: Optional[List[Dict[str, Any]]] = None,
+    
+    # NEW: Mid-year discounting
+    use_mid_year_discounting: bool = False,
 ) -> FullMonteCarloResult:
     """
     Run Full-Model Monte Carlo using the complete DCF engine.
@@ -254,53 +270,177 @@ def run_full_monte_carlo(
     3. Runs full FCF projections for each simulation
     4. Computes comprehensive decision-support metrics
     
+    Enhanced features:
+    - wacc_components: Calculate WACC from risk-free rate, beta, MRP, cost of debt
+    - growth_stages: Use multi-stage growth instead of single rate
+    - use_mid_year_discounting: Assume cash flows occur mid-year
+    
     Returns distribution of per-share intrinsic values with decision metrics.
     """
     if seed is not None:
         random.seed(seed)
     
-    # Define bounded inputs
-    inputs = [
-        BoundedInput("growth", base_growth, growth_std, -0.10, 0.50),  # -10% to +50%
+    # Determine effective base_discount_rate
+    effective_discount_rate = base_discount_rate
+    wacc_sampling_enabled = False
+    wacc_inputs: Dict[str, BoundedInput] = {}
+    
+    if wacc_components is not None:
+        # Calculate base WACC from components
+        wacc_calc = WACCCalculator(
+            risk_free_rate=wacc_components["risk_free_rate"],
+            beta=wacc_components["beta"],
+            market_risk_premium=wacc_components["market_risk_premium"],
+            cost_of_debt=wacc_components["cost_of_debt"],
+            tax_rate=base_tax_rate,
+            market_cap=wacc_components["market_cap"],
+            total_debt=total_debt,
+        )
+        effective_discount_rate = wacc_calc.calculate()
+        wacc_sampling_enabled = True
+        
+        # Set up WACC component sampling if std devs provided
+        beta_std = wacc_components.get("beta_std", 0.0)
+        mrp_std = wacc_components.get("market_risk_premium_std", 0.0)
+        
+        if beta_std > 0:
+            wacc_inputs["beta"] = BoundedInput(
+                "beta",
+                wacc_components["beta"],
+                beta_std,
+                0.2, 3.0  # Reasonable beta range
+            )
+        if mrp_std > 0:
+            wacc_inputs["mrp"] = BoundedInput(
+                "mrp",
+                wacc_components["market_risk_premium"],
+                mrp_std,
+                0.03, 0.10  # 3% to 10% MRP range
+            )
+    
+    if effective_discount_rate is None:
+        effective_discount_rate = 0.10  # Default fallback
+    
+    # Determine effective growth mode
+    use_multi_stage = growth_stages is not None and len(growth_stages) > 0
+    effective_base_growth = base_growth if base_growth is not None else 0.08
+    
+    # Convert growth_stages dicts to GrowthStage objects if provided
+    parsed_growth_stages: List[GrowthStage] = []
+    growth_stage_stds: List[float] = []  # Per-stage std devs
+    
+    if use_multi_stage:
+        for stage_dict in growth_stages:
+            parsed_growth_stages.append(GrowthStage(
+                name=stage_dict["name"],
+                years=stage_dict["years"],
+                growth_rate=stage_dict["growth_rate"],
+                end_growth_rate=stage_dict.get("end_growth_rate"),
+            ))
+            # Get per-stage std dev (default to global growth_std)
+            growth_stage_stds.append(stage_dict.get("growth_std", growth_std))
+        
+        # Calculate total projection years from stages
+        projection_years = sum(s.years for s in parsed_growth_stages)
+    
+    # Define bounded inputs for non-WACC, non-growth params
+    core_inputs = [
         BoundedInput("margin", base_margin, margin_std, -0.20, 0.50),  # -20% to +50%
         BoundedInput("da_ratio", base_da_ratio, da_ratio_std, 0.0, 0.15),  # 0% to 15%
         BoundedInput("capex_ratio", base_capex_ratio, capex_ratio_std, 0.0, 0.25),  # 0% to 25%
         BoundedInput("wc_ratio", base_wc_ratio, wc_ratio_std, -0.15, 0.30),  # -15% to +30%
-        BoundedInput("discount", base_discount_rate, discount_std, 0.04, 0.25),  # 4% to 25%
         BoundedInput("terminal_growth", base_terminal_growth, terminal_growth_std, 0.01, 0.05),  # 1% to 5%
     ]
     
-    # Build correlation matrix
-    # Order: growth, margin, da_ratio, capex_ratio, wc_ratio, discount, terminal_growth
-    n = len(inputs)
+    # Add growth input only if NOT using multi-stage
+    if not use_multi_stage:
+        core_inputs.insert(0, BoundedInput("growth", effective_base_growth, growth_std, -0.10, 0.50))
+    
+    # Add discount input only if NOT sampling WACC components
+    if not wacc_sampling_enabled or not wacc_inputs:
+        core_inputs.append(BoundedInput("discount", effective_discount_rate, discount_std, 0.04, 0.25))
+    
+    # Build correlation matrix for core inputs
+    n = len(core_inputs)
     corr_matrix = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
     
-    # Apply correlations
-    # growth (0) ↔ margin (1)
-    corr_matrix[0][1] = growth_margin_correlation
-    corr_matrix[1][0] = growth_margin_correlation
-    # growth (0) ↔ capex_ratio (3)
-    corr_matrix[0][3] = growth_capex_correlation
-    corr_matrix[3][0] = growth_capex_correlation
+    # Apply correlations (only if growth is in core_inputs at position 0)
+    if not use_multi_stage:
+        # growth (0) ↔ margin (1)
+        corr_matrix[0][1] = growth_margin_correlation
+        corr_matrix[1][0] = growth_margin_correlation
+        # growth (0) ↔ capex_ratio (3)
+        corr_matrix[0][3] = growth_capex_correlation
+        corr_matrix[3][0] = growth_capex_correlation
     
-    correlated_inputs = CorrelatedInputs(inputs, corr_matrix)
+    correlated_inputs = CorrelatedInputs(core_inputs, corr_matrix)
     
     # Net debt for EV → Equity conversion
     net_debt = total_debt - cash
     
+    # Mid-year discounting offset
+    discount_offset = 0.5 if use_mid_year_discounting else 0.0
+    
     per_share_values = []
     
     for _ in range(iterations):
-        # Sample correlated inputs
+        # Sample correlated core inputs
         params = correlated_inputs.sample()
         
-        growth = params["growth"]
         margin = params["margin"]
         da_ratio = params["da_ratio"]
         capex_ratio = params["capex_ratio"]
         wc_ratio = params["wc_ratio"]
-        discount = params["discount"]
         terminal_growth = params["terminal_growth"]
+        
+        # Get discount rate (either from core sampling or WACC component sampling)
+        if "discount" in params:
+            discount = params["discount"]
+        elif wacc_sampling_enabled and wacc_inputs:
+            # Sample WACC components and calculate WACC
+            sampled_beta = wacc_inputs["beta"].sample() if "beta" in wacc_inputs else wacc_components["beta"]
+            sampled_mrp = wacc_inputs["mrp"].sample() if "mrp" in wacc_inputs else wacc_components["market_risk_premium"]
+            
+            wacc_calc = WACCCalculator(
+                risk_free_rate=wacc_components["risk_free_rate"],
+                beta=sampled_beta,
+                market_risk_premium=sampled_mrp,
+                cost_of_debt=wacc_components["cost_of_debt"],
+                tax_rate=base_tax_rate,
+                market_cap=wacc_components["market_cap"],
+                total_debt=total_debt,
+            )
+            discount = wacc_calc.calculate()
+        else:
+            discount = effective_discount_rate
+        
+        # Get growth rate(s) - either single or multi-stage
+        if use_multi_stage:
+            # Sample each stage's growth rate
+            sampled_stages = []
+            for i, stage in enumerate(parsed_growth_stages):
+                stage_std = growth_stage_stds[i]
+                sampled_growth = random.gauss(stage.growth_rate, stage_std)
+                # Clamp to reasonable bounds
+                sampled_growth = max(-0.10, min(0.50, sampled_growth))
+                
+                # Handle end_growth_rate for fade stages
+                sampled_end = None
+                if stage.end_growth_rate is not None:
+                    sampled_end = random.gauss(stage.end_growth_rate, stage_std * 0.5)
+                    sampled_end = max(-0.10, min(0.50, sampled_end))
+                
+                sampled_stages.append(GrowthStage(
+                    name=stage.name,
+                    years=stage.years,
+                    growth_rate=sampled_growth,
+                    end_growth_rate=sampled_end,
+                ))
+            
+            growth_schedule = calculate_growth_schedule(sampled_stages)
+        else:
+            growth = params.get("growth", effective_base_growth)
+            growth_schedule = [growth] * projection_years
         
         # Skip invalid scenarios
         if discount <= terminal_growth:
@@ -311,43 +451,61 @@ def run_full_monte_carlo(
             continue
         
         try:
-            # Create FCF projector with sampled tax rate
+            # Create FCF projector
             projector = FCFProjector(
                 historical_revenue=historical_revenue,
                 historical_ebit=historical_ebit,
                 historical_da=historical_da,
                 historical_capex=historical_capex,
                 historical_working_capital=historical_working_capital,
-                tax_rate=base_tax_rate,  # Keep tax fixed for simplicity
+                tax_rate=base_tax_rate,
             )
             
-            # Project FCF
-            projections = projector.project(
-                years=projection_years,
-                revenue_growth=growth,
-                operating_margin=margin,
-                da_ratio=da_ratio,
-                capex_ratio=capex_ratio,
-                wc_ratio=wc_ratio,
-            )
+            # Project FCF year by year with growth schedule
+            fcfs = []
+            current_revenue = historical_revenue[-1] if historical_revenue else 100e9
             
-            fcfs = [p["fcf"] for p in projections]
+            for year_idx, year_growth in enumerate(growth_schedule):
+                current_revenue = current_revenue * (1 + year_growth)
+                ebit = current_revenue * margin
+                nopat = ebit * (1 - base_tax_rate)
+                da = current_revenue * da_ratio
+                capex = current_revenue * capex_ratio
+                wc = current_revenue * wc_ratio
+                
+                # Working capital change (level mode)
+                if year_idx == 0:
+                    prev_wc = (historical_working_capital[-1] 
+                               if historical_working_capital else current_revenue * wc_ratio)
+                else:
+                    prev_wc = growth_schedule[year_idx - 1] if year_idx > 0 else wc
+                    prev_wc = fcfs[year_idx - 1]["wc"] if year_idx > 0 else prev_wc
+                
+                delta_wc = wc - prev_wc if year_idx > 0 else wc - (historical_working_capital[-1] if historical_working_capital else wc)
+                
+                fcf = nopat + da - capex - delta_wc
+                fcfs.append({"fcf": fcf, "wc": wc})
             
-            # Discount FCFs
+            fcf_values = [p["fcf"] for p in fcfs]
+            actual_years = len(fcf_values)
+            
+            # Discount FCFs with optional mid-year convention
             pv_fcf = sum(
-                fcf / ((1 + discount) ** year)
-                for year, fcf in enumerate(fcfs, start=1)
+                fcf / ((1 + discount) ** (year - discount_offset))
+                for year, fcf in enumerate(fcf_values, start=1)
             )
             
             # Terminal value (Gordon growth)
-            final_fcf = fcfs[-1]
+            final_fcf = fcf_values[-1]
             if final_fcf > 0:
                 terminal_value = final_fcf * (1 + terminal_growth) / (discount - terminal_growth)
-                pv_terminal = terminal_value / ((1 + discount) ** projection_years)
+                terminal_discount_period = actual_years - discount_offset
+                pv_terminal = terminal_value / ((1 + discount) ** terminal_discount_period)
             else:
                 # Negative terminal FCF - use simplified exit multiple
                 terminal_value = final_fcf * 10  # 10x multiple for distressed
-                pv_terminal = terminal_value / ((1 + discount) ** projection_years)
+                terminal_discount_period = actual_years - discount_offset
+                pv_terminal = terminal_value / ((1 + discount) ** terminal_discount_period)
             
             enterprise_value = pv_fcf + pv_terminal
             
