@@ -1,0 +1,47 @@
+# Pre-commit hooks for documentation and code quality
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  # Documentation validation
+  - repo: local
+    hooks:
+      - id: validate-docs
+        name: Validate Documentation
+        entry: python scripts/validate_docs.py
+        language: python
+        pass_filenames: false
+        files: ^(docs/|backend/app/|frontend/src/)
+        additional_dependencies: [fastapi, pydantic]
+
+      - id: regenerate-api-docs
+        name: Regenerate API Docs (if needed)
+        entry: python scripts/generate_api_docs.py
+        language: python
+        pass_filenames: false
+        files: ^backend/app/main\.py$
+        additional_dependencies: [fastapi, pydantic]
+
+  # General code quality
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+
+  # Python formatting
+  - repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+      - id: black
+        files: ^backend/
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.39.0
+    hooks:
+      - id: markdownlint
+        args: ['--fix', '--disable', 'MD013', 'MD033', 'MD041', '--']
+        files: \.(md)$

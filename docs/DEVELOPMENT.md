@@ -350,7 +350,8 @@ Backend has CORS configured for `localhost:5173`. If using a different port:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:YOUR_PORT"],
-    ...
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 ```
 

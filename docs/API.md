@@ -4,7 +4,32 @@ Base URL: `http://localhost:8000`
 
 ## Stock Analysis
 
-### Get Stock Data
+### Get Basic Stock Data
+
+Returns basic company data (lightweight endpoint).
+
+```
+GET /api/stock/{symbol}
+```
+
+**Response**
+
+```json
+{
+  "symbol": "AAPL",
+  "company_name": "Apple Inc.",
+  "profile": {
+    "sector": "Technology",
+    "industry": "Consumer Electronics",
+    "price": 178.50,
+    "market_cap": 2800000000000
+  }
+}
+```
+
+---
+
+### Get Full Analysis Data
 
 Fetches company fundamentals and historical hints for DCF inputs.
 
@@ -221,40 +246,6 @@ If `scenarios` is null, default scenarios are generated from hints.
 
 ---
 
-### Get Sensitivity Analysis
-
-Returns intrinsic value matrix for WACC vs terminal growth combinations.
-
-```
-GET /api/stock/{symbol}/sensitivity
-```
-
-**Query Parameters**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `base_revenue_growth` | float | Required | Base case growth |
-| `base_operating_margin` | float | Required | Base case margin |
-| `projection_years` | int | 10 | Projection period |
-
-**Response**
-
-```json
-{
-  "wacc_values": [0.08, 0.09, 0.10, 0.11, 0.12],
-  "terminal_growth_values": [0.01, 0.02, 0.03, 0.04, 0.05],
-  "matrix": [
-    [210.5, 195.3, 182.1, 170.5, 160.2],
-    [198.2, 185.5, 174.0, 163.5, 154.0],
-    [187.5, 176.2, 166.0, 156.8, 148.3],
-    [178.0, 168.0, 159.0, 150.8, 143.2],
-    [169.5, 160.5, 152.4, 145.0, 138.2]
-  ]
-}
-```
-
----
-
 ### Get Financial Ratios
 
 Returns comprehensive financial ratios.
@@ -292,10 +283,10 @@ GET /api/stock/{symbol}/ratios
     }
   },
   "ttm": {
-    "profitability": { ... },
-    "liquidity": { ... },
-    "leverage": { ... },
-    "valuation": { ... }
+    "profitability": {},
+    "liquidity": {},
+    "leverage": {},
+    "valuation": {}
   }
 }
 ```
@@ -336,6 +327,56 @@ GET /api/stock/{symbol}/comparables
     "price_to_sales": 5.0,
     "price_to_book": 8.0
   }
+}
+```
+
+---
+
+### Get Dividend History
+
+```
+GET /api/stock/{symbol}/dividends
+```
+
+**Response**
+
+```json
+{
+  "symbol": "AAPL",
+  "dividends": [
+    {
+      "date": "2024-02-09",
+      "amount": 0.24
+    }
+  ],
+  "dividend_yield": 0.005,
+  "payout_ratio": 0.15
+}
+```
+
+---
+
+### Get Historical Valuation
+
+Returns historical P/E, P/B, and other multiples.
+
+```
+GET /api/stock/{symbol}/historical-valuation
+```
+
+**Response**
+
+```json
+{
+  "symbol": "AAPL",
+  "history": [
+    {
+      "date": "2024-01-15",
+      "pe_ratio": 28.5,
+      "pb_ratio": 42.0,
+      "ps_ratio": 7.2
+    }
+  ]
 }
 ```
 
@@ -440,7 +481,7 @@ POST /api/memos
     "discount_rate": 0.095,
     "projection_years": 10
   },
-  "scenarios": [...],
+  "scenarios": [],
   "initial_market": {
     "price": 178.50,
     "intrinsic_value": 185.50,
@@ -455,6 +496,36 @@ POST /api/memos
 
 ```
 GET /api/memos/{id}
+```
+
+---
+
+### Update Memo
+
+```
+PUT /api/memos/{id}
+```
+
+**Request Body**
+
+Same fields as Create Memo (partial updates supported).
+
+---
+
+### Delete Memo
+
+```
+DELETE /api/memos/{id}
+```
+
+---
+
+### Add Market Snapshot
+
+Records current market data for tracking.
+
+```
+POST /api/memos/{id}/snapshots
 ```
 
 ---
@@ -504,7 +575,7 @@ POST /api/memos/{id}/close
 ### Get Audit History
 
 ```
-GET /api/audit/{symbol}
+GET /api/audit/{symbol}/history
 ```
 
 **Response**
@@ -528,6 +599,60 @@ GET /api/audit/{symbol}
       "price_at_time": 178.50,
       "intrinsic_value_at_time": 185.50,
       "pe_ratio_at_time": 28.5
+    }
+  ]
+}
+```
+
+---
+
+### Get Current Snapshot
+
+```
+GET /api/audit/{symbol}/snapshot
+```
+
+**Response**
+
+```json
+{
+  "symbol": "AAPL",
+  "revenue_growth": 0.10,
+  "operating_margin": 0.30,
+  "terminal_growth_rate": 0.03,
+  "projection_years": 10
+}
+```
+
+---
+
+### Get Field History
+
+```
+GET /api/audit/{symbol}/field/{field}
+```
+
+**Query Parameters**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `field` | string | Field name (e.g., `revenue_growth`, `operating_margin`) |
+
+**Response**
+
+```json
+{
+  "field": "revenue_growth",
+  "history": [
+    {
+      "timestamp": "2024-01-15T10:30:00Z",
+      "value": 0.10,
+      "note": "Updated for Q4"
+    },
+    {
+      "timestamp": "2024-01-01T09:00:00Z",
+      "value": 0.08,
+      "note": "Initial analysis"
     }
   ]
 }
@@ -617,6 +742,16 @@ GET /api/rate-limits
     "reset_in_seconds": null
   }
 }
+```
+
+---
+
+### Reset Rate Limits
+
+Clears rate limit counters (for testing/development).
+
+```
+POST /api/rate-limits/reset
 ```
 
 ---
