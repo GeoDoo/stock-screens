@@ -155,3 +155,77 @@ class TestDataExtractor:
         extractor = DataExtractor(data, market_risk_premium=0.07)
         assert extractor.market_risk_premium() == 0.07
 
+    def test_extract_total_equity(self):
+        """Extract total stockholders equity from balance sheet."""
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{"totalStockholdersEquity": 73733000000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        assert extractor.total_equity() == 73733000000
+
+    def test_extract_total_equity_missing(self):
+        """Returns None when total equity is missing."""
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        assert extractor.total_equity() is None
+
+    def test_extract_latest_revenue(self):
+        """Extract latest revenue from income statement."""
+        data = {
+            "profile": {},
+            "income_statement": [{"revenue": 416161000000}],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        assert extractor.latest_revenue() == 416161000000
+
+    def test_extract_latest_working_capital(self):
+        """Calculate working capital from current assets and liabilities."""
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{
+                "totalCurrentAssets": 143566000000,
+                "totalCurrentLiabilities": 105392000000,
+            }],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        # 143.5B - 105.4B = 38.2B
+        assert extractor.latest_working_capital() == 38174000000
+
+    def test_extract_latest_working_capital_negative(self):
+        """Working capital can be negative (current liabilities > assets)."""
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{
+                "totalCurrentAssets": 100000000000,
+                "totalCurrentLiabilities": 120000000000,
+            }],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        # 100B - 120B = -20B (negative working capital)
+        assert extractor.latest_working_capital() == -20000000000
+
+    def test_extract_latest_working_capital_missing_data(self):
+        """Returns None when current assets or liabilities missing."""
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{"totalCurrentAssets": 100000000000}],  # Missing liabilities
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        assert extractor.latest_working_capital() is None
+
