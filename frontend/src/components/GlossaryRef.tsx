@@ -28,7 +28,7 @@ export function GlossaryRef({ id }: GlossaryRefProps) {
     <a
       href={`/glossary#${id}`}
       title={tooltip}
-      className="align-super text-[10px] text-blue-600 hover:text-blue-800 no-underline hover:underline ml-0.5"
+      className="align-super text-[10px] text-gray-400 hover:text-gray-600 no-underline hover:underline ml-0.5"
     >
       [{index}]
     </a>

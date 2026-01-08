@@ -15,7 +15,7 @@ export function FinancialRatiosTable({ ratios }: Props) {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
       {/* Valuation */}
       <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-blue-600 mb-4">Valuation</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Valuation</h3>
         <table className="w-full">
           <tbody>
             <tr className="border-b border-gray-100">
@@ -40,7 +40,7 @@ export function FinancialRatiosTable({ ratios }: Props) {
 
       {/* Profitability */}
       <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-purple-600 mb-4">Profitability</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Profitability</h3>
         <table className="w-full">
           <tbody>
             <tr className="border-b border-gray-100">
@@ -69,7 +69,7 @@ export function FinancialRatiosTable({ ratios }: Props) {
 
       {/* Liquidity & Solvency */}
       <div>
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-orange-600 mb-4">Liquidity</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Liquidity</h3>
         <table className="w-full">
           <tbody>
             <tr className="border-b border-gray-100">

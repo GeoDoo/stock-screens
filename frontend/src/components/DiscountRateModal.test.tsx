@@ -123,10 +123,10 @@ describe('DiscountRateModal', () => {
     expect(newInput).toHaveValue(null)
   })
 
-  it('displays error message in red for visibility', () => {
+  it('displays message for visibility', () => {
     render(<DiscountRateModal {...defaultProps} />)
-    const errorMsg = screen.getByText(/WACC cannot be calculated/i)
-    expect(errorMsg).toHaveClass('text-red-600')
+    const msg = screen.getByText(/WACC cannot be calculated/i)
+    expect(msg).toHaveClass('text-gray-600')
   })
 
   it('prevents negative input with min attribute', () => {

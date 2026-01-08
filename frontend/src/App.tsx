@@ -357,7 +357,7 @@ export default function App() {
           setShowDiscountModal(true);
         } else if (hasExtremeInputs) {
           // Show warning - user needs to adjust inputs manually
-          setFallbackNotice(`⚠️ Historical operating margin (${(opMargin! * 100).toFixed(0)}%) is extreme. Please adjust assumptions before running DCF valuation.`);
+          setFallbackNotice(`Historical operating margin (${(opMargin! * 100).toFixed(0)}%) is extreme. Please adjust assumptions before running DCF valuation.`);
         }
         
         return true;
@@ -891,13 +891,13 @@ export default function App() {
               onClick={() => setShowMemosPage(true)}
               className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-300 transition-colors"
             >
-              📝 Memos
+              Memos
             </button>
             <a
               href="/glossary"
               className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-300 transition-colors"
             >
-              📖 Glossary
+              Glossary
             </a>
           </div>
         </header>
@@ -938,7 +938,7 @@ export default function App() {
                       >
                         <span className="font-semibold text-sm">{provider.name}</span>
                         {provider.recommended && !atLimit && <span className="ml-1 text-xs">★</span>}
-                        {atLimit && <span className="ml-1 text-xs text-red-400">⊘</span>}
+                        {atLimit && <span className="ml-1 text-xs text-gray-400">⊘</span>}
                       </button>
                     );
                   })}
@@ -949,9 +949,9 @@ export default function App() {
                     rateLimits[selectedFundamentalProvider] ? (
                       <span className={`ml-2 ${
                         rateLimits[selectedFundamentalProvider].api_limited || rateLimits[selectedFundamentalProvider].remaining === 0
-                          ? 'text-red-500'
+                          ? 'text-gray-500'
                           : rateLimits[selectedFundamentalProvider].percentage >= 80
-                          ? 'text-amber-600'
+                          ? 'text-gray-500'
                           : 'text-gray-400'
                       }`}>
                         {rateLimits[selectedFundamentalProvider].api_limited 
@@ -992,7 +992,7 @@ export default function App() {
                       >
                         <span className="font-semibold text-sm">{provider.name}</span>
                         {provider.recommended && !atLimit && <span className="ml-1 text-xs">★</span>}
-                        {atLimit && <span className="ml-1 text-xs text-red-400">⊘</span>}
+                        {atLimit && <span className="ml-1 text-xs text-gray-400">⊘</span>}
                       </button>
                     );
                   })}
@@ -1003,9 +1003,9 @@ export default function App() {
                     rateLimits[selectedTechnicalProvider] ? (
                       <span className={`ml-2 ${
                         rateLimits[selectedTechnicalProvider].api_limited || rateLimits[selectedTechnicalProvider].remaining === 0
-                          ? 'text-red-500'
+                          ? 'text-gray-500'
                           : rateLimits[selectedTechnicalProvider].percentage >= 80
-                          ? 'text-amber-600'
+                          ? 'text-gray-500'
                           : 'text-gray-400'
                       }`}>
                         {rateLimits[selectedTechnicalProvider].api_limited 
@@ -1043,10 +1043,10 @@ export default function App() {
                 {loading ? 'Analyzing...' : 'Analyze'}
               </button>
             </div>
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            {error && <p className="mt-3 text-sm text-gray-600">{error}</p>}
             {fallbackNotice && (
-              <p className="mt-3 text-sm text-amber-600 flex items-center gap-1">
-                <span>⚠️</span> {fallbackNotice}
+              <p className="mt-3 text-sm text-gray-500">
+                {fallbackNotice}
               </p>
             )}
           </div>
@@ -1142,15 +1142,15 @@ export default function App() {
 
             {/* Historical Data Discrepancy Warning */}
             {dataDiscrepancyWarning && (
-              <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                <h3 className="text-sm font-semibold text-purple-700 mb-2 flex items-center gap-2">
-                  <span>📊</span> Company Has Transformed Significantly
+              <div className="mb-6 p-4 border border-gray-200 rounded">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">
+                  Company Has Transformed Significantly
                 </h3>
-                <p className="text-sm text-purple-600 mb-2">
+                <p className="text-sm text-gray-600 mb-2">
                   Historical annual data differs dramatically from recent TTM data. This often indicates major restructuring, pivots, or turnarounds. 
                   <strong> TTM data is recommended</strong> for this stock.
                 </p>
-                <ul className="text-sm text-purple-600 list-disc list-inside">
+                <ul className="text-sm text-gray-600 list-disc list-inside">
                   {dataDiscrepancyWarning.map((warning, i) => (
                     <li key={i}>{warning}</li>
                   ))}
@@ -1162,11 +1162,11 @@ export default function App() {
             {(relevantErrors.length > 0 || relevantWarnings.length > 0) && (
               <section className="mb-8 space-y-4">
                 {relevantErrors.length > 0 && (
-                  <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
-                    <h3 className="text-sm font-semibold text-red-600 mb-3">⛔ Cannot Run Valuation</h3>
+                  <div className="p-6 border border-gray-200 rounded">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Cannot Run Valuation</h3>
                     <ul className="space-y-1">
                       {relevantErrors.map((e, i) => (
-                        <li key={i} className="text-sm text-red-800">
+                        <li key={i} className="text-sm text-gray-700">
                           <span className="font-semibold capitalize">{e.field}:</span> {e.message}
                         </li>
                       ))}
@@ -1174,11 +1174,11 @@ export default function App() {
                   </div>
                 )}
                 {relevantWarnings.length > 0 && (
-                  <div className="p-6 bg-amber-50 border border-amber-200 rounded-lg">
-                    <h3 className="text-sm font-semibold text-amber-600 mb-3">⚠️ Data Quality Warnings</h3>
+                  <div className="p-6 border border-gray-200 rounded">
+                    <h3 className="text-sm font-medium text-gray-600 mb-3">Data Quality Warnings</h3>
                     <ul className="space-y-1">
                       {relevantWarnings.map((w, i) => (
-                        <li key={i} className="text-sm text-amber-800">
+                        <li key={i} className="text-sm text-gray-600">
                           <span className="font-semibold capitalize">{w.field}:</span> {w.message}
                         </li>
                       ))}
@@ -1253,7 +1253,7 @@ export default function App() {
 
                 {/* Historical Hints Card */}
       <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-600 mb-2">Historical Hints</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Historical Hints</h3>
                   <p className="text-sm text-gray-400 mb-6">Averaged from multiple annual reports (may differ from TTM)</p>
                   <table className="w-full">
                     <tbody>
@@ -1311,37 +1311,37 @@ export default function App() {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                   {/* Key Metrics */}
-                  <div className="bg-green-50 rounded-lg p-5">
-                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Annual Dividend</p>
-                    <p className="text-2xl font-semibold text-green-700">
+                  <div className="border border-gray-100 rounded p-4">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Annual Dividend</p>
+                    <p className="text-2xl font-medium text-gray-900">
                       {dividendResult.current_annual_dividend ? `$${dividendResult.current_annual_dividend.toFixed(2)}` : '—'}
                     </p>
                   </div>
                   
-                  <div className="bg-green-50 rounded-lg p-5">
-                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Yield<GlossaryRef id="dividend-yield" /></p>
-                    <p className="text-2xl font-semibold text-green-700">
+                  <div className="border border-gray-100 rounded p-4">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Yield<GlossaryRef id="dividend-yield" /></p>
+                    <p className="text-2xl font-medium text-gray-900">
                       {formatPercent(dividendResult.current_yield)}
                     </p>
                   </div>
                   
-                  <div className="bg-green-50 rounded-lg p-5">
-                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Payout Ratio<GlossaryRef id="payout-ratio" /></p>
-                    <p className="text-2xl font-semibold text-green-700">
+                  <div className="border border-gray-100 rounded p-4">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Payout Ratio<GlossaryRef id="payout-ratio" /></p>
+                    <p className="text-2xl font-medium text-gray-900">
                       {formatPercent(dividendResult.payout_ratio)}
                     </p>
                   </div>
                   
-                  <div className="bg-green-50 rounded-lg p-5">
-                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Growth (CAGR)<GlossaryRef id="cagr" /></p>
-                    <p className="text-2xl font-semibold text-green-700">
+                  <div className="border border-gray-100 rounded p-4">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Growth (CAGR)<GlossaryRef id="cagr" /></p>
+                    <p className="text-2xl font-medium text-gray-900">
                       {formatPercent(dividendResult.dividend_cagr)}
                     </p>
                   </div>
                   
-                  <div className="bg-green-50 rounded-lg p-5">
-                    <p className="text-xs text-green-600 uppercase tracking-wider mb-1">Consecutive Years</p>
-                    <p className="text-2xl font-semibold text-green-700">
+                  <div className="border border-gray-100 rounded p-4">
+                    <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Consecutive Years</p>
+                    <p className="text-2xl font-medium text-gray-900">
                       {dividendResult.consecutive_years} yrs
                     </p>
                   </div>
@@ -1447,8 +1447,8 @@ export default function App() {
                         <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                           <span className="text-sm text-gray-500">vs. Avg</span>
                           <span className={`text-sm font-medium px-2 py-0.5 rounded ${
-                            assessment === 'cheap' ? 'bg-green-100 text-green-700' :
-                            assessment === 'expensive' ? 'bg-red-100 text-red-700' :
+                            assessment === 'cheap' ? 'bg-gray-100 text-gray-900' :
+                            assessment === 'expensive' ? 'bg-gray-100 text-gray-500' :
                             'bg-gray-100 text-gray-600'
                           }`}>
                             {premium !== null ? `${premium > 0 ? '+' : ''}${(premium * 100).toFixed(0)}%` : '—'} ({assessment})
@@ -1468,7 +1468,7 @@ export default function App() {
                 {assumptionTracker.hasHistory && (
                   <button
                     onClick={() => setShowHistoryDrawer(true)}
-                    className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                    className="text-xs text-gray-500 hover:text-gray-700"
                   >
                     <span>🕐</span>
                     <span>View History ({assumptionTracker.history.length})</span>
@@ -1540,7 +1540,7 @@ export default function App() {
                   <button
                     onClick={handleRerunValuation}
                     disabled={loading}
-                    className="px-6 py-3 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="px-6 py-3 bg-gray-900 text-white font-medium rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? (
                       <>
@@ -1549,7 +1549,6 @@ export default function App() {
                       </>
                     ) : (
                       <>
-                        <span>📊</span>
                         Re-run Valuation
                       </>
                     )}
@@ -1565,7 +1564,7 @@ export default function App() {
             {/* Valuation Result */}
             {result && (
               <section className="pt-8 border-t border-gray-100">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-emerald-600 mb-8">Valuation Result</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-8">Valuation Result</h2>
             
             {/* Main Result */}
             <div className="mb-12">
@@ -1587,8 +1586,8 @@ export default function App() {
                     return (
                       <span className={`text-sm font-semibold px-3 py-1 rounded-md ${
                         upside >= 0 
-                          ? 'text-emerald-600 bg-emerald-50' 
-                          : 'text-red-600 bg-red-50'
+                          ? 'text-gray-900 bg-gray-50' 
+                          : 'text-gray-500 bg-gray-50'
                       }`}>
                         {upside >= 0 ? '+' : ''}{upside.toFixed(1)}% {upside >= 0 ? 'undervalued' : 'overvalued'}
                       </span>
@@ -1598,11 +1597,8 @@ export default function App() {
                   {/* Create Memo Button */}
                   <button
                     onClick={() => setShowMemoCreate(true)}
-                    className="ml-4 text-sm text-blue-600 hover:text-blue-700 border border-blue-200 px-3 py-1 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors flex items-center gap-1.5"
+                    className="ml-4 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1 rounded hover:border-gray-300 transition-colors"
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
                     Create Memo
                   </button>
                 </div>
@@ -1655,12 +1651,12 @@ export default function App() {
                         <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">EBIT<GlossaryRef id="ebit" /></th>
                         <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">Taxes</th>
                         <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">NOPAT<GlossaryRef id="nopat" /></th>
-                        <th className="py-3 text-right font-medium text-emerald-500 uppercase text-xs tracking-wide whitespace-nowrap">+ D&A<GlossaryRef id="da" /></th>
-                        <th className="py-3 text-right font-medium text-red-500 uppercase text-xs tracking-wide whitespace-nowrap">− CapEx<GlossaryRef id="capex" /></th>
-                        <th className="py-3 text-right font-medium text-red-500 uppercase text-xs tracking-wide whitespace-nowrap">− ΔWC<GlossaryRef id="working-capital" /></th>
+                        <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">+ D&A<GlossaryRef id="da" /></th>
+                        <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">− CapEx<GlossaryRef id="capex" /></th>
+                        <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">− ΔWC<GlossaryRef id="working-capital" /></th>
                         <th className="py-3 text-right font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap border-l border-gray-200 pl-3">FCF</th>
                         <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">Discount</th>
-                        <th className="py-3 text-right font-medium text-emerald-600 uppercase text-xs tracking-wide whitespace-nowrap">PV of FCF</th>
+                        <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">PV of FCF</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1676,18 +1672,18 @@ export default function App() {
                             <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.ebit)}</td>
                             <td className="py-3 text-right font-mono text-gray-400">({formatCurrency(Math.abs(taxes))})</td>
                             <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.nopat)}</td>
-                            <td className="py-3 text-right font-mono text-emerald-600">+{formatCurrency(p.da)}</td>
-                            <td className="py-3 text-right font-mono text-red-600">−{formatCurrency(Math.abs(p.capex))}</td>
-                            <td className={`py-3 text-right font-mono ${p.delta_wc >= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                            <td className="py-3 text-right font-mono text-gray-600">+{formatCurrency(p.da)}</td>
+                            <td className="py-3 text-right font-mono text-gray-500">−{formatCurrency(Math.abs(p.capex))}</td>
+                            <td className={`py-3 text-right font-mono ${p.delta_wc >= 0 ? 'text-gray-500' : 'text-gray-600'}`}>
                               {p.delta_wc >= 0 ? '−' : '+'}{formatCurrency(Math.abs(p.delta_wc))}
                             </td>
-                            <td className={`py-3 text-right font-mono font-medium border-l border-gray-200 pl-3 ${p.fcf >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                            <td className={`py-3 text-right font-mono font-medium border-l border-gray-200 pl-3 ${p.fcf >= 0 ? 'text-gray-900' : 'text-gray-500'}`}>
                               {formatCurrency(p.fcf)}
                             </td>
                             <td className="py-3 text-right font-mono text-gray-400 text-xs">
                               ÷{discountFactor.toFixed(3)}
                             </td>
-                            <td className={`py-3 text-right font-mono font-medium ${pvFcf >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            <td className={`py-3 text-right font-mono font-medium ${pvFcf >= 0 ? 'text-gray-900' : 'text-gray-500'}`}>
                               {formatCurrency(pvFcf)}
                             </td>
                           </tr>
@@ -1704,7 +1700,7 @@ export default function App() {
                           {formatCurrency(result.projections.reduce((sum, p) => sum + p.fcf, 0))}
                         </td>
                         <td></td>
-                        <td className="py-3 text-right font-mono text-emerald-600">
+                        <td className="py-3 text-right font-mono text-gray-900">
                           {formatCurrency(result.projections.reduce((sum, p, i) => {
                             const discountFactor = Math.pow(1 + result.discount_rate, i + 1);
                             return sum + p.fcf / discountFactor;
@@ -1733,7 +1729,7 @@ export default function App() {
                     </div>
                     <div>
                       <span className="text-gray-500">PV of Terminal Value</span>
-                      <p className="font-mono font-medium text-emerald-600">
+                      <p className="font-mono font-medium text-gray-900">
                         {formatCurrency(result.terminal_value / Math.pow(1 + result.discount_rate, result.projections.length))}
                       </p>
                     </div>
@@ -1761,7 +1757,7 @@ export default function App() {
                             key={tg} 
                             className={`py-2 px-3 text-center text-xs font-medium ${
                               Math.abs(tg - result.sensitivity.base_terminal_growth) < 0.001 
-                                ? 'text-emerald-600 bg-emerald-50' 
+                                ? 'text-gray-900 bg-gray-100' 
                                 : 'text-gray-400'
                             }`}
                           >
@@ -1784,7 +1780,7 @@ export default function App() {
                         return (
                           <tr key={rowIdx}>
                             <td className={`py-2 px-3 text-xs font-medium ${
-                              isBaseRow ? 'text-emerald-600 bg-emerald-50' : 'text-gray-500'
+                              isBaseRow ? 'text-gray-900 bg-gray-100' : 'text-gray-500'
                             }`}>
                               {(dr * 100).toFixed(1)}%
                             </td>
@@ -1798,17 +1794,17 @@ export default function App() {
                               if (value !== null && result.market_cap && stockData?.data.shares_outstanding) {
                                 const currentPrice = result.market_cap / stockData.data.shares_outstanding;
                                 const diff = ((value - currentPrice) / currentPrice) * 100;
-                                if (diff > 20) cellClass = 'text-emerald-700 bg-emerald-50';
-                                else if (diff > 0) cellClass = 'text-emerald-600';
-                                else if (diff > -20) cellClass = 'text-red-500';
-                                else cellClass = 'text-red-600 bg-red-50';
+                                if (diff > 20) cellClass = 'text-gray-900 bg-gray-50';
+                                else if (diff > 0) cellClass = 'text-gray-800';
+                                else if (diff > -20) cellClass = 'text-gray-500';
+                                else cellClass = 'text-gray-400 bg-gray-50';
                               }
                               
                               return (
                                 <td 
                                   key={colIdx} 
                                   className={`py-2 px-3 text-center font-mono text-sm ${cellClass} ${
-                                    isCurrentCell ? 'ring-2 ring-emerald-500 ring-inset font-bold' : ''
+                                    isCurrentCell ? 'ring-2 ring-gray-900 ring-inset font-bold' : ''
                                   }`}
                                 >
                                   {value !== null ? `$${value.toFixed(2)}` : '—'}
@@ -1823,9 +1819,9 @@ export default function App() {
                 </div>
                 
                 <div className="mt-4 flex gap-6 text-xs text-gray-400">
-                  <span><span className="inline-block w-3 h-3 bg-emerald-50 border border-emerald-200 rounded mr-1"></span> Undervalued (vs current price)</span>
-                  <span><span className="inline-block w-3 h-3 bg-red-50 border border-red-200 rounded mr-1"></span> Overvalued</span>
-                  <span><span className="inline-block w-3 h-3 ring-2 ring-emerald-500 rounded mr-1"></span> Current assumptions</span>
+                  <span><span className="inline-block w-3 h-3 bg-gray-100 border border-gray-200 rounded mr-1"></span> Upside</span>
+                  <span><span className="inline-block w-3 h-3 bg-gray-50 border border-gray-200 rounded mr-1"></span> Downside</span>
+                  <span><span className="inline-block w-3 h-3 ring-2 ring-gray-900 rounded mr-1"></span> Current</span>
                 </div>
               </div>
               )}
@@ -1853,7 +1849,7 @@ export default function App() {
                     if (current === 0) return null;
                     const diff = ((fair - current) / current) * 100;
                     return (
-                      <span className={`text-sm font-medium ${diff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      <span className={`text-sm font-medium ${diff >= 0 ? 'text-gray-900' : 'text-gray-500'}`}>
                         {diff >= 0 ? '+' : ''}{diff.toFixed(0)}%
                       </span>
                     );
@@ -1879,8 +1875,8 @@ export default function App() {
                         <td className="py-3 text-right font-mono text-sm">${scenario.intrinsic_value.toFixed(2)}</td>
                         <td className={`py-3 text-right font-mono text-sm ${
                           scenario.upside_percent !== null && scenario.upside_percent >= 0 
-                            ? 'text-emerald-600' 
-                            : 'text-red-600'
+                            ? 'text-gray-900' 
+                            : 'text-gray-500'
                         }`}>
                           {scenario.upside_percent !== null 
                             ? `${scenario.upside_percent >= 0 ? '+' : ''}${scenario.upside_percent.toFixed(0)}%`
@@ -1925,7 +1921,7 @@ export default function App() {
                   <span className="text-sm text-gray-400">implied fair value (peer median)</span>
                   {comparableResult.summary.average_upside_percent !== null && (
                     <span className={`text-sm font-medium ${
-                      comparableResult.summary.average_upside_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
+                      comparableResult.summary.average_upside_percent >= 0 ? 'text-gray-900' : 'text-gray-500'
                     }`}>
                       {comparableResult.summary.average_upside_percent >= 0 ? '+' : ''}
                       {comparableResult.summary.average_upside_percent.toFixed(0)}%
@@ -1970,8 +1966,8 @@ export default function App() {
                           </td>
                           <td className={`py-3 text-right font-mono text-sm ${
                             iv.upside_percent !== null && iv.upside_percent >= 0 
-                              ? 'text-emerald-600' 
-                              : 'text-red-600'
+                              ? 'text-gray-900' 
+                              : 'text-gray-500'
                           }`}>
                             {iv.upside_percent !== null 
                               ? `${iv.upside_percent >= 0 ? '+' : ''}${iv.upside_percent.toFixed(0)}%`
@@ -2130,7 +2126,7 @@ export default function App() {
                   </div>
                   <div className="flex items-baseline gap-3">
                     <span className="text-sm text-gray-500">Change (past {technicalResult.period_days} days)</span>
-                    <span className={`text-lg font-semibold ${technicalResult.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    <span className={`text-lg font-medium ${technicalResult.price_change_pct >= 0 ? 'text-gray-900' : 'text-gray-500'}`}>
                       {technicalResult.price_change_pct >= 0 ? '+' : ''}{technicalResult.price_change_pct.toFixed(2)}%
                     </span>
                   </div>
@@ -2138,8 +2134,8 @@ export default function App() {
 
                 {/* Limited data warning */}
                 {technicalResult.prices.length < 50 && (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p className="text-sm text-amber-800">
+                  <div className="p-4 border border-gray-200 rounded">
+                    <p className="text-sm text-gray-600">
                       <span className="font-semibold">Limited data:</span> Only {technicalResult.prices.length} trading days available. 
                       Some indicators need more data to calculate.
                     </p>
@@ -2150,27 +2146,27 @@ export default function App() {
                 <div className="grid grid-cols-3 gap-6 max-w-xl">
                   <div className="p-4 rounded-lg border border-gray-100">
                     <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Trend</div>
-                    <div className={`text-lg font-semibold capitalize ${
-                      technicalResult.signals.trend === 'bullish' ? 'text-emerald-600' :
-                      technicalResult.signals.trend === 'bearish' ? 'text-red-600' : 'text-gray-500'
+                    <div className={`text-lg font-medium capitalize ${
+                      technicalResult.signals.trend === 'bullish' ? 'text-gray-900' :
+                      technicalResult.signals.trend === 'bearish' ? 'text-gray-500' : 'text-gray-400'
                     }`}>
                       {technicalResult.signals.trend}
                     </div>
                   </div>
                   <div className="p-4 rounded-lg border border-gray-100">
                     <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Momentum</div>
-                    <div className={`text-lg font-semibold capitalize ${
-                      technicalResult.signals.rsi === 'overbought' ? 'text-red-600' :
-                      technicalResult.signals.rsi === 'oversold' ? 'text-emerald-600' : 'text-gray-500'
+                    <div className={`text-lg font-medium capitalize ${
+                      technicalResult.signals.rsi === 'overbought' ? 'text-gray-500' :
+                      technicalResult.signals.rsi === 'oversold' ? 'text-gray-900' : 'text-gray-400'
                     }`}>
                       {technicalResult.signals.rsi}
                     </div>
                   </div>
                   <div className="p-4 rounded-lg border border-gray-100">
                     <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Momentum Trend</div>
-                    <div className={`text-lg font-semibold capitalize ${
-                      technicalResult.signals.macd === 'bullish' ? 'text-emerald-600' :
-                      technicalResult.signals.macd === 'bearish' ? 'text-red-600' : 'text-gray-500'
+                    <div className={`text-lg font-medium capitalize ${
+                      technicalResult.signals.macd === 'bullish' ? 'text-gray-900' :
+                      technicalResult.signals.macd === 'bearish' ? 'text-gray-500' : 'text-gray-400'
                     }`}>
                       {technicalResult.signals.macd}
                     </div>
@@ -2277,8 +2273,8 @@ export default function App() {
                     </svg>
                     <div className="flex gap-6 mt-2 text-xs text-gray-400">
                       <span><span className="inline-block w-3 h-0.5 bg-gray-900 mr-1"></span> Price</span>
-                      <span><span className="inline-block w-3 h-0.5 bg-purple-500 mr-1"></span> SMA 20<GlossaryRef id="sma" /></span>
-                      <span><span className="inline-block w-3 h-0.5 bg-amber-500 mr-1"></span> SMA 50</span>
+                      <span><span className="inline-block w-3 h-0.5 bg-gray-500 mr-1"></span> SMA 20<GlossaryRef id="sma" /></span>
+                      <span><span className="inline-block w-3 h-0.5 bg-gray-400 mr-1"></span> SMA 50</span>
                     </div>
                   </div>
                 </div>
@@ -2388,9 +2384,9 @@ export default function App() {
                         })()}
                       </svg>
                       <div className="flex gap-6 mt-2 text-xs text-gray-400">
-                        <span><span className="inline-block w-3 h-0.5 bg-blue-500 mr-1"></span> MACD</span>
-                        <span><span className="inline-block w-3 h-0.5 bg-orange-500 mr-1"></span> Signal</span>
-                        <span><span className="inline-block w-3 h-2 bg-emerald-500 opacity-50 mr-1"></span> Histogram</span>
+                        <span><span className="inline-block w-3 h-0.5 bg-gray-700 mr-1"></span> MACD</span>
+                        <span><span className="inline-block w-3 h-0.5 bg-gray-400 mr-1"></span> Signal</span>
+                        <span><span className="inline-block w-3 h-2 bg-gray-300 mr-1"></span> Histogram</span>
                       </div>
                     </div>
                   ) : (
