@@ -25,12 +25,5 @@ Thumbs.db
 *.db
 *.sqlite
 
-# Rate limit persistence (contains call timestamps)
-.rate_limits.json
-
-NOTES
+# Local notes (not tracked)
 NOTES.md
-CHATGPT_FEEDBACK.md
-CHATGPT_REVIEW.md
-
-.rate_limits.json
