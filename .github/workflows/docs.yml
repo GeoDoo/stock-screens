@@ -1,0 +1,77 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'backend/app/**'
+      - 'frontend/src/**'
+      - 'scripts/validate_docs.py'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'backend/app/**'
+      - 'frontend/src/**'
+
+jobs:
+  validate-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+      
+      - name: Validate documentation
+        run: python scripts/validate_docs.py
+      
+      - name: Check for stale generated docs
+        run: |
+          python scripts/generate_api_docs.py
+          if git diff --exit-code docs/API_GENERATED.md; then
+            echo "✅ Generated docs are up-to-date"
+          else
+            echo "❌ Generated docs are stale. Run: python scripts/generate_api_docs.py"
+            exit 1
+          fi
+
+  check-doc-coverage:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check if code changes need doc updates
+        run: |
+          # Get changed files
+          CHANGED=$(git diff --name-only origin/main...HEAD)
+          
+          # Check if significant code changed
+          CODE_CHANGED=false
+          if echo "$CHANGED" | grep -qE "^backend/app/(main\.py|services/)"; then
+            CODE_CHANGED=true
+          fi
+          
+          # Check if docs were updated
+          DOCS_CHANGED=false
+          if echo "$CHANGED" | grep -qE "^docs/"; then
+            DOCS_CHANGED=true
+          fi
+          
+          # Warn if code changed but docs didn't
+          if [ "$CODE_CHANGED" = true ] && [ "$DOCS_CHANGED" = false ]; then
+            echo "::warning::Code in backend/app changed but docs/ was not updated. Consider updating documentation."
+          fi
