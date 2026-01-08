@@ -27,6 +27,8 @@ from app.services.massive_provider import MassiveProvider
 from app.services.rate_limiter_sqlite import rate_limiter
 from app.services.audit_repository import AuditRepository, get_audit_repository
 from app.services.memo_repository import MemoRepository, get_memo_repository
+from app.services.capital_efficiency import analyze_value_creation
+from app.services.monte_carlo import run_monte_carlo_valuation, MonteCarloResult
 from app.models.assumption_audit import (
     AssumptionField,
     AssumptionChange,
@@ -147,6 +149,27 @@ class ScenarioRequest(BaseModel):
     da_ratio: Optional[float] = None
     capex_ratio: Optional[float] = None
     wc_ratio: Optional[float] = None
+
+
+class MonteCarloRequest(BaseModel):
+    """Request for Monte Carlo simulation."""
+    base_growth: float  # Base revenue growth rate (e.g., 0.10 for 10%)
+    growth_std: float = 0.03  # Standard deviation for growth uncertainty
+    base_margin: float  # Base operating margin (e.g., 0.20 for 20%)
+    margin_std: float = 0.02  # Standard deviation for margin uncertainty
+    base_discount_rate: float  # Base discount rate / WACC
+    discount_std: float = 0.01  # Standard deviation for discount rate
+    terminal_growth: float = 0.03  # Terminal growth rate
+    projection_years: int = 5
+    iterations: int = 5000  # Number of simulations (default 5000 for speed)
+
+
+class CapitalEfficiencyRequest(BaseModel):
+    """Request for capital efficiency analysis."""
+    nopat: float  # Net Operating Profit After Tax
+    invested_capital: float  # Total invested capital
+    revenue_growth: float  # Expected growth rate
+    wacc: float  # Weighted Average Cost of Capital
 
 
 @app.get("/health")
@@ -1721,3 +1744,139 @@ async def add_market_snapshot(
     
     saved = repo.add_market_snapshot(memo_id, snapshot)
     return saved.to_dict()
+
+
+# =============================================================================
+# ELITE VALUATION FEATURES
+# =============================================================================
+
+@app.post("/api/stock/{symbol}/monte-carlo")
+async def run_monte_carlo(
+    symbol: str,
+    request: MonteCarloRequest,
+    provider: str = "yahoo",
+):
+    """
+    Run Monte Carlo simulation on DCF valuation.
+    
+    Varies growth, margin, and discount rate to produce a probability
+    distribution of intrinsic values.
+    
+    Returns:
+    - mean: Expected intrinsic value
+    - std_dev: Standard deviation of values
+    - percentiles: p5, p10, p25, p50 (median), p75, p90, p95
+    - valid_simulations: Number of successful iterations
+    
+    Example interpretation:
+    - "50% chance the stock is worth more than $X" (p50)
+    - "90% chance it's worth more than $Y" (p10)
+    - "Only 10% chance it's worth more than $Z" (p90)
+    """
+    # Get stock data to find base revenue
+    client = get_client_for_provider(provider)
+    rate_limiter.record_call(provider)
+    
+    try:
+        stock_data = await client.get_stock_data(symbol.upper())
+    except TickerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    data = stock_data_to_legacy(stock_data)
+    extractor = DataExtractor(data)
+    
+    # Get most recent revenue
+    revenue_history = extractor.revenue_history()
+    if not revenue_history:
+        raise HTTPException(status_code=400, detail="No revenue data available")
+    
+    base_revenue = revenue_history[-1]
+    
+    # Run Monte Carlo
+    result = run_monte_carlo_valuation(
+        base_revenue=base_revenue,
+        base_growth=request.base_growth,
+        growth_std=request.growth_std,
+        base_margin=request.base_margin,
+        margin_std=request.margin_std,
+        base_discount_rate=request.base_discount_rate,
+        discount_std=request.discount_std,
+        terminal_growth=request.terminal_growth,
+        projection_years=request.projection_years,
+        iterations=request.iterations,
+    )
+    
+    # Get shares for per-share values
+    shares = extractor.shares_outstanding() or 1
+    net_debt = (extractor.total_debt() or 0) - (extractor.cash() or 0)
+    
+    # Convert enterprise values to per-share equity values
+    def ev_to_per_share(ev: float) -> float:
+        equity = ev - net_debt
+        return equity / shares
+    
+    return {
+        "symbol": symbol.upper(),
+        "iterations": result.iterations,
+        "valid_simulations": result.valid_simulations,
+        "enterprise_value": {
+            "mean": result.mean,
+            "std_dev": result.std_dev,
+            "percentiles": result.percentiles,
+        },
+        "per_share": {
+            "mean": ev_to_per_share(result.mean),
+            "percentiles": {
+                k: ev_to_per_share(v) for k, v in result.percentiles.items()
+            },
+        },
+        "inputs": {
+            "base_revenue": base_revenue,
+            "base_growth": request.base_growth,
+            "growth_std": request.growth_std,
+            "base_margin": request.base_margin,
+            "margin_std": request.margin_std,
+            "base_discount_rate": request.base_discount_rate,
+            "discount_std": request.discount_std,
+            "terminal_growth": request.terminal_growth,
+            "projection_years": request.projection_years,
+        },
+    }
+
+
+@app.post("/api/capital-efficiency")
+async def analyze_capital_efficiency(request: CapitalEfficiencyRequest):
+    """
+    Analyze capital efficiency and value creation.
+    
+    Key metrics:
+    - ROIC: Return on Invested Capital (profitability of capital)
+    - Reinvestment Rate: % of earnings needed to fund growth
+    - Value Spread: ROIC - WACC (positive = value creation)
+    - Economic Profit (EVA): Dollar value created/destroyed
+    
+    Interpretation:
+    - ROIC > WACC: Growth creates shareholder value
+    - ROIC < WACC: Growth destroys shareholder value (despite earnings!)
+    - High ROIC + Low reinvestment = Excellent capital efficiency
+    """
+    result = analyze_value_creation(
+        nopat=request.nopat,
+        invested_capital=request.invested_capital,
+        revenue_growth=request.revenue_growth,
+        wacc=request.wacc,
+    )
+    
+    return {
+        "roic": result["roic"],
+        "roic_formatted": f"{result['roic']:.1%}" if result["roic"] else None,
+        "reinvestment_rate": result["reinvestment_rate"],
+        "reinvestment_rate_formatted": f"{result['reinvestment_rate']:.1%}" if result["reinvestment_rate"] else None,
+        "value_spread": result["value_spread"],
+        "value_spread_formatted": f"{result['value_spread']:.1%}" if result["value_spread"] else None,
+        "economic_profit": result["economic_profit"],
+        "is_value_creating": result["is_value_creating"],
+        "assessment": result["assessment"],
+    }

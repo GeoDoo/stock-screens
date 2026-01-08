@@ -465,3 +465,80 @@ export interface CreateMemoRequest {
   catalysts?: string | null;
   what_would_change_mind?: string | null;
 }
+
+// =============================================================================
+// Monte Carlo Simulation Types
+// =============================================================================
+
+export interface MonteCarloRequest {
+  base_growth: number;
+  growth_std: number;
+  base_margin: number;
+  margin_std: number;
+  base_discount_rate: number;
+  discount_std: number;
+  terminal_growth: number;
+  projection_years: number;
+  iterations: number;
+}
+
+export interface MonteCarloPercentiles {
+  p5: number;
+  p10: number;
+  p25: number;
+  p50: number;  // Median
+  p75: number;
+  p90: number;
+  p95: number;
+  min: number;
+  max: number;
+}
+
+export interface MonteCarloResult {
+  symbol: string;
+  iterations: number;
+  valid_simulations: number;
+  enterprise_value: {
+    mean: number;
+    std_dev: number;
+    percentiles: MonteCarloPercentiles;
+  };
+  per_share: {
+    mean: number;
+    percentiles: MonteCarloPercentiles;
+  };
+  inputs: {
+    base_revenue: number;
+    base_growth: number;
+    growth_std: number;
+    base_margin: number;
+    margin_std: number;
+    base_discount_rate: number;
+    discount_std: number;
+    terminal_growth: number;
+    projection_years: number;
+  };
+}
+
+// =============================================================================
+// Capital Efficiency Types
+// =============================================================================
+
+export interface CapitalEfficiencyRequest {
+  nopat: number;
+  invested_capital: number;
+  revenue_growth: number;
+  wacc: number;
+}
+
+export interface CapitalEfficiencyResult {
+  roic: number | null;
+  roic_formatted: string | null;
+  reinvestment_rate: number | null;
+  reinvestment_rate_formatted: string | null;
+  value_spread: number | null;
+  value_spread_formatted: string | null;
+  economic_profit: number | null;
+  is_value_creating: boolean;
+  assessment: string;
+}

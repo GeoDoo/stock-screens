@@ -19,6 +19,7 @@ import { shouldFallback, getAlternativeProvider, getProviderDisplayName } from '
 import { useAssumptionTracker } from './hooks/useAssumptionTracker';
 import { MemoCreateModal } from './components/MemoCreateModal';
 import { Layout } from './components/Layout';
+import { MonteCarloPanel } from './components/MonteCarloPanel';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -1837,6 +1838,28 @@ export default function App() {
               </div>
             )}
           </section>
+            )}
+
+            {/* Monte Carlo Simulation Section */}
+            {result && stockData && (
+            <section className="pt-12 border-t border-gray-100">
+              <div className="mb-8">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Monte Carlo Simulation</h2>
+                <p className="text-sm text-gray-400">Run 5,000 simulations with varying assumptions to see probability distribution</p>
+              </div>
+              <MonteCarloPanel
+                symbol={symbol}
+                provider={selectedFundamentalProvider}
+                defaultInputs={{
+                  growth: result.inputs.revenue_growth,
+                  margin: result.inputs.operating_margin,
+                  discountRate: result.discount_rate,
+                  terminalGrowth: result.inputs.terminal_growth_rate,
+                  projectionYears: result.inputs.projection_years,
+                }}
+                currentPrice={stockData.profile?.price || result.current_price || 0}
+              />
+            </section>
             )}
 
             {/* Comparable Analysis Section */}
