@@ -539,11 +539,11 @@ export default function App() {
   // === Assumption Audit Trail Functions ===
   
   // Get current assumptions as an object for audit trail
+  // Uses currentHints which respects TTM/Annual period selection
   const getCurrentAssumptions = useCallback(() => {
-    const dataHints = stockData?.hints_ttm || stockData?.hints_annual;
     return {
-      revenue_growth: revenueGrowth ? parseFloat(revenueGrowth) / 100 : (dataHints?.revenue_growth ?? 0.05),
-      operating_margin: operatingMargin ? parseFloat(operatingMargin) / 100 : (dataHints?.operating_margin ?? 0.15),
+      revenue_growth: revenueGrowth ? parseFloat(revenueGrowth) / 100 : (currentHints?.revenue_growth ?? 0.05),
+      operating_margin: operatingMargin ? parseFloat(operatingMargin) / 100 : (currentHints?.operating_margin ?? 0.15),
       terminal_growth: parseFloat(terminalGrowth) / 100,
       discount_rate: useCustomDiscountRate && customDiscountRate 
         ? parseFloat(customDiscountRate) / 100 
@@ -551,7 +551,7 @@ export default function App() {
       projection_years: parseInt(projectionYears),
       market_risk_premium: parseFloat(marketRiskPremium) / 100,
     };
-  }, [revenueGrowth, operatingMargin, terminalGrowth, customDiscountRate, useCustomDiscountRate, projectionYears, marketRiskPremium, stockData]);
+  }, [revenueGrowth, operatingMargin, terminalGrowth, customDiscountRate, useCustomDiscountRate, projectionYears, marketRiskPremium, stockData, currentHints]);
 
   // Detect which fields changed from the last recorded snapshot
   const getChangedFields = useCallback((): string[] => {
