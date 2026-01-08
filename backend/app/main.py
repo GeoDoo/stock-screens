@@ -124,6 +124,9 @@ class ValuationRequest(BaseModel):
     da_ratio: Optional[float] = None  # D&A / Revenue
     capex_ratio: Optional[float] = None  # CapEx / Revenue
     wc_ratio: Optional[float] = None  # Working Capital / Revenue
+    # Advanced DCF options
+    use_mid_year_discounting: bool = False  # Assumes cash flows occur mid-year
+    wc_mode: str = "level"  # "level" or "incremental"
 
 
 class ScenarioInput(BaseModel):
@@ -416,6 +419,9 @@ async def run_valuation(symbol: str, provider: str, request: ValuationRequest):
             da_ratio=request.da_ratio,
             capex_ratio=request.capex_ratio,
             wc_ratio=request.wc_ratio,
+            # Advanced DCF options
+            use_mid_year_discounting=request.use_mid_year_discounting,
+            wc_mode=request.wc_mode,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Valuation error: {str(e)}")
