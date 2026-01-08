@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-08 19:06
+> Last updated: 2026-01-08 19:25
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -36,6 +36,7 @@ Stock Screens is a full-stack stock analysis application with:
 | `massive_provider.py` | Massive (Polygon.io) data provider. |
 | `memo_repository.py` | SQLite-based repository for investment memos. |
 | `monte_carlo.py` | Configuration for a single Monte Carlo input variable. |
+| `monte_carlo_full.py` | Input parameter with bounded distribution. |
 | `multi_stage_growth.py` | A single growth phase in a multi-stage model. |
 | `rate_limiter_sqlite.py` | When the rate limit resets. |
 | `ratio_calculator.py` | Valuation metrics. |
@@ -146,7 +147,7 @@ Weighted Average Cost of Capital calculator.
 
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
-| Backend | 26 test files | pytest |
+| Backend | 27 test files | pytest |
 | Frontend | 11 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)

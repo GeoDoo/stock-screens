@@ -388,7 +388,7 @@ export const glossaryTerms: GlossaryTerm[] = [
     id: "monte-carlo",
     term: "Monte Carlo",
     fullName: "Monte Carlo Simulation",
-    definition: "A computational technique that runs thousands of simulations with randomized inputs to produce a probability distribution of outcomes. In valuation, it varies growth, margin, and discount rate assumptions to show the range of possible intrinsic values. Note: Our implementation uses a simplified FCF model (revenue × margin × 0.75) for speed—best for visualizing uncertainty, not precise valuations.",
+    definition: "A computational technique that runs thousands of simulations with randomized inputs to produce a probability distribution of outcomes. Our app offers two modes: Quick (simplified FCF for fast intuition) and Decision (full DCF engine with bounded distributions, correlations, and decision metrics like CVaR for investment decisions).",
     investopediaUrl: "https://www.investopedia.com/terms/m/montecarlosimulation.asp",
   },
   {
@@ -396,6 +396,19 @@ export const glossaryTerms: GlossaryTerm[] = [
     term: "Percentile",
     definition: "A measure indicating the value below which a given percentage of observations fall. The 10th percentile means 10% of values are lower (bear case), while the 90th percentile means only 10% are higher (bull case).",
     investopediaUrl: "https://www.investopedia.com/terms/p/percentile.asp",
+  },
+  {
+    id: "cvar",
+    term: "CVaR",
+    fullName: "Conditional Value at Risk",
+    definition: "The expected loss in the worst X% of scenarios (also called Expected Shortfall). CVaR 10% represents the average value of the worst 10% of simulation outcomes—a key downside risk metric for investment decisions.",
+    investopediaUrl: "https://www.investopedia.com/terms/c/conditional_value_at_risk.asp",
+  },
+  {
+    id: "margin-of-safety",
+    term: "Margin of Safety",
+    definition: "The difference between intrinsic value and market price, expressed as a percentage. A positive margin of safety means the stock trades below calculated fair value, providing a buffer against estimation errors. Coined by Benjamin Graham, it's a cornerstone of value investing.",
+    investopediaUrl: "https://www.investopedia.com/terms/m/marginofsafety.asp",
   },
 
   // Capital Efficiency Terms

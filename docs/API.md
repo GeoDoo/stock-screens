@@ -937,6 +937,90 @@ POST /api/stock/{symbol}/monte-carlo
 
 ---
 
+### Run Full Monte Carlo Endpoint
+
+Run Full-Model Monte Carlo simulation using complete DCF engine.
+
+This is the DECISION-GRADE Monte Carlo that:
+1. Uses FCFProjector for proper FCF calculations (NOPAT + D&A - CapEx - ΔWC)
+2. Samples ALL DCF inputs with bounded distributions
+3. Implements correlations between inputs (growth↔margin, growth↔reinvestment)
+4. Computes comprehensive decision-support outputs
+
+Returns:
+- Per-share value distribution (mean, median, percentiles)
+- Decision metrics:
+  - P(upside > 0%): Probability stock is undervalued
+  - P(upside > 20%): Probability of significant upside
+  - P(downside > 20%): Probability of significant loss
+  - CVaR 10%: Expected value of worst 10% outcomes
+  - Margin of safety distribution
+
+Use this for actual investment decisions.
+Use /monte-carlo (simplified) for quick intuition only.
+
+```
+POST /api/stock/{symbol}/monte-carlo-full
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | No |  (default: `yahoo`) |
+
+**Request Body**
+
+```json
+{
+  "base_growth": 0.0,
+  "base_margin": 0.0,
+  "base_da_ratio": 0.0,
+  "base_capex_ratio": 0.0,
+  "base_wc_ratio": 0.0,
+  "base_tax_rate": 0.0,
+  "base_discount_rate": 0.0,
+  "base_terminal_growth": 0.0,
+  "growth_std": 0.0,
+  "margin_std": 0.0,
+  "da_ratio_std": 0.0,
+  "capex_ratio_std": 0.0,
+  "wc_ratio_std": 0.0,
+  "discount_std": 0.0,
+  "terminal_growth_std": 0.0,
+  "projection_years": 0,
+  "iterations": 0,
+  "growth_margin_correlation": 0.0,
+  "growth_capex_correlation": 0.0
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_growth` | number | Yes |  |
+| `base_margin` | number | Yes |  |
+| `base_da_ratio` | number | Yes |  |
+| `base_capex_ratio` | number | Yes |  |
+| `base_wc_ratio` | number | Yes |  |
+| `base_tax_rate` | number | No |  |
+| `base_discount_rate` | number | Yes |  |
+| `base_terminal_growth` | number | No |  |
+| `growth_std` | number | No |  |
+| `margin_std` | number | No |  |
+| `da_ratio_std` | number | No |  |
+| `capex_ratio_std` | number | No |  |
+| `wc_ratio_std` | number | No |  |
+| `discount_std` | number | No |  |
+| `terminal_growth_std` | number | No |  |
+| `projection_years` | integer | No |  |
+| `iterations` | integer | No |  |
+| `growth_margin_correlation` | number | No |  |
+| `growth_capex_correlation` | number | No |  |
+
+
+---
+
 ### Analyze Capital Efficiency
 
 Analyze capital efficiency and value creation.
