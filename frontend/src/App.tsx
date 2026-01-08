@@ -1417,7 +1417,6 @@ export default function App() {
                     onClick={() => setShowHistoryDrawer(true)}
                     className="text-xs text-gray-500 hover:text-gray-700"
                   >
-                    <span>🕐</span>
                     <span>View History ({assumptionTracker.history.length})</span>
                   </button>
                 )}
@@ -1519,33 +1518,85 @@ export default function App() {
                   </div>
                 </div>
                 
-                {/* WC Mode Explanation */}
-                <div className={`mt-4 p-4 rounded-lg border ${wcMode === 'level' ? 'bg-blue-50 border-blue-100' : 'bg-amber-50 border-amber-100'}`}>
-                  <div className="flex items-start gap-3">
-                    <div className={`w-2 h-2 rounded-full mt-1.5 ${wcMode === 'level' ? 'bg-blue-400' : 'bg-amber-400'}`} />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-700 mb-1">
-                        {wcMode === 'level' ? 'Level Mode Active' : 'Incremental Mode Active'}
-                      </p>
-                      <p className="text-xs text-gray-600 mb-2">
-                        {wcMode === 'level' 
-                          ? 'Working capital is reset to target ratio each year. If current WC differs from target, Year 1 will show a large adjustment (cash release or investment).'
-                          : 'Working capital grows incrementally with revenue. Preserves current WC level and only adds the portion needed for growth.'}
-                      </p>
-                      <div className="text-xs text-gray-500 space-y-1">
-                        <p><strong>Formula:</strong> {wcMode === 'level' 
-                          ? 'WC = Revenue × Ratio, then ΔWC = WC_new − WC_old'
-                          : 'ΔWC = (Revenue_new − Revenue_old) × Intensity'}</p>
-                        <p><strong>Best for:</strong> {wcMode === 'level'
-                          ? 'Companies with WC that needs to normalize to industry standards'
-                          : 'Stable companies or when current WC level is appropriate'}</p>
-                        <p className="text-gray-400 italic">
-                          Note: Both modes give similar results when actual WC ≈ Revenue × Ratio
-                        </p>
-                      </div>
-                    </div>
+                {/* WC Mode Impact Calculator */}
+                {stockData.data.working_capital !== null && stockData.data.revenue !== null && currentHints?.wc_ratio !== null && (
+                  <div className="mt-4 p-4 rounded-lg border bg-gray-50 border-gray-200">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">Working Capital Mode Impact</p>
+                    
+                    {(() => {
+                      const actualWC = stockData.data.working_capital || 0;
+                      const revenue = stockData.data.revenue || 1;
+                      const inputRatio = (currentHints?.wc_ratio ?? 0);
+                      const actualRatio = actualWC / revenue;
+                      const targetWC = revenue * inputRatio;
+                      const mismatch = actualWC - targetWC;
+                      const mismatchPct = Math.abs(mismatch / targetWC) * 100;
+                      const growth = parseFloat(revenueGrowth) / 100 || 0.05;
+                      
+                      // Year 1 calculations
+                      const newRevenue = revenue * (1 + growth);
+                      const levelDelta = (newRevenue * inputRatio) - actualWC;
+                      const incrDelta = (newRevenue - revenue) * inputRatio;
+                      const fcfDiff = incrDelta - levelDelta; // Positive = Level releases more cash
+                      
+                      const isSignificant = mismatchPct > 10;
+                      
+                      return (
+                        <div className="space-y-3">
+                          {/* Actual vs Target comparison */}
+                          <div className="grid grid-cols-2 gap-4 text-xs">
+                            <div>
+                              <span className="text-gray-500">Actual WC/Revenue:</span>
+                              <span className="ml-2 font-mono font-medium">{(actualRatio * 100).toFixed(1)}%</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Input Ratio:</span>
+                              <span className="ml-2 font-mono font-medium">{(inputRatio * 100).toFixed(1)}%</span>
+                            </div>
+                          </div>
+                          
+                          {/* Mismatch indicator */}
+                          <div className={`p-3 rounded ${isSignificant ? 'bg-amber-100 border border-amber-200' : 'bg-emerald-50 border border-emerald-100'}`}>
+                            {isSignificant ? (
+                              <div className="text-xs">
+                                <p className="font-medium text-amber-800 mb-1">
+                                  WC is {mismatch > 0 ? 'ABOVE' : 'BELOW'} target by {formatCurrency(Math.abs(mismatch))}
+                                </p>
+                                <p className="text-amber-700">
+                                  <strong>Year 1 FCF difference:</strong> {formatCurrency(Math.abs(fcfDiff))}
+                                  {fcfDiff > 0 
+                                    ? ' — Level mode releases cash (WC normalizes down)'
+                                    : ' — Level mode invests cash (WC builds up)'}
+                                </p>
+                                <p className="text-amber-600 mt-1">
+                                  Modes will produce noticeably different results!
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="text-xs text-emerald-700">
+                                <p className="font-medium mb-1">WC is close to target ratio</p>
+                                <p>Year 1 FCF difference: ~{formatCurrency(Math.abs(fcfDiff))} (minimal impact)</p>
+                                <p className="text-emerald-600 mt-1">Both modes will produce similar results for this company.</p>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Mode descriptions */}
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className={`p-2 rounded ${wcMode === 'level' ? 'bg-blue-100 border border-blue-200' : 'bg-gray-100'}`}>
+                              <p className="font-medium text-gray-700">Level</p>
+                              <p className="text-gray-500">Resets WC to target each year</p>
+                            </div>
+                            <div className={`p-2 rounded ${wcMode === 'incremental' ? 'bg-amber-100 border border-amber-200' : 'bg-gray-100'}`}>
+                              <p className="font-medium text-gray-700">Incremental</p>
+                              <p className="text-gray-500">Grows WC with revenue only</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Re-run Valuation Button */}
