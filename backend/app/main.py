@@ -26,11 +26,22 @@ from app.services.yahoo_provider import YahooProvider
 from app.services.massive_provider import MassiveProvider
 from app.services.rate_limiter_sqlite import rate_limiter
 from app.services.audit_repository import AuditRepository, get_audit_repository
+from app.services.memo_repository import MemoRepository, get_memo_repository
 from app.models.assumption_audit import (
     AssumptionField,
     AssumptionChange,
     AuditEntry,
     AssumptionSnapshot,
+)
+from app.models.memo import (
+    InvestmentMemo,
+    AssumptionsSnapshot,
+    ScenarioSnapshot,
+    MarketSnapshot,
+    PostMortem,
+    Conviction,
+    MemoStatus,
+    PostMortemAction,
 )
 
 load_dotenv()
@@ -1407,3 +1418,306 @@ async def get_field_history(
         }
         for c in changes
     ]
+
+
+# =============================================================================
+# Investment Memo Endpoints
+# =============================================================================
+
+class MemoAssumptions(BaseModel):
+    """Assumptions snapshot for memo creation."""
+    revenue_growth: float
+    operating_margin: float
+    terminal_growth_rate: float
+    discount_rate: float
+    projection_years: int
+    da_ratio: Optional[float] = None
+    capex_ratio: Optional[float] = None
+    wc_ratio: Optional[float] = None
+
+
+class MemoScenario(BaseModel):
+    """Scenario data for memo creation."""
+    name: str
+    revenue_growth: float
+    operating_margin: float
+    intrinsic_value: float
+    upside_percent: float
+
+
+class MemoMarket(BaseModel):
+    """Market data for memo creation."""
+    price: float
+    intrinsic_value: float
+    pe_ratio: Optional[float] = None
+
+
+class CreateMemoRequest(BaseModel):
+    """Request to create a new investment memo."""
+    symbol: str
+    title: str
+    thesis: str
+    conviction: str  # low, medium, high
+    time_horizon_months: int
+    assumptions: MemoAssumptions
+    scenarios: List[MemoScenario]
+    initial_market: MemoMarket
+    target_price: Optional[float] = None
+    risks: Optional[str] = None
+    catalysts: Optional[str] = None
+    what_would_change_mind: Optional[str] = None
+
+
+class AddPostMortemRequest(BaseModel):
+    """Request to add a post-mortem."""
+    note: str
+    action: str  # hold, add, trim, close, review
+    price_at_time: float
+    iv_at_time: float
+
+
+class CloseMemoRequest(BaseModel):
+    """Request to close a memo."""
+    status: str  # closed_win, closed_loss, closed_neutral
+    reason: str
+
+
+@app.post("/api/memos", status_code=201)
+async def create_memo(
+    request: CreateMemoRequest,
+    repo: MemoRepository = Depends(get_memo_repository),
+):
+    """
+    Create a new investment memo.
+    
+    Captures thesis, assumptions, scenarios, and market context at creation time.
+    """
+    try:
+        conviction = Conviction(request.conviction)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid conviction. Valid: {[c.value for c in Conviction]}"
+        )
+    
+    memo = InvestmentMemo(
+        id=None,
+        symbol=request.symbol.upper(),
+        title=request.title,
+        thesis=request.thesis,
+        conviction=conviction,
+        time_horizon_months=request.time_horizon_months,
+        created_at=datetime.utcnow(),
+        assumptions=AssumptionsSnapshot(
+            revenue_growth=request.assumptions.revenue_growth,
+            operating_margin=request.assumptions.operating_margin,
+            terminal_growth_rate=request.assumptions.terminal_growth_rate,
+            discount_rate=request.assumptions.discount_rate,
+            projection_years=request.assumptions.projection_years,
+            da_ratio=request.assumptions.da_ratio,
+            capex_ratio=request.assumptions.capex_ratio,
+            wc_ratio=request.assumptions.wc_ratio,
+        ),
+        scenarios=[
+            ScenarioSnapshot(
+                name=s.name,
+                revenue_growth=s.revenue_growth,
+                operating_margin=s.operating_margin,
+                intrinsic_value=s.intrinsic_value,
+                upside_percent=s.upside_percent,
+            )
+            for s in request.scenarios
+        ],
+        initial_market=MarketSnapshot(
+            price=request.initial_market.price,
+            intrinsic_value=request.initial_market.intrinsic_value,
+            pe_ratio=request.initial_market.pe_ratio,
+        ),
+        target_price=request.target_price,
+        risks=request.risks,
+        catalysts=request.catalysts,
+        what_would_change_mind=request.what_would_change_mind,
+    )
+    
+    saved = repo.save_memo(memo)
+    return saved.to_dict()
+
+
+@app.get("/api/memos")
+async def list_memos(
+    symbol: Optional[str] = None,
+    status: Optional[str] = None,
+    repo: MemoRepository = Depends(get_memo_repository),
+):
+    """
+    List investment memos with optional filtering.
+    
+    Args:
+        symbol: Filter by stock symbol
+        status: Filter by status (active, closed_win, closed_loss, closed_neutral)
+    """
+    status_filter = None
+    if status:
+        try:
+            status_filter = MemoStatus(status)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status. Valid: {[s.value for s in MemoStatus]}"
+            )
+    
+    memos = repo.list_memos(symbol=symbol, status=status_filter)
+    return [m.to_dict() for m in memos]
+
+
+@app.get("/api/memos/{memo_id}")
+async def get_memo(
+    memo_id: int,
+    repo: MemoRepository = Depends(get_memo_repository),
+):
+    """Get a single investment memo by ID."""
+    memo = repo.get_memo(memo_id)
+    if memo is None:
+        raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
+    return memo.to_dict()
+
+
+@app.put("/api/memos/{memo_id}")
+async def update_memo(
+    memo_id: int,
+    request: CreateMemoRequest,
+    repo: MemoRepository = Depends(get_memo_repository),
+):
+    """Update an existing memo."""
+    existing = repo.get_memo(memo_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
+    
+    try:
+        conviction = Conviction(request.conviction)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid conviction. Valid: {[c.value for c in Conviction]}"
+        )
+    
+    existing.title = request.title
+    existing.thesis = request.thesis
+    existing.conviction = conviction
+    existing.time_horizon_months = request.time_horizon_months
+    existing.target_price = request.target_price
+    existing.risks = request.risks
+    existing.catalysts = request.catalysts
+    existing.what_would_change_mind = request.what_would_change_mind
+    
+    updated = repo.update_memo(existing)
+    return updated.to_dict()
+
+
+@app.delete("/api/memos/{memo_id}")
+async def delete_memo(
+    memo_id: int,
+    repo: MemoRepository = Depends(get_memo_repository),
+):
+    """Delete an investment memo."""
+    existing = repo.get_memo(memo_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
+    
+    repo.delete_memo(memo_id)
+    return {"deleted": True, "id": memo_id}
+
+
+@app.post("/api/memos/{memo_id}/post-mortems", status_code=201)
+async def add_post_mortem(
+    memo_id: int,
+    request: AddPostMortemRequest,
+    repo: MemoRepository = Depends(get_memo_repository),
+):
+    """
+    Add a post-mortem review to a memo.
+    
+    Post-mortems track how reality is unfolding vs the original thesis.
+    """
+    existing = repo.get_memo(memo_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
+    
+    try:
+        action = PostMortemAction(request.action)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid action. Valid: {[a.value for a in PostMortemAction]}"
+        )
+    
+    post_mortem = PostMortem(
+        id=None,
+        memo_id=memo_id,
+        created_at=datetime.utcnow(),
+        note=request.note,
+        action=action,
+        price_at_time=request.price_at_time,
+        iv_at_time=request.iv_at_time,
+    )
+    
+    saved = repo.add_post_mortem(post_mortem)
+    return saved.to_dict()
+
+
+@app.post("/api/memos/{memo_id}/close")
+async def close_memo(
+    memo_id: int,
+    request: CloseMemoRequest,
+    repo: MemoRepository = Depends(get_memo_repository),
+):
+    """
+    Close a memo with final status and reason.
+    
+    Status should reflect whether the thesis played out:
+    - closed_win: Thesis was correct
+    - closed_loss: Thesis was wrong
+    - closed_neutral: Closed for other reasons
+    """
+    existing = repo.get_memo(memo_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
+    
+    try:
+        status = MemoStatus(request.status)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status. Valid: {[s.value for s in MemoStatus if s != MemoStatus.ACTIVE]}"
+        )
+    
+    if status == MemoStatus.ACTIVE:
+        raise HTTPException(status_code=400, detail="Cannot close memo with 'active' status")
+    
+    closed = repo.close_memo(memo_id, status, request.reason)
+    return closed.to_dict()
+
+
+@app.post("/api/memos/{memo_id}/snapshots", status_code=201)
+async def add_market_snapshot(
+    memo_id: int,
+    request: MemoMarket,
+    repo: MemoRepository = Depends(get_memo_repository),
+):
+    """
+    Add a market snapshot to track performance over time.
+    
+    Call this periodically to track how price and intrinsic value evolve.
+    """
+    existing = repo.get_memo(memo_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
+    
+    snapshot = MarketSnapshot(
+        price=request.price,
+        intrinsic_value=request.intrinsic_value,
+        pe_ratio=request.pe_ratio,
+    )
+    
+    saved = repo.add_market_snapshot(memo_id, snapshot)
+    return saved.to_dict()

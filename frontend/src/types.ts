@@ -361,3 +361,107 @@ export interface HistoricalValuationResult {
   yearly_metrics: YearlyMetrics[];
 }
 
+// =============================================================================
+// Investment Memo Types
+// =============================================================================
+
+export type MemoConviction = 'low' | 'medium' | 'high';
+export type MemoStatus = 'active' | 'closed_win' | 'closed_loss' | 'closed_neutral';
+export type PostMortemAction = 'hold' | 'add' | 'trim' | 'close' | 'review';
+
+export interface MemoAssumptions {
+  revenue_growth: number;
+  operating_margin: number;
+  terminal_growth_rate: number;
+  discount_rate: number;
+  projection_years: number;
+  da_ratio?: number | null;
+  capex_ratio?: number | null;
+  wc_ratio?: number | null;
+}
+
+export interface MemoScenario {
+  name: string;
+  revenue_growth: number;
+  operating_margin: number;
+  intrinsic_value: number;
+  upside_percent: number;
+}
+
+export interface MemoMarketSnapshot {
+  price: number;
+  intrinsic_value: number;
+  pe_ratio?: number | null;
+  captured_at: string;
+}
+
+export interface MemoPostMortem {
+  id: number;
+  memo_id: number;
+  created_at: string;
+  note: string;
+  action: PostMortemAction;
+  price_at_time: number;
+  iv_at_time: number;
+}
+
+export interface MemoPerformance {
+  price_change_percent: number;
+  iv_change_percent: number;
+  original_upside_percent: number;
+  thesis_realized_percent: number;
+  latest_price: number;
+  latest_iv: number;
+}
+
+export interface InvestmentMemo {
+  id: number;
+  symbol: string;
+  title: string;
+  thesis: string;
+  conviction: MemoConviction;
+  time_horizon_months: number;
+  created_at: string;
+  
+  // Snapshots at creation
+  assumptions: MemoAssumptions;
+  scenarios: MemoScenario[];
+  initial_market: MemoMarketSnapshot;
+  
+  // Optional fields
+  target_price?: number | null;
+  risks?: string | null;
+  catalysts?: string | null;
+  what_would_change_mind?: string | null;
+  
+  // Status
+  status: MemoStatus;
+  closed_at?: string | null;
+  closed_reason?: string | null;
+  
+  // Tracking data
+  market_snapshots: MemoMarketSnapshot[];
+  post_mortems: MemoPostMortem[];
+  
+  // Computed
+  current_performance: MemoPerformance;
+}
+
+export interface CreateMemoRequest {
+  symbol: string;
+  title: string;
+  thesis: string;
+  conviction: MemoConviction;
+  time_horizon_months: number;
+  assumptions: MemoAssumptions;
+  scenarios: MemoScenario[];
+  initial_market: {
+    price: number;
+    intrinsic_value: number;
+    pe_ratio?: number | null;
+  };
+  target_price?: number | null;
+  risks?: string | null;
+  catalysts?: string | null;
+  what_would_change_mind?: string | null;
+}
