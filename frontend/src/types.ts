@@ -535,6 +535,68 @@ export interface MonteCarloResult {
   };
 }
 
+// Full-Model Monte Carlo (Decision-Grade)
+export interface FullMonteCarloRequest {
+  base_growth: number;
+  base_margin: number;
+  base_da_ratio: number;
+  base_capex_ratio: number;
+  base_wc_ratio: number;
+  base_tax_rate?: number;
+  base_discount_rate: number;
+  base_terminal_growth?: number;
+  growth_std?: number;
+  margin_std?: number;
+  da_ratio_std?: number;
+  capex_ratio_std?: number;
+  wc_ratio_std?: number;
+  discount_std?: number;
+  terminal_growth_std?: number;
+  projection_years?: number;
+  iterations?: number;
+  growth_margin_correlation?: number;
+  growth_capex_correlation?: number;
+}
+
+export interface FullMonteCarloDecisionMetrics {
+  probability_positive_upside: number;  // P(IV > price)
+  probability_20pct_upside: number;     // P(IV > price * 1.2)
+  probability_20pct_downside: number;   // P(IV < price * 0.8)
+  cvar_10: number;                      // Expected value of worst 10%
+  margin_of_safety_mean: number;
+  margin_of_safety_median: number;
+}
+
+export interface FullMonteCarloResult {
+  symbol: string;
+  mode: 'full';
+  current_price: number;
+  iterations: number;
+  valid_simulations: number;
+  per_share: {
+    mean: number;
+    median: number;
+    std_dev: number;
+    percentiles: MonteCarloPercentiles;
+  };
+  decision_metrics: FullMonteCarloDecisionMetrics;
+  inputs: {
+    base_growth: number;
+    base_margin: number;
+    base_da_ratio: number;
+    base_capex_ratio: number;
+    base_wc_ratio: number;
+    base_tax_rate: number;
+    base_discount_rate: number;
+    base_terminal_growth: number;
+    projection_years: number;
+    correlations: {
+      growth_margin: number;
+      growth_capex: number;
+    };
+  };
+}
+
 // =============================================================================
 // Capital Efficiency Types
 // =============================================================================

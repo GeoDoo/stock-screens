@@ -2142,6 +2142,10 @@ export default function App() {
                 defaultInputs={{
                   growth: result.inputs.revenue_growth as number,
                   margin: result.inputs.operating_margin as number,
+                  daRatio: result.inputs.da_ratio as number,
+                  capexRatio: result.inputs.capex_ratio as number,
+                  wcRatio: result.inputs.wc_ratio as number,
+                  taxRate: result.inputs.tax_rate as number,
                   discountRate: result.discount_rate,
                   terminalGrowth: result.inputs.terminal_growth_rate as number,
                   projectionYears: result.inputs.projection_years as number,

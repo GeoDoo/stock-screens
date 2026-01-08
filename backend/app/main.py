@@ -30,6 +30,7 @@ from app.services.audit_repository import AuditRepository, get_audit_repository
 from app.services.memo_repository import MemoRepository, get_memo_repository
 from app.services.capital_efficiency import analyze_value_creation
 from app.services.monte_carlo import run_monte_carlo_valuation, MonteCarloResult
+from app.services.monte_carlo_full import run_full_monte_carlo, FullMonteCarloResult
 from app.models.assumption_audit import (
     AssumptionField,
     AssumptionChange,
@@ -175,7 +176,7 @@ class ScenarioRequest(BaseModel):
 
 
 class MonteCarloRequest(BaseModel):
-    """Request for Monte Carlo simulation."""
+    """Request for Monte Carlo simulation (simplified/quick mode)."""
     base_growth: float  # Base revenue growth rate (e.g., 0.10 for 10%)
     growth_std: float = 0.03  # Standard deviation for growth uncertainty
     base_margin: float  # Base operating margin (e.g., 0.20 for 20%)
@@ -185,6 +186,43 @@ class MonteCarloRequest(BaseModel):
     terminal_growth: float = DEFAULT_TERMINAL_GROWTH  # Terminal growth rate
     projection_years: int = 5
     iterations: int = 5000  # Number of simulations (default 5000 for speed)
+
+
+class FullMonteCarloRequest(BaseModel):
+    """
+    Request for Full-Model Monte Carlo simulation (decision-grade).
+    
+    Uses the complete DCF engine with FCF projections including:
+    NOPAT, D&A, CapEx, Working Capital changes, and proper terminal value.
+    
+    Supports bounded distributions and correlations between inputs.
+    """
+    # Base assumptions (will be means of distributions)
+    base_growth: float  # Revenue growth rate
+    base_margin: float  # Operating margin (EBIT/Revenue)
+    base_da_ratio: float  # D&A as % of revenue
+    base_capex_ratio: float  # CapEx as % of revenue
+    base_wc_ratio: float  # Working capital as % of revenue
+    base_tax_rate: float = DEFAULT_TAX_RATE
+    base_discount_rate: float  # WACC
+    base_terminal_growth: float = DEFAULT_TERMINAL_GROWTH
+    
+    # Standard deviations for sampling
+    growth_std: float = 0.03  # Revenue growth uncertainty
+    margin_std: float = 0.02  # Margin uncertainty
+    da_ratio_std: float = 0.01  # D&A ratio uncertainty
+    capex_ratio_std: float = 0.02  # CapEx ratio uncertainty
+    wc_ratio_std: float = 0.02  # Working capital ratio uncertainty
+    discount_std: float = 0.01  # Discount rate uncertainty
+    terminal_growth_std: float = 0.005  # Terminal growth uncertainty
+    
+    # Simulation settings
+    projection_years: int = 5
+    iterations: int = 5000
+    
+    # Correlations (defaults based on typical market behavior)
+    growth_margin_correlation: float = -0.2  # Negative: high growth often compresses margins
+    growth_capex_correlation: float = 0.3  # Positive: growth requires investment
 
 
 class CapitalEfficiencyRequest(BaseModel):
@@ -1934,6 +1972,176 @@ async def run_monte_carlo(
             "discount_std": request.discount_std,
             "terminal_growth": request.terminal_growth,
             "projection_years": request.projection_years,
+        },
+    }
+
+
+# =============================================================================
+# FULL-MODEL MONTE CARLO (Decision-Grade)
+# =============================================================================
+
+@app.post("/api/stock/{symbol}/monte-carlo-full")
+async def run_full_monte_carlo_endpoint(
+    symbol: str,
+    request: FullMonteCarloRequest,
+    provider: str = "yahoo",
+):
+    """
+    Run Full-Model Monte Carlo simulation using complete DCF engine.
+    
+    This is the DECISION-GRADE Monte Carlo that:
+    1. Uses FCFProjector for proper FCF calculations (NOPAT + D&A - CapEx - ΔWC)
+    2. Samples ALL DCF inputs with bounded distributions
+    3. Implements correlations between inputs (growth↔margin, growth↔reinvestment)
+    4. Computes comprehensive decision-support outputs
+    
+    Returns:
+    - Per-share value distribution (mean, median, percentiles)
+    - Decision metrics:
+      - P(upside > 0%): Probability stock is undervalued
+      - P(upside > 20%): Probability of significant upside
+      - P(downside > 20%): Probability of significant loss
+      - CVaR 10%: Expected value of worst 10% outcomes
+      - Margin of safety distribution
+    
+    Use this for actual investment decisions.
+    Use /monte-carlo (simplified) for quick intuition only.
+    """
+    # Check rate limit and auto-fallback if needed
+    actual_provider = provider
+    if rate_limiter.is_api_limited(provider):
+        actual_provider = "yahoo"
+    
+    # Get stock data
+    client = get_client_for_provider(actual_provider)
+    rate_limiter.record_call(actual_provider)
+    
+    try:
+        stock_data = await client.get_stock_data(symbol.upper())
+    except (RateLimitError, DataNotAvailableError) as e:
+        if actual_provider != "yahoo":
+            client = get_client_for_provider("yahoo")
+            rate_limiter.record_call("yahoo")
+            try:
+                stock_data = await client.get_stock_data(symbol.upper())
+                actual_provider = "yahoo"
+            except Exception:
+                raise HTTPException(status_code=429, detail=f"Rate limit exceeded for {provider}")
+        else:
+            raise HTTPException(status_code=429, detail=str(e))
+    except TickerNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    data = stock_data_to_legacy(stock_data)
+    extractor = DataExtractor(data)
+    
+    # Extract historical data for FCFProjector
+    revenue_history = extractor.revenue_history()
+    ebit_history = extractor.ebit_history()
+    da_history = extractor.da_history()
+    capex_history = extractor.capex_history()
+    wc_history = extractor.working_capital_history()
+    
+    if not revenue_history or len(revenue_history) < 2:
+        raise HTTPException(status_code=400, detail="Insufficient historical data for full Monte Carlo")
+    
+    # Fill in missing data with reasonable defaults
+    if not ebit_history or len(ebit_history) < len(revenue_history):
+        ebit_history = [r * request.base_margin for r in revenue_history]
+    if not da_history or len(da_history) < len(revenue_history):
+        da_history = [r * request.base_da_ratio for r in revenue_history]
+    if not capex_history or len(capex_history) < len(revenue_history):
+        capex_history = [r * request.base_capex_ratio for r in revenue_history]
+    if not wc_history or len(wc_history) < len(revenue_history):
+        wc_history = [r * request.base_wc_ratio for r in revenue_history]
+    
+    # Company data
+    shares = extractor.shares_outstanding() or 1
+    total_debt = extractor.total_debt() or 0
+    cash = extractor.cash() or 0
+    
+    # Get current price for decision metrics
+    current_price = stock_data.profile.price if stock_data.profile and stock_data.profile.price else 0
+    if not current_price:
+        # Fallback: estimate from market cap
+        market_cap = extractor.market_cap()
+        if market_cap and shares:
+            current_price = market_cap / shares
+    
+    # Run Full-Model Monte Carlo
+    result = run_full_monte_carlo(
+        historical_revenue=revenue_history,
+        historical_ebit=ebit_history,
+        historical_da=da_history,
+        historical_capex=capex_history,
+        historical_working_capital=wc_history,
+        shares_outstanding=shares,
+        total_debt=total_debt,
+        cash=cash,
+        current_price=current_price,
+        base_growth=request.base_growth,
+        base_margin=request.base_margin,
+        base_da_ratio=request.base_da_ratio,
+        base_capex_ratio=request.base_capex_ratio,
+        base_wc_ratio=request.base_wc_ratio,
+        base_tax_rate=request.base_tax_rate,
+        base_discount_rate=request.base_discount_rate,
+        base_terminal_growth=request.base_terminal_growth,
+        growth_std=request.growth_std,
+        margin_std=request.margin_std,
+        da_ratio_std=request.da_ratio_std,
+        capex_ratio_std=request.capex_ratio_std,
+        wc_ratio_std=request.wc_ratio_std,
+        discount_std=request.discount_std,
+        terminal_growth_std=request.terminal_growth_std,
+        projection_years=request.projection_years,
+        iterations=request.iterations,
+        growth_margin_correlation=request.growth_margin_correlation,
+        growth_capex_correlation=request.growth_capex_correlation,
+    )
+    
+    return {
+        "symbol": symbol.upper(),
+        "mode": "full",  # Distinguish from simplified mode
+        "current_price": current_price,
+        "iterations": result.iterations,
+        "valid_simulations": result.valid_simulations,
+        
+        # Per-share value distribution
+        "per_share": {
+            "mean": result.mean,
+            "median": result.median,
+            "std_dev": result.std_dev,
+            "percentiles": result.percentiles,
+        },
+        
+        # Decision metrics - the key outputs for investment decisions
+        "decision_metrics": {
+            "probability_positive_upside": result.probability_positive_upside,  # P(IV > price)
+            "probability_20pct_upside": result.probability_20pct_upside,  # P(IV > price * 1.2)
+            "probability_20pct_downside": result.probability_20pct_downside,  # P(IV < price * 0.8)
+            "cvar_10": result.cvar_10,  # Expected value of worst 10% outcomes
+            "margin_of_safety_mean": result.margin_of_safety_mean,
+            "margin_of_safety_median": result.margin_of_safety_median,
+        },
+        
+        # Inputs for reproducibility
+        "inputs": {
+            "base_growth": request.base_growth,
+            "base_margin": request.base_margin,
+            "base_da_ratio": request.base_da_ratio,
+            "base_capex_ratio": request.base_capex_ratio,
+            "base_wc_ratio": request.base_wc_ratio,
+            "base_tax_rate": request.base_tax_rate,
+            "base_discount_rate": request.base_discount_rate,
+            "base_terminal_growth": request.base_terminal_growth,
+            "projection_years": request.projection_years,
+            "correlations": {
+                "growth_margin": request.growth_margin_correlation,
+                "growth_capex": request.growth_capex_correlation,
+            },
         },
     }
 

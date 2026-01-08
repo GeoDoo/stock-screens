@@ -480,3 +480,104 @@ class TestAdvancedDCFOptions:
             
             # Values should be different (multi-stage has higher early growth)
             assert value_constant != value_stages
+
+
+class TestFullMonteCarloEndpoint:
+    """Tests for Full-Model Monte Carlo API endpoint."""
+    
+    def test_full_monte_carlo_returns_decision_metrics(self):
+        """Full MC endpoint should return decision-grade metrics."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/monte-carlo-full?provider=fmp",
+                json={
+                    "base_growth": 0.08,
+                    "base_margin": 0.25,
+                    "base_da_ratio": 0.05,
+                    "base_capex_ratio": 0.08,
+                    "base_wc_ratio": 0.10,
+                    "base_tax_rate": 0.25,
+                    "base_discount_rate": 0.10,
+                    "base_terminal_growth": 0.03,
+                    "iterations": 100,  # Small for speed
+                }
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            # Should have mode indicator
+            assert data["mode"] == "full"
+            
+            # Should have per-share distribution
+            assert "per_share" in data
+            assert "mean" in data["per_share"]
+            assert "median" in data["per_share"]
+            assert "percentiles" in data["per_share"]
+            
+            # Should have decision metrics
+            assert "decision_metrics" in data
+            metrics = data["decision_metrics"]
+            assert "probability_positive_upside" in metrics
+            assert "probability_20pct_upside" in metrics
+            assert "probability_20pct_downside" in metrics
+            assert "cvar_10" in metrics
+            assert "margin_of_safety_mean" in metrics
+    
+    def test_full_monte_carlo_with_correlations(self):
+        """Full MC should accept correlation parameters."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/monte-carlo-full?provider=fmp",
+                json={
+                    "base_growth": 0.08,
+                    "base_margin": 0.25,
+                    "base_da_ratio": 0.05,
+                    "base_capex_ratio": 0.08,
+                    "base_wc_ratio": 0.10,
+                    "base_discount_rate": 0.10,
+                    "iterations": 100,
+                    "growth_margin_correlation": -0.3,  # Custom correlation
+                    "growth_capex_correlation": 0.4,
+                }
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            # Should echo back correlations in inputs
+            assert data["inputs"]["correlations"]["growth_margin"] == -0.3
+            assert data["inputs"]["correlations"]["growth_capex"] == 0.4
+    
+    def test_full_monte_carlo_valid_simulations_count(self):
+        """Full MC should report valid simulation count."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/monte-carlo-full?provider=fmp",
+                json={
+                    "base_growth": 0.08,
+                    "base_margin": 0.25,
+                    "base_da_ratio": 0.05,
+                    "base_capex_ratio": 0.08,
+                    "base_wc_ratio": 0.10,
+                    "base_discount_rate": 0.10,
+                    "iterations": 100,
+                }
+            )
+            
+            data = response.json()
+            assert "valid_simulations" in data
+            # Most should be valid for reasonable inputs
+            assert data["valid_simulations"] >= 50

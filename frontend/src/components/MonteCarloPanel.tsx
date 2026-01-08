@@ -1,18 +1,30 @@
 import { useState } from 'react';
-import type { MonteCarloResult, MonteCarloRequest } from '../types';
+import type { MonteCarloResult, MonteCarloRequest, FullMonteCarloResult, FullMonteCarloRequest } from '../types';
 import { GlossaryRef } from './GlossaryRef';
 
 import { API_BASE } from '../config';
+
+type MCMode = 'quick' | 'decision';
 
 interface MonteCarloInputs {
   growth: number;
   growthStd: number;
   margin: number;
   marginStd: number;
+  daRatio: number;
+  daRatioStd: number;
+  capexRatio: number;
+  capexRatioStd: number;
+  wcRatio: number;
+  wcRatioStd: number;
   discountRate: number;
   discountStd: number;
   terminalGrowth: number;
+  terminalGrowthStd: number;
   projectionYears: number;
+  // Correlations
+  growthMarginCorr: number;
+  growthCapexCorr: number;
 }
 
 interface MonteCarloPanelProps {
@@ -21,6 +33,10 @@ interface MonteCarloPanelProps {
   defaultInputs: {
     growth: number;
     margin: number;
+    daRatio?: number;
+    capexRatio?: number;
+    wcRatio?: number;
+    taxRate?: number;
     discountRate: number;
     terminalGrowth: number;
     projectionYears: number;
@@ -37,6 +53,10 @@ const formatCurrency = (value: number): string => {
   return `$${value.toFixed(2)}`;
 };
 
+const formatPercent = (value: number, decimals = 0): string => {
+  return `${(value * 100).toFixed(decimals)}%`;
+};
+
 
 export function MonteCarloPanel({ 
   symbol, 
@@ -44,55 +64,111 @@ export function MonteCarloPanel({
   defaultInputs,
   currentPrice,
 }: MonteCarloPanelProps) {
+  const [mode, setMode] = useState<MCMode>('decision');
   const [inputs, setInputs] = useState<MonteCarloInputs>({
     growth: defaultInputs.growth,
-    growthStd: 0.03,  // ±3% default uncertainty
+    growthStd: 0.03,
     margin: defaultInputs.margin,
-    marginStd: 0.02,  // ±2% default uncertainty
+    marginStd: 0.02,
+    daRatio: defaultInputs.daRatio || 0.05,
+    daRatioStd: 0.01,
+    capexRatio: defaultInputs.capexRatio || 0.06,
+    capexRatioStd: 0.02,
+    wcRatio: defaultInputs.wcRatio || 0.10,
+    wcRatioStd: 0.02,
     discountRate: defaultInputs.discountRate,
-    discountStd: 0.01,  // ±1% default uncertainty
+    discountStd: 0.01,
     terminalGrowth: defaultInputs.terminalGrowth,
+    terminalGrowthStd: 0.005,
     projectionYears: defaultInputs.projectionYears,
+    growthMarginCorr: -0.2,
+    growthCapexCorr: 0.3,
   });
   
-  const [result, setResult] = useState<MonteCarloResult | null>(null);
+  const [quickResult, setQuickResult] = useState<MonteCarloResult | null>(null);
+  const [fullResult, setFullResult] = useState<FullMonteCarloResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  
+  const result = mode === 'decision' ? fullResult : quickResult;
   
   const runSimulation = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const request: MonteCarloRequest = {
-        base_growth: inputs.growth,
-        growth_std: inputs.growthStd,
-        base_margin: inputs.margin,
-        margin_std: inputs.marginStd,
-        base_discount_rate: inputs.discountRate,
-        discount_std: inputs.discountStd,
-        terminal_growth: inputs.terminalGrowth,
-        projection_years: inputs.projectionYears,
-        iterations: 5000,
-      };
-      
-      const response = await fetch(
-        `${API_BASE}/api/stock/${symbol}/monte-carlo?provider=${provider}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(request),
+      if (mode === 'quick') {
+        const request: MonteCarloRequest = {
+          base_growth: inputs.growth,
+          growth_std: inputs.growthStd,
+          base_margin: inputs.margin,
+          margin_std: inputs.marginStd,
+          base_discount_rate: inputs.discountRate,
+          discount_std: inputs.discountStd,
+          terminal_growth: inputs.terminalGrowth,
+          projection_years: inputs.projectionYears,
+          iterations: 5000,
+        };
+        
+        const response = await fetch(
+          `${API_BASE}/api/stock/${symbol}/monte-carlo?provider=${provider}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+          }
+        );
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'Simulation failed');
         }
-      );
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Simulation failed');
+        
+        const data = await response.json();
+        setQuickResult(data);
+      } else {
+        // Full-model Monte Carlo
+        const request: FullMonteCarloRequest = {
+          base_growth: inputs.growth,
+          base_margin: inputs.margin,
+          base_da_ratio: inputs.daRatio,
+          base_capex_ratio: inputs.capexRatio,
+          base_wc_ratio: inputs.wcRatio,
+          base_tax_rate: defaultInputs.taxRate || 0.25,
+          base_discount_rate: inputs.discountRate,
+          base_terminal_growth: inputs.terminalGrowth,
+          growth_std: inputs.growthStd,
+          margin_std: inputs.marginStd,
+          da_ratio_std: inputs.daRatioStd,
+          capex_ratio_std: inputs.capexRatioStd,
+          wc_ratio_std: inputs.wcRatioStd,
+          discount_std: inputs.discountStd,
+          terminal_growth_std: inputs.terminalGrowthStd,
+          projection_years: inputs.projectionYears,
+          iterations: 5000,
+          growth_margin_correlation: inputs.growthMarginCorr,
+          growth_capex_correlation: inputs.growthCapexCorr,
+        };
+        
+        const response = await fetch(
+          `${API_BASE}/api/stock/${symbol}/monte-carlo-full?provider=${provider}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+          }
+        );
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'Simulation failed');
+        }
+        
+        const data = await response.json();
+        setFullResult(data);
       }
       
-      const data = await response.json();
-      setResult(data);
       setExpanded(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error');
@@ -101,7 +177,6 @@ export function MonteCarloPanel({
     }
   };
   
-  // Calculate upside/downside from current price
   const getUpside = (value: number): number => {
     return ((value - currentPrice) / currentPrice) * 100;
   };
@@ -125,128 +200,288 @@ export function MonteCarloPanel({
     return `${sign}${upside.toFixed(0)}%`;
   };
   
+  // Get per-share data regardless of mode
+  // Both quick and full mode have per_share, but full mode adds median and std_dev
+  const perShare = result && 'per_share' in result 
+    ? result.per_share as { 
+        mean: number; 
+        median?: number; 
+        std_dev?: number; 
+        percentiles: import('../types').MonteCarloPercentiles; 
+      } 
+    : null;
+  
   return (
     <div className="border border-gray-200 rounded-lg p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">
           Monte Carlo Simulation<GlossaryRef id="monte-carlo" />
         </h3>
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          {expanded ? 'Collapse' : 'Expand'}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Mode Toggle */}
+          <div className="flex text-xs border rounded overflow-hidden">
+            <button
+              onClick={() => setMode('quick')}
+              className={`px-2 py-1 ${mode === 'quick' ? 'bg-gray-200 font-medium' : 'bg-white hover:bg-gray-50'}`}
+            >
+              Quick
+            </button>
+            <button
+              onClick={() => setMode('decision')}
+              className={`px-2 py-1 ${mode === 'decision' ? 'bg-gray-900 text-white font-medium' : 'bg-white hover:bg-gray-50'}`}
+            >
+              Decision
+            </button>
+          </div>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            {expanded ? 'Collapse' : 'Expand'}
+          </button>
+        </div>
       </div>
       
       {expanded && (
         <>
-          {/* Simplified Model Disclaimer */}
-          <div className="text-xs text-gray-500 mb-4 p-2 bg-gray-50 rounded border-l-2 border-gray-300">
-            <strong>Simplified Model:</strong> Uses revenue × margin × 0.75 as FCF proxy. 
-            Does not include full CapEx/WC projections. Best for visualizing uncertainty ranges, 
-            not precise valuations.
+          {/* Mode Description */}
+          <div className={`text-xs mb-4 p-2 rounded border-l-2 ${
+            mode === 'quick' 
+              ? 'text-gray-500 bg-gray-50 border-gray-300' 
+              : 'text-emerald-700 bg-emerald-50 border-emerald-400'
+          }`}>
+            {mode === 'quick' ? (
+              <>
+                <strong>Quick Mode:</strong> Simplified FCF model (Revenue × Margin × 0.75). 
+                Best for visualizing uncertainty, not precise valuations.
+              </>
+            ) : (
+              <>
+                <strong>Decision Mode:</strong> Full DCF engine with NOPAT, D&A, CapEx, WC, 
+                bounded distributions, and input correlations. Use for investment decisions.
+              </>
+            )}
           </div>
           
           {/* Input Controls */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Growth Rate
-              </label>
-              <div className="flex gap-1 items-center">
-                <input
-                  type="number"
-                  value={(inputs.growth * 100).toFixed(1)}
-                  onChange={(e) => setInputs(prev => ({ 
-                    ...prev, 
-                    growth: parseFloat(e.target.value) / 100 
-                  }))}
-                  className="w-20 px-2 py-1 text-sm border rounded"
-                  step="0.5"
-                />
-                <span className="text-xs text-gray-400">±</span>
-                <input
-                  type="number"
-                  value={(inputs.growthStd * 100).toFixed(1)}
-                  onChange={(e) => setInputs(prev => ({ 
-                    ...prev, 
-                    growthStd: parseFloat(e.target.value) / 100 
-                  }))}
-                  className="w-20 px-2 py-1 text-sm border rounded"
-                  step="0.5"
-                />
-                <span className="text-xs text-gray-400">%</span>
+          <div className="space-y-4 mb-4">
+            {/* Row 1: Core inputs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Growth Rate</label>
+                <div className="flex gap-1 items-center">
+                  <input
+                    type="number"
+                    value={(inputs.growth * 100).toFixed(1)}
+                    onChange={(e) => setInputs(prev => ({ ...prev, growth: parseFloat(e.target.value) / 100 }))}
+                    className="w-16 px-2 py-1 text-sm border rounded"
+                    step="0.5"
+                  />
+                  <span className="text-xs text-gray-400">±</span>
+                  <input
+                    type="number"
+                    value={(inputs.growthStd * 100).toFixed(1)}
+                    onChange={(e) => setInputs(prev => ({ ...prev, growthStd: parseFloat(e.target.value) / 100 }))}
+                    className="w-14 px-2 py-1 text-sm border rounded"
+                    step="0.5"
+                  />
+                  <span className="text-xs text-gray-400">%</span>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Op. Margin</label>
+                <div className="flex gap-1 items-center">
+                  <input
+                    type="number"
+                    value={(inputs.margin * 100).toFixed(1)}
+                    onChange={(e) => setInputs(prev => ({ ...prev, margin: parseFloat(e.target.value) / 100 }))}
+                    className="w-16 px-2 py-1 text-sm border rounded"
+                    step="0.5"
+                  />
+                  <span className="text-xs text-gray-400">±</span>
+                  <input
+                    type="number"
+                    value={(inputs.marginStd * 100).toFixed(1)}
+                    onChange={(e) => setInputs(prev => ({ ...prev, marginStd: parseFloat(e.target.value) / 100 }))}
+                    className="w-14 px-2 py-1 text-sm border rounded"
+                    step="0.5"
+                  />
+                  <span className="text-xs text-gray-400">%</span>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Discount Rate</label>
+                <div className="flex gap-1 items-center">
+                  <input
+                    type="number"
+                    value={(inputs.discountRate * 100).toFixed(1)}
+                    onChange={(e) => setInputs(prev => ({ ...prev, discountRate: parseFloat(e.target.value) / 100 }))}
+                    className="w-16 px-2 py-1 text-sm border rounded"
+                    step="0.5"
+                  />
+                  <span className="text-xs text-gray-400">±</span>
+                  <input
+                    type="number"
+                    value={(inputs.discountStd * 100).toFixed(1)}
+                    onChange={(e) => setInputs(prev => ({ ...prev, discountStd: parseFloat(e.target.value) / 100 }))}
+                    className="w-14 px-2 py-1 text-sm border rounded"
+                    step="0.5"
+                  />
+                  <span className="text-xs text-gray-400">%</span>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Terminal Growth</label>
+                <div className="flex gap-1 items-center">
+                  <input
+                    type="number"
+                    value={(inputs.terminalGrowth * 100).toFixed(1)}
+                    onChange={(e) => setInputs(prev => ({ ...prev, terminalGrowth: parseFloat(e.target.value) / 100 }))}
+                    className="w-16 px-2 py-1 text-sm border rounded"
+                    step="0.5"
+                  />
+                  {mode === 'decision' && (
+                    <>
+                      <span className="text-xs text-gray-400">±</span>
+                      <input
+                        type="number"
+                        value={(inputs.terminalGrowthStd * 100).toFixed(2)}
+                        onChange={(e) => setInputs(prev => ({ ...prev, terminalGrowthStd: parseFloat(e.target.value) / 100 }))}
+                        className="w-14 px-2 py-1 text-sm border rounded"
+                        step="0.1"
+                      />
+                    </>
+                  )}
+                  <span className="text-xs text-gray-400">%</span>
+                </div>
               </div>
             </div>
             
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Op. Margin
-              </label>
-              <div className="flex gap-1 items-center">
-                <input
-                  type="number"
-                  value={(inputs.margin * 100).toFixed(1)}
-                  onChange={(e) => setInputs(prev => ({ 
-                    ...prev, 
-                    margin: parseFloat(e.target.value) / 100 
-                  }))}
-                  className="w-20 px-2 py-1 text-sm border rounded"
-                  step="0.5"
-                />
-                <span className="text-xs text-gray-400">±</span>
-                <input
-                  type="number"
-                  value={(inputs.marginStd * 100).toFixed(1)}
-                  onChange={(e) => setInputs(prev => ({ 
-                    ...prev, 
-                    marginStd: parseFloat(e.target.value) / 100 
-                  }))}
-                  className="w-20 px-2 py-1 text-sm border rounded"
-                  step="0.5"
-                />
-                <span className="text-xs text-gray-400">%</span>
-              </div>
-            </div>
+            {/* Row 2: Decision-mode only inputs */}
+            {mode === 'decision' && (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">D&A Ratio</label>
+                    <div className="flex gap-1 items-center">
+                      <input
+                        type="number"
+                        value={(inputs.daRatio * 100).toFixed(1)}
+                        onChange={(e) => setInputs(prev => ({ ...prev, daRatio: parseFloat(e.target.value) / 100 }))}
+                        className="w-16 px-2 py-1 text-sm border rounded"
+                        step="0.5"
+                      />
+                      <span className="text-xs text-gray-400">±</span>
+                      <input
+                        type="number"
+                        value={(inputs.daRatioStd * 100).toFixed(1)}
+                        onChange={(e) => setInputs(prev => ({ ...prev, daRatioStd: parseFloat(e.target.value) / 100 }))}
+                        className="w-14 px-2 py-1 text-sm border rounded"
+                        step="0.1"
+                      />
+                      <span className="text-xs text-gray-400">%</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">CapEx Ratio</label>
+                    <div className="flex gap-1 items-center">
+                      <input
+                        type="number"
+                        value={(inputs.capexRatio * 100).toFixed(1)}
+                        onChange={(e) => setInputs(prev => ({ ...prev, capexRatio: parseFloat(e.target.value) / 100 }))}
+                        className="w-16 px-2 py-1 text-sm border rounded"
+                        step="0.5"
+                      />
+                      <span className="text-xs text-gray-400">±</span>
+                      <input
+                        type="number"
+                        value={(inputs.capexRatioStd * 100).toFixed(1)}
+                        onChange={(e) => setInputs(prev => ({ ...prev, capexRatioStd: parseFloat(e.target.value) / 100 }))}
+                        className="w-14 px-2 py-1 text-sm border rounded"
+                        step="0.5"
+                      />
+                      <span className="text-xs text-gray-400">%</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">WC Ratio</label>
+                    <div className="flex gap-1 items-center">
+                      <input
+                        type="number"
+                        value={(inputs.wcRatio * 100).toFixed(1)}
+                        onChange={(e) => setInputs(prev => ({ ...prev, wcRatio: parseFloat(e.target.value) / 100 }))}
+                        className="w-16 px-2 py-1 text-sm border rounded"
+                        step="0.5"
+                      />
+                      <span className="text-xs text-gray-400">±</span>
+                      <input
+                        type="number"
+                        value={(inputs.wcRatioStd * 100).toFixed(1)}
+                        onChange={(e) => setInputs(prev => ({ ...prev, wcRatioStd: parseFloat(e.target.value) / 100 }))}
+                        className="w-14 px-2 py-1 text-sm border rounded"
+                        step="0.5"
+                      />
+                      <span className="text-xs text-gray-400">%</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Years</label>
+                    <input
+                      type="number"
+                      value={inputs.projectionYears}
+                      onChange={(e) => setInputs(prev => ({ ...prev, projectionYears: parseInt(e.target.value) || 5 }))}
+                      className="w-16 px-2 py-1 text-sm border rounded"
+                      min="3"
+                      max="15"
+                    />
+                  </div>
+                </div>
+                
+                {/* Correlations */}
+                <div className="flex gap-6 items-center">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-500">Growth↔Margin</label>
+                    <input
+                      type="number"
+                      value={inputs.growthMarginCorr.toFixed(1)}
+                      onChange={(e) => setInputs(prev => ({ ...prev, growthMarginCorr: parseFloat(e.target.value) }))}
+                      className="w-16 px-2 py-1 text-sm border rounded"
+                      step="0.1"
+                      min="-1"
+                      max="1"
+                    />
+                    <span className="text-xs text-gray-400">(-1 to 1)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-500">Growth↔CapEx</label>
+                    <input
+                      type="number"
+                      value={inputs.growthCapexCorr.toFixed(1)}
+                      onChange={(e) => setInputs(prev => ({ ...prev, growthCapexCorr: parseFloat(e.target.value) }))}
+                      className="w-16 px-2 py-1 text-sm border rounded"
+                      step="0.1"
+                      min="-1"
+                      max="1"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
             
+            {/* Run Button */}
             <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Discount Rate
-              </label>
-              <div className="flex gap-1 items-center">
-                <input
-                  type="number"
-                  value={(inputs.discountRate * 100).toFixed(1)}
-                  onChange={(e) => setInputs(prev => ({ 
-                    ...prev, 
-                    discountRate: parseFloat(e.target.value) / 100 
-                  }))}
-                  className="w-20 px-2 py-1 text-sm border rounded"
-                  step="0.5"
-                />
-                <span className="text-xs text-gray-400">±</span>
-                <input
-                  type="number"
-                  value={(inputs.discountStd * 100).toFixed(1)}
-                  onChange={(e) => setInputs(prev => ({ 
-                    ...prev, 
-                    discountStd: parseFloat(e.target.value) / 100 
-                  }))}
-                  className="w-20 px-2 py-1 text-sm border rounded"
-                  step="0.5"
-                />
-                <span className="text-xs text-gray-400">%</span>
-              </div>
-            </div>
-            
-            <div className="flex items-end">
               <button
                 onClick={runSimulation}
                 disabled={loading}
-                className="px-4 py-1 bg-gray-900 text-white text-sm rounded hover:bg-gray-700 disabled:bg-gray-400"
+                className="px-4 py-2 bg-gray-900 text-white text-sm rounded hover:bg-gray-700 disabled:bg-gray-400"
               >
-                {loading ? 'Running...' : 'Run 5,000 Simulations'}
+                {loading ? 'Running...' : `Run 5,000 ${mode === 'decision' ? 'Full-Model' : ''} Simulations`}
               </button>
             </div>
           </div>
@@ -255,32 +490,111 @@ export function MonteCarloPanel({
             <div className="text-red-600 text-sm mb-4">{error}</div>
           )}
           
-          {result && (
+          {perShare && (
             <div className="space-y-4">
+              {/* Decision Metrics (Full-Model Only) */}
+              {mode === 'decision' && fullResult?.decision_metrics && (
+                <div className="bg-gray-900 text-white rounded-lg p-4">
+                  <h4 className="text-sm font-medium mb-3">Decision Metrics</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-xs text-gray-400">P(Undervalued)</div>
+                      <div className={`text-lg font-semibold ${
+                        fullResult.decision_metrics.probability_positive_upside > 0.7 
+                          ? 'text-emerald-400' 
+                          : fullResult.decision_metrics.probability_positive_upside > 0.5 
+                            ? 'text-yellow-400' 
+                            : 'text-red-400'
+                      }`}>
+                        {formatPercent(fullResult.decision_metrics.probability_positive_upside)}
+                      </div>
+                      <div className="text-xs text-gray-500">IV {'>'} Price</div>
+                    </div>
+                    
+                    <div>
+                      <div className="text-xs text-gray-400">P(20%+ Upside)</div>
+                      <div className={`text-lg font-semibold ${
+                        fullResult.decision_metrics.probability_20pct_upside > 0.5 
+                          ? 'text-emerald-400' 
+                          : fullResult.decision_metrics.probability_20pct_upside > 0.3 
+                            ? 'text-yellow-400' 
+                            : 'text-gray-400'
+                      }`}>
+                        {formatPercent(fullResult.decision_metrics.probability_20pct_upside)}
+                      </div>
+                      <div className="text-xs text-gray-500">IV {'>'} Price × 1.2</div>
+                    </div>
+                    
+                    <div>
+                      <div className="text-xs text-gray-400">P(20%+ Loss)</div>
+                      <div className={`text-lg font-semibold ${
+                        fullResult.decision_metrics.probability_20pct_downside > 0.3 
+                          ? 'text-red-400' 
+                          : fullResult.decision_metrics.probability_20pct_downside > 0.15 
+                            ? 'text-yellow-400' 
+                            : 'text-emerald-400'
+                      }`}>
+                        {formatPercent(fullResult.decision_metrics.probability_20pct_downside)}
+                      </div>
+                      <div className="text-xs text-gray-500">IV {'<'} Price × 0.8</div>
+                    </div>
+                    
+                    <div>
+                      <div className="text-xs text-gray-400">CVaR 10%<GlossaryRef id="cvar" /></div>
+                      <div className="text-lg font-semibold">
+                        {formatCurrency(fullResult.decision_metrics.cvar_10)}
+                      </div>
+                      <div className="text-xs text-gray-500">Worst 10% avg</div>
+                    </div>
+                  </div>
+                  
+                  {/* Margin of Safety */}
+                  <div className="mt-4 pt-3 border-t border-gray-700">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-400">Margin of Safety<GlossaryRef id="margin-of-safety" /></span>
+                      <div className="text-right">
+                        <span className={`font-medium ${
+                          fullResult.decision_metrics.margin_of_safety_median > 0.2 
+                            ? 'text-emerald-400' 
+                            : fullResult.decision_metrics.margin_of_safety_median > 0 
+                              ? 'text-yellow-400' 
+                              : 'text-red-400'
+                        }`}>
+                          {formatPercent(fullResult.decision_metrics.margin_of_safety_median, 1)} median
+                        </span>
+                        <span className="text-gray-500 ml-2">
+                          ({formatPercent(fullResult.decision_metrics.margin_of_safety_mean, 1)} mean)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Summary Stats */}
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="text-sm text-gray-500 mb-2">
-                  {result.valid_simulations.toLocaleString()} valid simulations
+                  {result?.valid_simulations?.toLocaleString() || 0} valid simulations
                 </div>
                 
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <div className="text-xs text-gray-500">Expected Value</div>
                     <div className="text-lg font-semibold">
-                      {formatCurrency(result.per_share.mean)}
+                      {formatCurrency(perShare.mean)}
                     </div>
-                    <div className={`text-sm ${getUpsideColor(getUpside(result.per_share.mean))}`}>
-                      {getUpside(result.per_share.mean) > 0 ? '+' : ''}{getUpside(result.per_share.mean).toFixed(1)}%
+                    <div className={`text-sm ${getUpsideColor(getUpside(perShare.mean))}`}>
+                      {formatUpside(getUpside(perShare.mean))}
                     </div>
                   </div>
                   
                   <div>
                     <div className="text-xs text-gray-500">Median (50th)</div>
                     <div className="text-lg font-semibold">
-                      {formatCurrency(result.per_share.percentiles.p50)}
+                      {formatCurrency(perShare.median || perShare.percentiles.p50)}
                     </div>
-                    <div className={`text-sm ${getUpsideColor(getUpside(result.per_share.percentiles.p50))}`}>
-                      {getUpside(result.per_share.percentiles.p50) > 0 ? '+' : ''}{getUpside(result.per_share.percentiles.p50).toFixed(1)}%
+                    <div className={`text-sm ${getUpsideColor(getUpside(perShare.median || perShare.percentiles.p50))}`}>
+                      {formatUpside(getUpside(perShare.median || perShare.percentiles.p50))}
                     </div>
                   </div>
                   
@@ -305,38 +619,38 @@ export function MonteCarloPanel({
                     <div 
                       className="absolute h-full bg-gray-300"
                       style={{
-                        left: `${((result.per_share.percentiles.p10 - result.per_share.percentiles.min) / 
-                               (result.per_share.percentiles.max - result.per_share.percentiles.min)) * 100}%`,
-                        width: `${((result.per_share.percentiles.p90 - result.per_share.percentiles.p10) / 
-                                (result.per_share.percentiles.max - result.per_share.percentiles.min)) * 100}%`,
+                        left: `${((perShare.percentiles.p10 - perShare.percentiles.min) / 
+                               (perShare.percentiles.max - perShare.percentiles.min)) * 100}%`,
+                        width: `${((perShare.percentiles.p90 - perShare.percentiles.p10) / 
+                                (perShare.percentiles.max - perShare.percentiles.min)) * 100}%`,
                       }}
                     />
                     {/* 25-75 range */}
                     <div 
                       className="absolute h-full bg-gray-500"
                       style={{
-                        left: `${((result.per_share.percentiles.p25 - result.per_share.percentiles.min) / 
-                               (result.per_share.percentiles.max - result.per_share.percentiles.min)) * 100}%`,
-                        width: `${((result.per_share.percentiles.p75 - result.per_share.percentiles.p25) / 
-                                (result.per_share.percentiles.max - result.per_share.percentiles.min)) * 100}%`,
+                        left: `${((perShare.percentiles.p25 - perShare.percentiles.min) / 
+                               (perShare.percentiles.max - perShare.percentiles.min)) * 100}%`,
+                        width: `${((perShare.percentiles.p75 - perShare.percentiles.p25) / 
+                                (perShare.percentiles.max - perShare.percentiles.min)) * 100}%`,
                       }}
                     />
                     {/* Median marker */}
                     <div 
                       className="absolute w-0.5 h-full bg-gray-900"
                       style={{
-                        left: `${((result.per_share.percentiles.p50 - result.per_share.percentiles.min) / 
-                               (result.per_share.percentiles.max - result.per_share.percentiles.min)) * 100}%`,
+                        left: `${((perShare.percentiles.p50 - perShare.percentiles.min) / 
+                               (perShare.percentiles.max - perShare.percentiles.min)) * 100}%`,
                       }}
                     />
                     {/* Current price marker */}
-                    {currentPrice >= result.per_share.percentiles.min && 
-                     currentPrice <= result.per_share.percentiles.max && (
+                    {currentPrice >= perShare.percentiles.min && 
+                     currentPrice <= perShare.percentiles.max && (
                       <div 
                         className="absolute w-0.5 h-full bg-blue-500"
                         style={{
-                          left: `${((currentPrice - result.per_share.percentiles.min) / 
-                                 (result.per_share.percentiles.max - result.per_share.percentiles.min)) * 100}%`,
+                          left: `${((currentPrice - perShare.percentiles.min) / 
+                                 (perShare.percentiles.max - perShare.percentiles.min)) * 100}%`,
                         }}
                       />
                     )}
@@ -344,20 +658,20 @@ export function MonteCarloPanel({
                   
                   {/* Labels */}
                   <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>{formatCurrency(result.per_share.percentiles.p10)} (10th)</span>
-                    <span>{formatCurrency(result.per_share.percentiles.p50)} (median)</span>
-                    <span>{formatCurrency(result.per_share.percentiles.p90)} (90th)</span>
+                    <span>{formatCurrency(perShare.percentiles.p10)} (10th)</span>
+                    <span>{formatCurrency(perShare.percentiles.p50)} (median)</span>
+                    <span>{formatCurrency(perShare.percentiles.p90)} (90th)</span>
                   </div>
                   
                   {/* Current price indicator when outside range */}
-                  {currentPrice > result.per_share.percentiles.max && (
+                  {currentPrice > perShare.percentiles.max && (
                     <div className="text-xs text-red-600 mt-1 text-right">
-                      Current price ({formatCurrency(currentPrice)}) exceeds all simulated values →
+                      Current price ({formatCurrency(currentPrice)}) exceeds all simulated values
                     </div>
                   )}
-                  {currentPrice < result.per_share.percentiles.min && (
+                  {currentPrice < perShare.percentiles.min && (
                     <div className="text-xs text-emerald-600 mt-1 text-left">
-                      ← Current price ({formatCurrency(currentPrice)}) below all simulated values
+                      Current price ({formatCurrency(currentPrice)}) below all simulated values
                     </div>
                   )}
                 </div>
@@ -365,44 +679,44 @@ export function MonteCarloPanel({
               
               {/* Probability Table */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                <div className={`p-2 rounded ${getBackgroundColor(getUpside(result.per_share.percentiles.p10))}`}>
+                <div className={`p-2 rounded ${getBackgroundColor(getUpside(perShare.percentiles.p10))}`}>
                   <div className="text-xs text-gray-500">Bear Case (10th<GlossaryRef id="percentile" />)</div>
-                  <div className="font-medium">{formatCurrency(result.per_share.percentiles.p10)}</div>
-                  <div className={getUpsideColor(getUpside(result.per_share.percentiles.p10))}>
-                    {formatUpside(getUpside(result.per_share.percentiles.p10))}
+                  <div className="font-medium">{formatCurrency(perShare.percentiles.p10)}</div>
+                  <div className={getUpsideColor(getUpside(perShare.percentiles.p10))}>
+                    {formatUpside(getUpside(perShare.percentiles.p10))}
                   </div>
                 </div>
                 
-                <div className={`p-2 rounded ${getBackgroundColor(getUpside(result.per_share.percentiles.p25))}`}>
+                <div className={`p-2 rounded ${getBackgroundColor(getUpside(perShare.percentiles.p25))}`}>
                   <div className="text-xs text-gray-500">Conservative (25th)</div>
-                  <div className="font-medium">{formatCurrency(result.per_share.percentiles.p25)}</div>
-                  <div className={getUpsideColor(getUpside(result.per_share.percentiles.p25))}>
-                    {formatUpside(getUpside(result.per_share.percentiles.p25))}
+                  <div className="font-medium">{formatCurrency(perShare.percentiles.p25)}</div>
+                  <div className={getUpsideColor(getUpside(perShare.percentiles.p25))}>
+                    {formatUpside(getUpside(perShare.percentiles.p25))}
                   </div>
                 </div>
                 
-                <div className={`p-2 rounded ${getBackgroundColor(getUpside(result.per_share.percentiles.p75))}`}>
+                <div className={`p-2 rounded ${getBackgroundColor(getUpside(perShare.percentiles.p75))}`}>
                   <div className="text-xs text-gray-500">Base Case (75th)</div>
-                  <div className="font-medium">{formatCurrency(result.per_share.percentiles.p75)}</div>
-                  <div className={getUpsideColor(getUpside(result.per_share.percentiles.p75))}>
-                    {formatUpside(getUpside(result.per_share.percentiles.p75))}
+                  <div className="font-medium">{formatCurrency(perShare.percentiles.p75)}</div>
+                  <div className={getUpsideColor(getUpside(perShare.percentiles.p75))}>
+                    {formatUpside(getUpside(perShare.percentiles.p75))}
                   </div>
                 </div>
                 
-                <div className={`p-2 rounded ${getBackgroundColor(getUpside(result.per_share.percentiles.p90))}`}>
+                <div className={`p-2 rounded ${getBackgroundColor(getUpside(perShare.percentiles.p90))}`}>
                   <div className="text-xs text-gray-500">Bull Case (90th)</div>
-                  <div className="font-medium">{formatCurrency(result.per_share.percentiles.p90)}</div>
-                  <div className={getUpsideColor(getUpside(result.per_share.percentiles.p90))}>
-                    {formatUpside(getUpside(result.per_share.percentiles.p90))}
+                  <div className="font-medium">{formatCurrency(perShare.percentiles.p90)}</div>
+                  <div className={getUpsideColor(getUpside(perShare.percentiles.p90))}>
+                    {formatUpside(getUpside(perShare.percentiles.p90))}
                   </div>
                 </div>
               </div>
               
               {/* Overall Assessment */}
               {(() => {
-                const p90Upside = getUpside(result.per_share.percentiles.p90);
-                const p10Upside = getUpside(result.per_share.percentiles.p10);
-                const medianUpside = getUpside(result.per_share.percentiles.p50);
+                const p90Upside = getUpside(perShare.percentiles.p90);
+                const p10Upside = getUpside(perShare.percentiles.p10);
+                const medianUpside = getUpside(perShare.percentiles.p50);
                 
                 let assessment = '';
                 let assessmentColor = '';
@@ -441,30 +755,36 @@ export function MonteCarloPanel({
               <div className="text-xs text-gray-500 border-t pt-2 space-y-1">
                 <p>
                   <strong>Interpretation:</strong> There's a 90% chance the stock is worth more than{' '}
-                  <span className="font-medium">{formatCurrency(result.per_share.percentiles.p10)}</span>{' '}
+                  <span className="font-medium">{formatCurrency(perShare.percentiles.p10)}</span>{' '}
                   and a 50% chance it's worth more than{' '}
-                  <span className="font-medium">{formatCurrency(result.per_share.percentiles.p50)}</span>.
+                  <span className="font-medium">{formatCurrency(perShare.percentiles.p50)}</span>.
                 </p>
-                <p className="text-gray-400 italic">
-                  Note: This is a simplified model for uncertainty visualization. 
-                  Use the full DCF above for precise valuations.
-                </p>
+                {mode === 'quick' && (
+                  <p className="text-gray-400 italic">
+                    Note: Quick mode uses a simplified model. Switch to Decision mode for precise valuations.
+                  </p>
+                )}
               </div>
             </div>
           )}
           
           {!result && !loading && (
             <div className="text-sm text-gray-500 text-center py-4">
-              Adjust uncertainty ranges (±) and run simulation to see value distribution
+              Adjust inputs and run simulation to see value distribution
             </div>
           )}
         </>
       )}
       
-      {!expanded && result && (
+      {!expanded && result && perShare && (
         <div className="text-sm text-gray-600">
-          Expected: {formatCurrency(result.per_share.mean)} | 
-          10th-90th: {formatCurrency(result.per_share.percentiles.p10)} - {formatCurrency(result.per_share.percentiles.p90)}
+          Expected: {formatCurrency(perShare.mean)} | 
+          10th-90th: {formatCurrency(perShare.percentiles.p10)} - {formatCurrency(perShare.percentiles.p90)}
+          {mode === 'decision' && fullResult?.decision_metrics && (
+            <span className="ml-2 text-xs">
+              | P(undervalued): {formatPercent(fullResult.decision_metrics.probability_positive_upside)}
+            </span>
+          )}
         </div>
       )}
     </div>
