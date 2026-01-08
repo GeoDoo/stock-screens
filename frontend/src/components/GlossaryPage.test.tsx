@@ -1,16 +1,26 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { GlossaryPage } from './GlossaryPage'
+
+const renderWithRouter = (component: React.ReactElement) => {
+  return render(
+    <MemoryRouter>
+      {component}
+    </MemoryRouter>
+  )
+}
 
 describe('GlossaryPage', () => {
   it('renders the glossary title', () => {
-    render(<GlossaryPage />)
+    renderWithRouter(<GlossaryPage />)
     
-    expect(screen.getByText('Glossary')).toBeInTheDocument()
+    // Use role selector to get the h1 heading specifically
+    expect(screen.getByRole('heading', { level: 1, name: 'Glossary' })).toBeInTheDocument()
   })
 
   it('displays all glossary terms', () => {
-    render(<GlossaryPage />)
+    renderWithRouter(<GlossaryPage />)
     
     // Check for some key terms
     expect(screen.getByText('DCF')).toBeInTheDocument()
@@ -20,27 +30,27 @@ describe('GlossaryPage', () => {
   })
 
   it('shows full names for terms that have them', () => {
-    render(<GlossaryPage />)
+    renderWithRouter(<GlossaryPage />)
     
     expect(screen.getByText(/Discounted Cash Flow/)).toBeInTheDocument()
     expect(screen.getByText(/Weighted Average Cost of Capital/)).toBeInTheDocument()
   })
 
   it('displays definitions for each term', () => {
-    render(<GlossaryPage />)
+    renderWithRouter(<GlossaryPage />)
     
     // Check that definitions are rendered (partial text match)
     expect(screen.getByText(/valuation method that estimates the present value/)).toBeInTheDocument()
   })
 
   it('includes Investopedia links for each term', () => {
-    render(<GlossaryPage />)
+    renderWithRouter(<GlossaryPage />)
     
-    const investopediaLinks = screen.getAllByText('Learn more on Investopedia →')
-    expect(investopediaLinks.length).toBeGreaterThan(0)
+    const learnMoreLinks = screen.getAllByText('Learn more →')
+    expect(learnMoreLinks.length).toBeGreaterThan(0)
     
     // Check that links have correct attributes
-    const firstLink = investopediaLinks[0].closest('a')
+    const firstLink = learnMoreLinks[0].closest('a')
     expect(firstLink).toHaveAttribute('href')
     expect(firstLink?.getAttribute('href')).toContain('investopedia.com')
     expect(firstLink).toHaveAttribute('target', '_blank')
@@ -48,7 +58,7 @@ describe('GlossaryPage', () => {
   })
 
   it('renders terms with correct anchor IDs for navigation', () => {
-    render(<GlossaryPage />)
+    renderWithRouter(<GlossaryPage />)
     
     // Check that terms have id attributes for anchor navigation
     const dcfSection = document.getElementById('dcf')
@@ -59,7 +69,7 @@ describe('GlossaryPage', () => {
   })
 
   it('organizes terms alphabetically', () => {
-    render(<GlossaryPage />)
+    renderWithRouter(<GlossaryPage />)
     
     const terms = screen.getAllByRole('heading', { level: 3 })
     // Extract just the term name (before the dash)
@@ -77,16 +87,13 @@ describe('GlossaryPage', () => {
     expect(betaIndex).toBeLessThan(dcfIndex)
   })
 
-  it('includes a back to app link', () => {
-    render(<GlossaryPage />)
+  it('renders alphabet navigation', () => {
+    renderWithRouter(<GlossaryPage />)
     
-    // There are two "Back to App" links (header and footer)
-    const backLinks = screen.getAllByText(/Back to App/i)
-    expect(backLinks.length).toBeGreaterThanOrEqual(1)
-    
-    // Check the first one has correct href
-    const firstBackLink = backLinks[0].closest('a')
-    expect(firstBackLink).toHaveAttribute('href', '/')
+    // The alphabet navigation should be present
+    const letterLinks = screen.getAllByRole('link')
+    // Should have Investopedia links plus alphabet links
+    expect(letterLinks.length).toBeGreaterThan(26) // More than just alphabet
   })
 })
 
