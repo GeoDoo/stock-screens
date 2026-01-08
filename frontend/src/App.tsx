@@ -1799,7 +1799,9 @@ export default function App() {
             <section className="pt-12 border-t border-gray-100">
               <div className="mb-8">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Comparable Analysis</h2>
-              <p className="text-sm text-gray-400">Relative valuation vs sector peers using P/E, EV/EBITDA, P/S, P/B</p>
+              <p className="text-sm text-gray-400">
+                Relative valuation vs sector peers using P/E<GlossaryRef id="pe-ratio" />, EV/EBITDA<GlossaryRef id="ev-ebitda" />, P/S<GlossaryRef id="ps-ratio" />, P/B<GlossaryRef id="pb-ratio" />
+              </p>
               {comparableLoading && <p className="text-sm text-gray-400 mt-2">Loading peer data...</p>}
             </div>
 
@@ -1880,10 +1882,10 @@ export default function App() {
                         <tr className="border-b border-gray-200">
                           <th className="py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Company</th>
                           <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Market Cap</th>
-                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">P/E</th>
-                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">EV/EBITDA</th>
-                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">P/S</th>
-                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">P/B</th>
+                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">P/E<GlossaryRef id="pe-ratio" /></th>
+                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">EV/EBITDA<GlossaryRef id="ev-ebitda" /></th>
+                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">P/S<GlossaryRef id="ps-ratio" /></th>
+                          <th className="py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">P/B<GlossaryRef id="pb-ratio" /></th>
                         </tr>
                       </thead>
                       <tbody>

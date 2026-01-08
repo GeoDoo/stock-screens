@@ -160,6 +160,13 @@ export const glossaryTerms: GlossaryTerm[] = [
     investopediaUrl: "https://www.investopedia.com/terms/e/ebitda.asp",
   },
   {
+    id: "nopat",
+    term: "NOPAT",
+    fullName: "Net Operating Profit After Tax",
+    definition: "Operating profit (EBIT) minus taxes, representing the cash earnings available to all capital providers. NOPAT = EBIT × (1 - Tax Rate). It's the starting point for calculating Free Cash Flow.",
+    investopediaUrl: "https://www.investopedia.com/terms/n/nopat.asp",
+  },
+  {
     id: "da",
     term: "D&A",
     fullName: "Depreciation and Amortization",
