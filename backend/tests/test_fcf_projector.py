@@ -349,4 +349,90 @@ class TestWCIncrementalMode:
         assert projections[0]["delta_wc"] is not None
 
 
+class TestMultiStageGrowthIntegration:
+    """Test FCFProjector with multi-stage growth schedules."""
+    
+    def test_growth_schedule_overrides_constant_growth(self):
+        """When growth_schedule is provided, it overrides constant revenue_growth."""
+        projector = FCFProjector(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[10],
+            historical_working_capital=[15],
+            tax_rate=0.25,
+        )
+        
+        # Variable growth: 20%, 15%, 10%
+        growth_schedule = [0.20, 0.15, 0.10]
+        
+        projections = projector.project(
+            years=5,  # Ignored when growth_schedule provided
+            revenue_growth=0.05,  # Also ignored
+            growth_schedule=growth_schedule,
+        )
+        
+        # Should have 3 years (from schedule), not 5
+        assert len(projections) == 3
+        
+        # Verify revenues follow the schedule
+        # Year 1: 100 * 1.20 = 120
+        # Year 2: 120 * 1.15 = 138
+        # Year 3: 138 * 1.10 = 151.8
+        assert abs(projections[0]["revenue"] - 120) < 0.1
+        assert abs(projections[1]["revenue"] - 138) < 0.1
+        assert abs(projections[2]["revenue"] - 151.8) < 0.1
+    
+    def test_growth_schedule_with_fade(self):
+        """Test variable growth with declining rates (fade)."""
+        projector = FCFProjector(
+            historical_revenue=[1000],
+            historical_ebit=[200],
+            historical_da=[50],
+            historical_capex=[100],
+            historical_working_capital=[150],
+            tax_rate=0.25,
+        )
+        
+        # High growth fading to low: 25%, 20%, 15%, 10%, 5%
+        growth_schedule = [0.25, 0.20, 0.15, 0.10, 0.05]
+        
+        projections = projector.project(
+            years=10,  # Ignored
+            growth_schedule=growth_schedule,
+        )
+        
+        assert len(projections) == 5
+        
+        # Each year should apply different growth
+        expected_revenues = [1250, 1500, 1725, 1897.5, 1992.375]
+        for i, proj in enumerate(projections):
+            assert abs(proj["revenue"] - expected_revenues[i]) < 0.5
+    
+    def test_growth_schedule_with_negative_growth(self):
+        """Test schedule with negative growth (turnaround scenarios)."""
+        projector = FCFProjector(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[10],
+            historical_working_capital=[15],
+            tax_rate=0.25,
+        )
+        
+        # Decline then recovery
+        growth_schedule = [-0.10, -0.05, 0.0, 0.05, 0.10]
+        
+        projections = projector.project(growth_schedule=growth_schedule, years=1)
+        
+        assert len(projections) == 5
+        
+        # Revenue should dip then recover
+        assert projections[0]["revenue"] < 100  # Decline
+        assert projections[1]["revenue"] < projections[0]["revenue"]  # More decline
+        assert projections[2]["revenue"] == projections[1]["revenue"]  # Flat
+        assert projections[3]["revenue"] > projections[2]["revenue"]  # Growth
+        assert projections[4]["revenue"] > projections[3]["revenue"]  # More growth
+
+
 

@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-08 18:13
+> Last updated: 2026-01-08 18:26
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -118,6 +118,7 @@ Weighted Average Cost of Capital calculator.
 | `MemoDetailView.tsx` | MemoDetailView |
 | `MemosPage.tsx` | MemosPage |
 | `MonteCarloPanel.tsx` | MonteCarloPanel |
+| `MultiStageGrowth.tsx` | MultiStageGrowth |
 
 ### Hooks (`frontend/src/hooks/`)
 

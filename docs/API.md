@@ -117,6 +117,10 @@ GET /api/stock/{symbol}
 
 Run DCF valuation with user-provided assumptions.
 
+Supports two modes:
+1. Single growth rate: Uses revenue_growth for all projection_years
+2. Multi-stage growth: Uses growth_stages to define phases (overrides revenue_growth)
+
 Args:
     symbol: Stock ticker symbol
     provider: Data provider to use (fmp or yahoo) - REQUIRED
@@ -147,7 +151,15 @@ POST /api/stock/{symbol}/valuation
   "capex_ratio": 0.0,
   "wc_ratio": 0.0,
   "use_mid_year_discounting": true,
-  "wc_mode": "string"
+  "wc_mode": "string",
+  "growth_stages": [
+    {
+      "name": "string",
+      "years": 0,
+      "growth_rate": 0.0,
+      "end_growth_rate": 0.0
+    }
+  ]
 }
 ```
 
@@ -164,6 +176,7 @@ POST /api/stock/{symbol}/valuation
 | `wc_ratio` | number | null | No |  |
 | `use_mid_year_discounting` | boolean | No |  |
 | `wc_mode` | string | No |  |
+| `growth_stages` | array | null | No |  |
 
 
 ---

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats, CreateMemoRequest } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats, CreateMemoRequest, GrowthStage } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { FinancialRatiosTable } from './components/FinancialRatiosTable';
 import { DiscountRateModal } from './components/DiscountRateModal';
@@ -20,6 +20,7 @@ import { useAssumptionTracker } from './hooks/useAssumptionTracker';
 import { MemoCreateModal } from './components/MemoCreateModal';
 import { Layout } from './components/Layout';
 import { MonteCarloPanel } from './components/MonteCarloPanel';
+import { MultiStageGrowth } from './components/MultiStageGrowth';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -198,6 +199,7 @@ export default function App() {
   // Advanced DCF options
   const [useMidYearDiscounting, setUseMidYearDiscounting] = useState(false);
   const [wcMode, setWcMode] = useState<'level' | 'incremental'>('level');
+  const [growthStages, setGrowthStages] = useState<GrowthStage[]>([]);
   
   // Scenario Analysis
   const [scenarioResult, setScenarioResult] = useState<ScenarioAnalysisResult | null>(null);
@@ -474,6 +476,8 @@ export default function App() {
       // Advanced DCF options
       use_mid_year_discounting: useMidYearDiscounting,
       wc_mode: wcMode,
+      // Multi-stage growth (overrides revenue_growth if provided)
+      growth_stages: growthStages.length > 0 ? growthStages : null,
     };
     
     try {
@@ -1613,6 +1617,15 @@ export default function App() {
                     })()}
                   </div>
                 )}
+              </div>
+
+              {/* Multi-Stage Growth */}
+              <div className="mt-8 pt-4 border-t border-gray-100">
+                <MultiStageGrowth
+                  stages={growthStages}
+                  onChange={setGrowthStages}
+                  terminalGrowth={parseFloat(terminalGrowth) / 100 || 0.03}
+                />
               </div>
 
               {/* Re-run Valuation Button */}

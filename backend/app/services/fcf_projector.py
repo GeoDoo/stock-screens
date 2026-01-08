@@ -189,6 +189,7 @@ class FCFProjector:
         capex_ratio: Optional[float] = None,
         wc_ratio: Optional[float] = None,
         wc_mode: str = "level",
+        growth_schedule: Optional[List[float]] = None,
     ) -> List[dict]:
         """
         Project FCF for multiple years.
@@ -196,6 +197,9 @@ class FCFProjector:
         All ratios default to historical averages but can be overridden.
         
         Args:
+            years: Number of years to project (ignored if growth_schedule provided)
+            revenue_growth: Constant growth rate for all years (ignored if growth_schedule provided)
+            growth_schedule: List of growth rates per year (overrides revenue_growth and years)
             wc_mode: "level" (WC = Revenue × Ratio) or "incremental" (ΔWC = ΔRevenue × Intensity)
         """
         # Use historical averages as defaults
@@ -205,15 +209,23 @@ class FCFProjector:
         _capex_ratio = capex_ratio if capex_ratio is not None else self.capex_to_revenue_ratio()
         _wc_ratio = wc_ratio if wc_ratio is not None else self.wc_to_revenue_ratio()
         
+        # If growth_schedule provided, use it for variable growth rates
+        if growth_schedule:
+            num_years = len(growth_schedule)
+        else:
+            num_years = years
+            growth_schedule = [_revenue_growth] * num_years  # Constant growth
+        
         projections = []
         prior_revenue = self.historical_revenue[-1]
         prior_wc = self.historical_working_capital[-1]
         
-        for _ in range(years):
+        for year_idx in range(num_years):
+            year_growth = growth_schedule[year_idx]
             year_projection = self.project_fcf_year(
                 prior_revenue=prior_revenue,
                 prior_working_capital=prior_wc,
-                revenue_growth=_revenue_growth,
+                revenue_growth=year_growth,
                 operating_margin=_operating_margin,
                 da_ratio=_da_ratio,
                 capex_ratio=_capex_ratio,

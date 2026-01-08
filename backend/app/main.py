@@ -117,13 +117,21 @@ class StockDataResponse(BaseModel):
     validation: ValidationResponse
 
 
+class GrowthStageInput(BaseModel):
+    """A single growth stage for multi-stage DCF."""
+    name: str
+    years: int
+    growth_rate: float  # e.g., 0.20 for 20%
+    end_growth_rate: Optional[float] = None  # If set, fade linearly to this rate
+
+
 class ValuationRequest(BaseModel):
     """User provides ALL of these - no defaults from backend."""
-    revenue_growth: float
+    revenue_growth: float  # Used only if growth_stages is not provided
     operating_margin: float
     terminal_growth_rate: float
     market_risk_premium: float
-    projection_years: int
+    projection_years: int  # Used only if growth_stages is not provided
     discount_rate_override: Optional[float] = None  # If set, use this instead of calculated WACC
     # FCF projection ratios - passed from frontend based on selected period (TTM or Annual)
     da_ratio: Optional[float] = None  # D&A / Revenue
@@ -132,6 +140,8 @@ class ValuationRequest(BaseModel):
     # Advanced DCF options
     use_mid_year_discounting: bool = False  # Assumes cash flows occur mid-year
     wc_mode: str = "level"  # "level" or "incremental"
+    # Multi-stage growth - if provided, overrides revenue_growth and projection_years
+    growth_stages: Optional[List[GrowthStageInput]] = None
 
 
 class ScenarioInput(BaseModel):
@@ -406,20 +416,48 @@ async def run_valuation(symbol: str, provider: str, request: ValuationRequest):
     """
     Run DCF valuation with user-provided assumptions.
     
+    Supports two modes:
+    1. Single growth rate: Uses revenue_growth for all projection_years
+    2. Multi-stage growth: Uses growth_stages to define phases (overrides revenue_growth)
+    
     Args:
         symbol: Stock ticker symbol
         provider: Data provider to use (fmp or yahoo) - REQUIRED
         request: Valuation assumptions from user
     """
+    from app.services.multi_stage_growth import GrowthStage, MultiStageGrowthModel
+    
     client = get_client_for_provider(provider)
     service = ValuationService(client=client)
+
+    # Determine if using multi-stage growth
+    growth_schedule = None
+    projection_years = request.projection_years
+    
+    if request.growth_stages and len(request.growth_stages) > 0:
+        # Convert API stages to model stages
+        stages = [
+            GrowthStage(
+                name=s.name,
+                years=s.years,
+                growth_rate=s.growth_rate,
+                end_growth_rate=s.end_growth_rate,
+            )
+            for s in request.growth_stages
+        ]
+        model = MultiStageGrowthModel(
+            stages=stages,
+            terminal_growth_rate=request.terminal_growth_rate,
+        )
+        growth_schedule = model.growth_schedule
+        projection_years = model.total_projection_years
 
     try:
         result = await service.value_stock(
             symbol=symbol.upper(),
-            projection_years=request.projection_years,
+            projection_years=projection_years,
             terminal_growth_rate=request.terminal_growth_rate,
-            revenue_growth=request.revenue_growth,
+            revenue_growth=request.revenue_growth,  # Used if growth_schedule is None
             operating_margin=request.operating_margin,
             market_risk_premium=request.market_risk_premium,
             discount_rate_override=request.discount_rate_override,
@@ -430,6 +468,8 @@ async def run_valuation(symbol: str, provider: str, request: ValuationRequest):
             # Advanced DCF options
             use_mid_year_discounting=request.use_mid_year_discounting,
             wc_mode=request.wc_mode,
+            # Multi-stage growth
+            growth_schedule=growth_schedule,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Valuation error: {str(e)}")
