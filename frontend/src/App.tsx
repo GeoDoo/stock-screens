@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats } from './types';
+import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, ComparableResult, Provider, TechnicalAnalysisResult, ProvidersResponse, FinancialRatiosResult, DividendHistoryResult, HistoricalValuationResult, RateLimitStats, InvestmentMemo, CreateMemoRequest, PostMortemAction, MemoStatus } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { FinancialRatiosTable } from './components/FinancialRatiosTable';
 import { DiscountRateModal } from './components/DiscountRateModal';
@@ -17,6 +17,9 @@ import {
 } from './normalizers';
 import { shouldFallback, getAlternativeProvider, getProviderDisplayName } from './providerFallback';
 import { useAssumptionTracker } from './hooks/useAssumptionTracker';
+import { MemoCreateModal } from './components/MemoCreateModal';
+import { MemosPage } from './components/MemosPage';
+import { MemoDetailView } from './components/MemoDetailView';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -209,6 +212,11 @@ export default function App() {
   
   // Assumption Audit Trail
   const [showCommitModal, setShowCommitModal] = useState(false);
+  
+  // Investment Memo state
+  const [showMemoCreate, setShowMemoCreate] = useState(false);
+  const [showMemosPage, setShowMemosPage] = useState(false);
+  const [selectedMemo, setSelectedMemo] = useState<InvestmentMemo | null>(null);
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
   
   // Tab navigation
@@ -591,6 +599,56 @@ export default function App() {
     await runScenariosWithData(stockData, discountOverride);
   };
 
+  // Memo handlers
+  const handleSaveMemo = async (memo: CreateMemoRequest) => {
+    const res = await fetch(`${API_BASE}/api/memos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(memo),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Failed to save memo');
+    }
+    return res.json();
+  };
+
+  const handleAddPostMortem = async (
+    memoId: number,
+    note: string,
+    action: PostMortemAction,
+    price: number,
+    iv: number
+  ) => {
+    const res = await fetch(`${API_BASE}/api/memos/${memoId}/post-mortems`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note, action, price_at_time: price, iv_at_time: iv }),
+    });
+    if (!res.ok) {
+      throw new Error('Failed to add post-mortem');
+    }
+  };
+
+  const handleCloseMemo = async (memoId: number, status: MemoStatus, reason: string) => {
+    const res = await fetch(`${API_BASE}/api/memos/${memoId}/close`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, reason }),
+    });
+    if (!res.ok) {
+      throw new Error('Failed to close memo');
+    }
+  };
+
+  const refreshSelectedMemo = async () => {
+    if (!selectedMemo) return;
+    const res = await fetch(`${API_BASE}/api/memos/${selectedMemo.id}`);
+    if (res.ok) {
+      setSelectedMemo(await res.json());
+    }
+  };
+
   const runTechnicalAnalysis = async () => {
     if (!stockData || !selectedTechnicalProvider) return;
     
@@ -828,12 +886,20 @@ export default function App() {
             <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Stock Analysis</h1>
             <p className="text-sm text-gray-400 mt-2">Fundamental & Technical Analysis</p>
           </div>
-          <a 
-            href="/glossary" 
-            className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-300 transition-colors"
-          >
-            📖 Glossary
-          </a>
+<div className="flex gap-2">
+            <button
+              onClick={() => setShowMemosPage(true)}
+              className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-300 transition-colors"
+            >
+              📝 Memos
+            </button>
+            <a
+              href="/glossary"
+              className="text-sm text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:border-gray-300 transition-colors"
+            >
+              📖 Glossary
+            </a>
+          </div>
         </header>
 
         {/* Provider Selection + Ticker in one cohesive block */}
@@ -1528,6 +1594,17 @@ export default function App() {
                       </span>
                     );
                   })()}
+                  
+                  {/* Create Memo Button */}
+                  <button
+                    onClick={() => setShowMemoCreate(true)}
+                    className="ml-4 text-sm text-blue-600 hover:text-blue-700 border border-blue-200 px-3 py-1 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors flex items-center gap-1.5"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Create Memo
+                  </button>
                 </div>
               )}
             </div>
@@ -2365,6 +2442,56 @@ export default function App() {
         history={assumptionTracker.history}
         isLoading={assumptionTracker.isLoading}
       />
+
+      {/* Investment Memo Modals */}
+      {showMemoCreate && stockData && result && (
+        <MemoCreateModal
+          isOpen={showMemoCreate}
+          onClose={() => setShowMemoCreate(false)}
+          onSave={handleSaveMemo}
+          symbol={stockData.symbol}
+          currentPrice={stockData.data.market_cap && stockData.data.shares_outstanding 
+            ? stockData.data.market_cap / stockData.data.shares_outstanding 
+            : 0}
+          intrinsicValue={result.intrinsic_value_per_share}
+          peRatio={ratiosResult?.annual?.valuation?.pe_ratio ?? ratiosResult?.ttm?.valuation?.pe_ratio ?? null}
+          assumptions={{
+            revenue_growth: parseFloat(revenueGrowth) / 100,
+            operating_margin: parseFloat(operatingMargin) / 100,
+            terminal_growth_rate: parseFloat(terminalGrowth) / 100,
+            discount_rate: result.discount_rate,
+            projection_years: parseInt(projectionYears),
+            da_ratio: currentHints?.da_ratio,
+            capex_ratio: currentHints?.capex_ratio,
+            wc_ratio: currentHints?.wc_ratio,
+          }}
+          scenarios={scenarioResult}
+        />
+      )}
+
+      {showMemosPage && (
+        <MemosPage
+          onClose={() => setShowMemosPage(false)}
+          onSelectMemo={(memo) => {
+            setSelectedMemo(memo);
+            setShowMemosPage(false);
+          }}
+        />
+      )}
+
+      {selectedMemo && (
+        <MemoDetailView
+          memo={selectedMemo}
+          onClose={() => setSelectedMemo(null)}
+          onAddPostMortem={(note, action, price, iv) => 
+            handleAddPostMortem(selectedMemo.id, note, action, price, iv)
+          }
+          onCloseMemo={(status, reason) => 
+            handleCloseMemo(selectedMemo.id, status, reason)
+          }
+          onRefresh={refreshSelectedMemo}
+        />
+      )}
     </div>
   );
 }
