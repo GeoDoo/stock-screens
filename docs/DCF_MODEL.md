@@ -1,343 +1,137 @@
 # DCF Valuation Model
 
-This document explains the Discounted Cash Flow (DCF) methodology used in this platform.
+> **Auto-generated** from source code docstrings.
+> 
+> Last updated: 2026-01-08 18:13
+> 
+> Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
 ## Overview
 
-DCF valuation estimates a company's intrinsic value by projecting future free cash flows and discounting them to present value.
+This application implements a **Discounted Cash Flow (DCF)** model for intrinsic value estimation.
 
-```
-Intrinsic Value = Present Value of FCFs + Present Value of Terminal Value - Net Debt
-                  ────────────────────────────────────────────────────────────────────
-                                       Shares Outstanding
-```
+## DCF Calculator
 
-## Free Cash Flow (FCF)
+Discounted Cash Flow calculator with optional mid-year discounting.
 
-### Formula
+Mid-year convention assumes cash flows are received at the middle of each year
+rather than at the end. This is more realistic for most businesses and produces
+slightly higher valuations (since cash is received sooner on average).
 
-```
+## WACC Calculator
+
+Weighted Average Cost of Capital calculator.
+
+WACC = (E/V) * Re + (D/V) * Rd * (1 - T)
+
+Where:
+- E = Market cap (equity value)
+- D = Total debt
+- V = E + D (total firm value)
+- Re = Cost of equity
+- Rd = Cost of debt
+- T = Tax rate
+
+## FCF Projector
+
+Projects Free Cash Flow from first principles.
+
 FCF = NOPAT + D&A - CapEx - ΔWorking Capital
-```
 
 Where:
-- **NOPAT** = Net Operating Profit After Tax = EBIT × (1 - Tax Rate)
-- **D&A** = Depreciation & Amortization (non-cash, added back)
-- **CapEx** = Capital Expenditures (cash outflow, subtracted)
-- **ΔWC** = Change in Working Capital (increase = cash use, decrease = cash source)
+- NOPAT = EBIT × (1 - Tax Rate)
+- D&A = Depreciation & Amortization
+- CapEx = Capital Expenditures
+- ΔWC = Change in Working Capital
 
-### Implementation
+Working Capital Modes:
+- "level" (default): WC_t = Revenue_t × WC_ratio, ΔWC = WC_t - WC_{t-1}
+  This maintains WC as a % of revenue (traditional approach)
 
-```python
-# fcf_projector.py
-def project_fcf(
-    revenue: float,
-    operating_margin: float,
-    tax_rate: float,
-    da_ratio: float,
-    capex_ratio: float,
-    wc_ratio: float,
-    prior_wc: float,
-) -> dict:
-    ebit = revenue * operating_margin
-    nopat = ebit * (1 - tax_rate)
-    da = revenue * da_ratio
-    capex = revenue * capex_ratio
-    wc = revenue * wc_ratio
-    delta_wc = wc - prior_wc
-    
-    fcf = nopat + da - capex - delta_wc
-    
-    return {
-        "revenue": revenue,
-        "ebit": ebit,
-        "nopat": nopat,
-        "da": da,
-        "capex": capex,
-        "working_capital": wc,
-        "delta_wc": delta_wc,
-        "fcf": fcf,
-    }
+- "incremental": ΔWC = ΔRevenue × WC_intensity
+  This ties WC investment directly to revenue growth (institutional approach)
+  Better for high-growth companies and more realistic for stable businesses
+
+## Multi-Stage Growth
+
+A single growth phase in a multi-stage model.
+
+If end_growth_rate is provided, the stage will fade linearly
+from growth_rate to end_growth_rate over the years.
+
+## Monte Carlo Simulation
+
+Configuration for a single Monte Carlo input variable.
+
+Can sample from either:
+- Normal distribution (if std_dev is provided)
+- Uniform distribution (if min_value and max_value are provided)
+
+## Key Formulas
+
+### Intrinsic Value
+```
+Intrinsic Value = Σ(FCF_t / (1 + WACC)^t) + Terminal Value / (1 + WACC)^n
 ```
 
-## Weighted Average Cost of Capital (WACC)
-
-WACC is the discount rate used to calculate present value.
-
-### Formula
-
+### WACC (Weighted Average Cost of Capital)
 ```
-WACC = (E/V × Re) + (D/V × Rd × (1 - T))
-```
+WACC = (E/V) × Re + (D/V) × Rd × (1 - Tc)
 
 Where:
-- **E** = Market value of equity
-- **D** = Market value of debt
-- **V** = E + D (total value)
-- **Re** = Cost of equity
-- **Rd** = Cost of debt
-- **T** = Tax rate
+  E = Market value of equity
+  D = Market value of debt
+  V = E + D (total firm value)
+  Re = Cost of equity (from CAPM)
+  Rd = Cost of debt
+  Tc = Corporate tax rate
+```
 
 ### Cost of Equity (CAPM)
-
 ```
 Re = Rf + β × (Rm - Rf)
-```
 
 Where:
-- **Rf** = Risk-free rate (10-year Treasury yield)
-- **β** = Beta (stock's volatility vs market)
-- **Rm - Rf** = Market risk premium (typically 5-7%)
-
-### Implementation
-
-```python
-# wacc_calculator.py
-def calculate_wacc(
-    beta: float,
-    risk_free_rate: float,
-    market_risk_premium: float,
-    cost_of_debt: float,
-    tax_rate: float,
-    market_cap: float,
-    total_debt: float,
-) -> dict:
-    # Cost of equity using CAPM
-    cost_of_equity = risk_free_rate + (beta * market_risk_premium)
-    
-    # After-tax cost of debt
-    after_tax_cost_of_debt = cost_of_debt * (1 - tax_rate)
-    
-    # Capital structure weights
-    total_value = market_cap + total_debt
-    weight_equity = market_cap / total_value
-    weight_debt = total_debt / total_value
-    
-    # WACC
-    wacc = (weight_equity * cost_of_equity) + (weight_debt * after_tax_cost_of_debt)
-    
-    return {
-        "wacc": wacc,
-        "cost_of_equity": cost_of_equity,
-        "cost_of_debt": cost_of_debt,
-        "after_tax_cost_of_debt": after_tax_cost_of_debt,
-        "weight_equity": weight_equity,
-        "weight_debt": weight_debt,
-    }
+  Rf = Risk-free rate
+  β = Beta (systematic risk)
+  Rm - Rf = Market risk premium
 ```
 
-## Terminal Value
-
-Terminal value captures the company's value beyond the projection period.
-
-### Gordon Growth Model
-
+### Free Cash Flow
 ```
-Terminal Value = FCF_final × (1 + g) / (WACC - g)
-```
+FCF = NOPAT + D&A - CapEx - ΔWC
 
 Where:
-- **FCF_final** = Free cash flow in the final projection year
-- **g** = Perpetual growth rate (typically 2-3%, should not exceed GDP growth)
-- **WACC** = Discount rate
-
-### Present Value of Terminal Value
-
-```
-PV of Terminal Value = Terminal Value / (1 + WACC)^n
+  NOPAT = EBIT × (1 - Tax Rate)
+  D&A = Depreciation & Amortization
+  CapEx = Capital Expenditures
+  ΔWC = Change in Working Capital
 ```
 
-Where **n** = number of projection years
-
-### Implementation
-
-```python
-# dcf_calculator.py
-def calculate_terminal_value(
-    final_fcf: float,
-    terminal_growth: float,
-    wacc: float,
-) -> float:
-    if wacc <= terminal_growth:
-        raise ValueError("WACC must be greater than terminal growth rate")
-    
-    return final_fcf * (1 + terminal_growth) / (wacc - terminal_growth)
+### Terminal Value (Gordon Growth)
 ```
-
-## Enterprise Value to Equity Value
-
-### Formula
-
-```
-Equity Value = Enterprise Value - Net Debt
-```
+TV = FCF_n × (1 + g) / (WACC - g)
 
 Where:
-- **Enterprise Value** = PV of FCFs + PV of Terminal Value
-- **Net Debt** = Total Debt - Cash
-
-### Intrinsic Value Per Share
-
-```
-Intrinsic Value = Equity Value / Shares Outstanding
+  FCF_n = Final year FCF
+  g = Terminal growth rate (must be < WACC)
 ```
 
-## Complete DCF Flow
+## Working Capital Modes
 
+1. **Level Mode**: `WC = Revenue × WC_ratio`
+2. **Incremental Mode**: `ΔWC = (Revenue_t - Revenue_t-1) × WC_intensity`
+
+## Mid-Year Discounting
+
+Optional adjustment that assumes cash flows occur mid-year rather than year-end:
 ```
-                    User Inputs
-                         │
-        ┌────────────────┼────────────────┐
-        │                │                │
-        ▼                ▼                ▼
-  Revenue Growth   Operating Margin   Terminal Growth
-        │                │                │
-        └────────────────┼────────────────┘
-                         │
-                         ▼
-              ┌──────────────────┐
-              │ Project Revenue  │
-              │ Years 1 through N│
-              └────────┬─────────┘
-                       │
-                       ▼
-              ┌──────────────────┐
-              │ Calculate FCF    │
-              │ for each year    │
-              └────────┬─────────┘
-                       │
-                       ▼
-              ┌──────────────────┐
-              │ Calculate WACC   │
-              │ (discount rate)  │
-              └────────┬─────────┘
-                       │
-            ┌──────────┴──────────┐
-            │                     │
-            ▼                     ▼
-   ┌──────────────┐      ┌──────────────┐
-   │ PV of FCFs   │      │ Terminal     │
-   │ Σ FCF/(1+r)^t│      │ Value        │
-   └──────┬───────┘      └──────┬───────┘
-          │                     │
-          └──────────┬──────────┘
-                     │
-                     ▼
-          ┌──────────────────┐
-          │ Enterprise Value │
-          │ = PV FCFs + PV TV│
-          └────────┬─────────┘
-                   │
-                   ▼
-          ┌──────────────────┐
-          │ Equity Value     │
-          │ = EV - Net Debt  │
-          └────────┬─────────┘
-                   │
-                   ▼
-          ┌──────────────────┐
-          │ Intrinsic Value  │
-          │ = Equity / Shares│
-          └──────────────────┘
+Discount Factor = 1 / (1 + WACC)^(t - 0.5)
 ```
 
-## Key Assumptions & Sensitivities
+## Guardrails
 
-### Revenue Growth
-
-| Impact | High | Low |
-|--------|------|-----|
-| Higher growth → Higher revenue → Higher FCF → Higher value | ✓ | |
-| Growth should reflect realistic market opportunity | | |
-| Historical growth is a reference, not a guarantee | | |
-
-### Operating Margin
-
-| Impact | High | Low |
-|--------|------|-----|
-| Higher margin → More profit per dollar of revenue | ✓ | |
-| Should reflect competitive position and scale | | |
-| Consider industry benchmarks | | |
-
-### Terminal Growth Rate
-
-| Impact | High | Low |
-|--------|------|-----|
-| Higher terminal growth → Much higher terminal value | ✓ | |
-| **Critical**: Should not exceed long-term GDP growth (2-3%) | | |
-| Small changes have large impact (sensitivity) | | |
-
-### Discount Rate (WACC)
-
-| Impact | High | Low |
-|--------|------|-----|
-| Higher WACC → Lower present value | | ✓ |
-| Reflects risk—riskier companies need higher rates | | |
-| Driven by beta and capital structure | | |
-
-## Scenario Analysis
-
-Compare valuations under different assumptions:
-
-| Scenario | Revenue Growth | Op. Margin | Result |
-|----------|----------------|------------|--------|
-| Bear | Low | Low | Downside case |
-| Base | Moderate | Moderate | Expected case |
-| Bull | High | High | Upside case |
-
-### Default Scenario Generation
-
-```python
-def get_default_scenarios(hints: dict) -> list:
-    base_growth = hints["revenue_growth"]
-    base_margin = hints["operating_margin"]
-    
-    return [
-        {
-            "name": "Bear",
-            "revenue_growth": base_growth * 0.5,
-            "operating_margin": base_margin * 0.85,
-        },
-        {
-            "name": "Base",
-            "revenue_growth": base_growth,
-            "operating_margin": base_margin,
-        },
-        {
-            "name": "Bull",
-            "revenue_growth": base_growth * 1.5,
-            "operating_margin": base_margin * 1.15,
-        },
-    ]
-```
-
-## Sensitivity Analysis
-
-Shows intrinsic value for combinations of WACC and terminal growth:
-
-```
-             Terminal Growth Rate
-              1%    2%    3%    4%
-         ┌─────────────────────────┐
-    8%   │ 210   225   245   270   │
-WACC 9%  │ 185   198   215   235   │
-    10%  │ 165   176   190   208   │
-    11%  │ 148   158   170   185   │
-         └─────────────────────────┘
-```
-
-## Limitations
-
-1. **Garbage In, Garbage Out**: Results depend entirely on assumption quality
-2. **Terminal Value Dominance**: Often 60-80% of total value—highly sensitive
-3. **Single Point Estimate**: DCF gives one number, not a range
-4. **No Margin of Safety**: Doesn't account for execution risk
-5. **Assumes Cash Flow**: May not suit early-stage or distressed companies
-
-## Best Practices
-
-1. **Use ranges, not point estimates** — Run scenarios
-2. **Triangulate** — Compare with multiples (P/E, EV/EBITDA)
-3. **Be conservative** — Err on lower growth, higher discount
-4. **Update regularly** — Revisit assumptions quarterly
-5. **Document reasoning** — Use memos to track why you chose assumptions
+- WACC must be greater than terminal growth rate
+- Shares outstanding must be positive
+- Warnings for negative FCF projections
+- Warnings for distressed companies (negative equity)

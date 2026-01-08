@@ -1,362 +1,157 @@
 # Architecture
 
+> **Auto-generated** from source code structure.
+> 
+> Last updated: 2026-01-08 18:13
+> 
+> Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
+
 ## Overview
 
-The Stock Analysis Platform follows a clean separation of concerns with a React frontend communicating with a FastAPI backend. Data is fetched from external providers and persisted locally in SQLite.
+Stock Screens is a full-stack stock analysis application with:
+- **Backend**: FastAPI (Python) - DCF valuation, financial analysis
+- **Frontend**: React + TypeScript + Vite - Interactive UI
+- **Database**: SQLite - Rate limits, audit trails, memos
 
-## System Components
+## Backend Architecture
 
-### Frontend (React + TypeScript)
+### Services (`backend/app/services/`)
 
-```
-frontend/src/
-├── main.tsx              # Router and app entry
-├── App.tsx               # Main analysis page
-├── components/
-│   ├── Layout.tsx        # Shared layout with sidebar navigation
-│   ├── MemosPage.tsx     # Investment memos list
-│   ├── MemoDetailPage.tsx # Single memo view
-│   ├── GlossaryPage.tsx  # Financial terms glossary
-│   ├── MemoCreateModal.tsx
-│   ├── DiscountRateModal.tsx
-│   ├── AssumptionHistoryDrawer.tsx
-│   ├── AssumptionCommitModal.tsx
-│   ├── FinancialRatiosTable.tsx
-│   └── GlossaryRef.tsx
-├── hooks/
-│   └── useAssumptionTracker.ts
-├── types.ts              # TypeScript interfaces
-├── glossary.ts           # Financial term definitions
-├── normalizers.ts        # API response normalization
-├── providerFallback.ts   # Provider fallback logic
-└── utils.ts              # Formatting utilities
-```
+| Service | Purpose |
+|---------|---------|
+| `audit_repository.py` | SQLite-based repository for assumption audit entries. |
+| `base_provider.py` | Standardized company profile data. |
+| `capital_efficiency.py` | Calculator for capital efficiency metrics. |
+| `comparable_analyzer.py` | Key valuation metrics for a company. |
+| `data_adapter.py` | — |
+| `data_extractor.py` | Extracts financial metrics from FMP data for use in valuatio |
+| `data_validator.py` | Severity levels for validation issues. |
+| `database.py` | — |
+| `dcf_calculator.py` | Discounted Cash Flow calculator with optional mid-year disco |
+| `dividend_analyzer.py` | A single dividend payment. |
+| `fcf_projector.py` | Projects Free Cash Flow from first principles. |
+| `fmp_client.py` | Custom exception for FMP API errors. |
+| `fmp_provider.py` | Financial Modeling Prep data provider. |
+| `historical_valuation.py` | Valuation metrics for a single year. |
+| `massive_provider.py` | Massive (Polygon.io) data provider. |
+| `memo_repository.py` | SQLite-based repository for investment memos. |
+| `monte_carlo.py` | Configuration for a single Monte Carlo input variable. |
+| `multi_stage_growth.py` | A single growth phase in a multi-stage model. |
+| `rate_limiter_sqlite.py` | When the rate limit resets. |
+| `ratio_calculator.py` | Valuation metrics. |
+| `scenario_calculator.py` | A single scenario with its assumptions. |
+| `sensitivity_calculator.py` | Calculates sensitivity matrix for DCF valuation. |
+| `stock_data_client.py` | Smart stock data client with automatic fallback between prov |
+| `technical_indicators.py` | Single indicator data point. |
+| `technical_service.py` | Service for running technical analysis on a stock. |
+| `valuation_service.py` | Orchestrates the full DCF valuation: |
+| `wacc_calculator.py` | Weighted Average Cost of Capital calculator. |
+| `yahoo_provider.py` | Yahoo Finance data provider using yfinance library. |
 
-**Key Patterns:**
+### Key Services Detail
 
-- **Shared Layout**: All pages use `Layout.tsx` for consistent navigation
-- **Type Safety**: Strict TypeScript with defined interfaces in `types.ts`
-- **Data Normalization**: All API responses pass through normalizers for consistent shape
-- **Provider Fallback**: Automatic fallback from FMP to Yahoo on errors
+#### `data_extractor.py` - DataExtractor
 
-### Backend (FastAPI + Python)
+Extracts financial metrics from FMP data for use in valuation models.
 
-```
-backend/app/
-├── main.py               # FastAPI application and routes
-├── constants.py          # Application constants
-├── models/
-│   ├── assumption_audit.py  # Audit trail data models
-│   └── memo.py              # Investment memo data models
-└── services/
-    ├── valuation_service.py    # Orchestrates DCF valuation
-    ├── dcf_calculator.py       # Core DCF math
-    ├── wacc_calculator.py      # WACC calculation
-    ├── fcf_projector.py        # FCF projection logic
-    ├── scenario_calculator.py  # Multi-scenario analysis
-    ├── sensitivity_calculator.py
-    ├── ratio_calculator.py     # Financial ratios
-    ├── comparable_analyzer.py  # Peer comparison
-    ├── technical_service.py    # Technical analysis
-    ├── technical_indicators.py
-    ├── dividend_analyzer.py
-    ├── historical_valuation.py
-    │
-    ├── stock_data_client.py    # Data fetching orchestration
-    ├── data_adapter.py         # Normalizes provider responses
-    ├── data_extractor.py       # Extracts fields from raw data
-    ├── data_validator.py       # Validates data quality
-    │
-    ├── fmp_provider.py         # Financial Modeling Prep
-    ├── fmp_client.py           # FMP API client
-    ├── yahoo_provider.py       # Yahoo Finance
-    ├── massive_provider.py     # Massive (technical)
-    ├── base_provider.py        # Provider interface
-    │
-    ├── memo_repository.py      # Memo CRUD operations
-    ├── audit_repository.py     # Audit trail storage
-    ├── database.py             # SQLite connection management
-    └── rate_limiter_sqlite.py  # API rate limiting
-```
+**Key Methods:**
+- `beta()` - Stock beta from profile.
+- `market_cap()` - Market capitalization from profile.
+- `total_debt()` - Total debt from balance sheet.
+- `total_equity()` - Total stockholders equity from balance sheet.
+- `cash()` - Cash and equivalents from balance sheet.
+
+#### `dcf_calculator.py` - DCFCalculator
+
+Discounted Cash Flow calculator with optional mid-year discounting.
+
+**Key Methods:**
+- `calculate()` - Calculate intrinsic value per share using DCF model.
+
+#### `fcf_projector.py` - FCFProjector
+
+Projects Free Cash Flow from first principles.
+
+**Key Methods:**
+- `effective_tax_rate()` - Return tax rate or default if not available.
+- `revenue_cagr()` - Calculate Compound Annual Growth Rate of revenue.
+- `operating_margin()` - Calculate average operating margin (EBIT / Revenue).
+- `da_to_revenue_ratio()` - Calculate average D&A as percentage of revenue.
+- `capex_to_revenue_ratio()` - Calculate average CapEx as percentage of revenue.
+
+#### `monte_carlo.py` - MonteCarloInput
+
+Configuration for a single Monte Carlo input variable.
+
+**Key Methods:**
+- `sample()` - Draw a random sample for this input.
+
+#### `valuation_service.py` - ValuationService
+
+Orchestrates the full DCF valuation:
+
+#### `wacc_calculator.py` - WACCCalculator
+
+Weighted Average Cost of Capital calculator.
+
+**Key Methods:**
+- `cost_of_equity()` - Calculate cost of equity using CAPM.
+- `after_tax_cost_of_debt()` - Calculate after-tax cost of debt.
+- `calculate()` - Calculate WACC.
+
+## Frontend Architecture
+
+### Components (`frontend/src/components/`)
+
+| Component | Description |
+|-----------|-------------|
+| `AssumptionCommitModal.tsx` | AssumptionCommitModal |
+| `AssumptionHistoryDrawer.tsx` | AssumptionHistoryDrawer |
+| `AssumptionHistoryIndicator.tsx` | AssumptionHistoryIndicator |
+| `DiscountRateModal.tsx` | DiscountRateModal |
+| `FinancialRatiosTable.tsx` | FinancialRatiosTable |
+| `GlossaryPage.tsx` | GlossaryPage |
+| `GlossaryRef.tsx` | GlossaryRef |
+| `Layout.tsx` | Layout |
+| `MemoCreateModal.tsx` | MemoCreateModal |
+| `MemoDetailPage.tsx` | MemoDetailPage |
+| `MemoDetailView.tsx` | MemoDetailView |
+| `MemosPage.tsx` | MemosPage |
+| `MonteCarloPanel.tsx` | MonteCarloPanel |
+
+### Hooks (`frontend/src/hooks/`)
+
+| Hook | Purpose |
+|------|---------|
+| `useAssumptionTracker.ts` | Assumptiontracker |
 
 ## Data Flow
 
-### Valuation Flow
-
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Frontend  │────▶│   FastAPI   │────▶│   Provider  │
-│             │     │             │     │  (FMP/Yahoo)│
-└─────────────┘     └──────┬──────┘     └─────────────┘
+│   Frontend  │────▶│   FastAPI   │────▶│  Providers  │
+│   (React)   │◀────│   Backend   │◀────│ (FMP/Yahoo) │
+└─────────────┘     └─────────────┘     └─────────────┘
                            │
-                           ▼
-                    ┌─────────────┐
-                    │ StockData   │
-                    │   Client    │
-                    └──────┬──────┘
-                           │
-            ┌──────────────┼──────────────┐
-            ▼              ▼              ▼
-     ┌───────────┐  ┌───────────┐  ┌───────────┐
-     │   Data    │  │   Data    │  │   Data    │
-     │  Adapter  │  │ Extractor │  │ Validator │
-     └───────────┘  └───────────┘  └───────────┘
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │ Valuation   │
-                    │   Service   │
-                    └──────┬──────┘
-                           │
-         ┌─────────────────┼─────────────────┐
-         ▼                 ▼                 ▼
-  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-  │    WACC     │   │     FCF     │   │     DCF     │
-  │ Calculator  │   │  Projector  │   │ Calculator  │
-  └─────────────┘   └─────────────┘   └─────────────┘
-                           │
-                           ▼
-                    ┌─────────────┐
-                    │   Result    │
-                    │  Response   │
-                    └─────────────┘
+                    ┌──────┴──────┐
+                    ▼             ▼
+              ┌─────────┐  ┌─────────────┐
+              │ SQLite  │  │ Calculators │
+              │   DB    │  │  & Models   │
+              └─────────┘  └─────────────┘
 ```
 
-### Provider Fallback
+## Test Coverage
 
-```
-┌──────────────────────────────────────────────────┐
-│                    Frontend                       │
-│                                                   │
-│  1. Request with provider=fmp                    │
-│                    │                              │
-│                    ▼                              │
-│  2. FMP returns error (rate limit/premium)       │
-│                    │                              │
-│                    ▼                              │
-│  3. shouldFallback() → true                      │
-│                    │                              │
-│                    ▼                              │
-│  4. getAlternativeProvider() → "yahoo"           │
-│                    │                              │
-│                    ▼                              │
-│  5. Retry request with provider=yahoo            │
-│                    │                              │
-│                    ▼                              │
-│  6. Display result + fallback notice             │
-│                                                   │
-└──────────────────────────────────────────────────┘
-```
+| Layer | Test Files | Framework |
+|-------|------------|-----------|
+| Backend | 26 test files | pytest |
+| Frontend | 11 test files | vitest |
 
-## Database Schema
+## Constants (`backend/app/constants.py`)
 
-All data is stored in `stock_screens.db`:
-
-### Audit Entries
-
-```sql
-CREATE TABLE audit_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    symbol TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
-    note TEXT,
-    is_initial INTEGER NOT NULL DEFAULT 0,
-    price_at_time REAL,
-    intrinsic_value_at_time REAL,
-    pe_ratio_at_time REAL
-);
-
-CREATE TABLE audit_changes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    entry_id INTEGER NOT NULL,
-    field TEXT NOT NULL,
-    old_value REAL,
-    new_value REAL NOT NULL,
-    FOREIGN KEY (entry_id) REFERENCES audit_entries(id)
-);
-```
-
-### Investment Memos
-
-```sql
-CREATE TABLE memos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    symbol TEXT NOT NULL,
-    title TEXT NOT NULL,
-    thesis TEXT NOT NULL,
-    conviction TEXT NOT NULL,
-    time_horizon_months INTEGER NOT NULL,
-    created_at TEXT NOT NULL,
-    target_price REAL,
-    catalysts TEXT,
-    risks TEXT,
-    what_would_change_mind TEXT,
-    assumptions_json TEXT NOT NULL,
-    scenarios_json TEXT,
-    initial_market_json TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'open',
-    closed_at TEXT,
-    closed_reason TEXT
-);
-
-CREATE TABLE memo_post_mortems (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    memo_id INTEGER NOT NULL,
-    timestamp TEXT NOT NULL,
-    content TEXT NOT NULL,
-    action_taken TEXT NOT NULL,
-    market_snapshot_json TEXT,
-    FOREIGN KEY (memo_id) REFERENCES memos(id)
-);
-
-CREATE TABLE memo_market_snapshots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    memo_id INTEGER NOT NULL,
-    timestamp TEXT NOT NULL,
-    price REAL NOT NULL,
-    intrinsic_value REAL,
-    pe_ratio REAL,
-    FOREIGN KEY (memo_id) REFERENCES memos(id)
-);
-```
-
-### Rate Limits
-
-```sql
-CREATE TABLE rate_limits (
-    provider TEXT PRIMARY KEY,
-    calls_json TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-```
-
-## Key Design Decisions
-
-### 1. Clean TTM/Annual Separation
-
-All DCF inputs can come from either TTM (trailing twelve months) or annual data. The frontend passes explicit ratios to ensure consistency:
-
-```python
-# Backend accepts explicit ratios
-class ValuationRequest(BaseModel):
-    revenue_growth: float
-    operating_margin: float
-    da_ratio: Optional[float] = None      # D&A / Revenue
-    capex_ratio: Optional[float] = None   # CapEx / Revenue
-    wc_ratio: Optional[float] = None      # ΔWC / Revenue
-```
-
-### 2. Provider Abstraction
-
-All data providers implement a common interface:
-
-```python
-class BaseProvider:
-    async def get_company_data(self, symbol: str) -> dict:
-        raise NotImplementedError
-    
-    async def get_financial_statements(self, symbol: str) -> dict:
-        raise NotImplementedError
-```
-
-### 3. Data Normalization
-
-Raw API responses are normalized to a consistent shape:
-
-```typescript
-// Frontend normalizer
-function normalizeStockData(raw: any): StockDataResponse {
-  return {
-    symbol: raw.symbol,
-    company_name: raw.company_name || raw.companyName,
-    // ... consistent field mapping
-  };
-}
-```
-
-### 4. Assumption Audit Trail
-
-Every valuation run can record assumption changes:
-
-```
-User changes revenue_growth: 8% → 10%
-         │
-         ▼
-┌─────────────────────────────────────┐
-│ AuditEntry                          │
-│ - timestamp: 2024-01-15 10:30:00   │
-│ - changes: [{revenue_growth: 8→10}]│
-│ - note: "Updated for Q4 guidance"  │
-│ - price_at_time: $178.50           │
-│ - intrinsic_value: $185.50         │
-└─────────────────────────────────────┘
-```
-
-### 5. Investment Memo Lifecycle
-
-```
-┌─────────┐     ┌─────────┐     ┌─────────┐
-│ Create  │────▶│  Open   │────▶│ Closed  │
-│  Memo   │     │ Status  │     │ Status  │
-└─────────┘     └────┬────┘     └─────────┘
-                     │
-                     ▼
-              ┌─────────────┐
-              │ Post-Mortems│
-              │ (ongoing)   │
-              └─────────────┘
-```
-
-## Error Handling
-
-### Backend
-
-```python
-from fastapi import HTTPException
-
-# Validation errors
-if not data:
-    raise HTTPException(status_code=404, detail=f"No data found for {symbol}")
-
-# Provider errors
-try:
-    result = await provider.fetch(symbol)
-except RateLimitError:
-    raise HTTPException(status_code=429, detail="Rate limit exceeded")
-```
-
-### Frontend
-
-```typescript
-// API errors trigger fallback
-const response = await fetch(url);
-if (!response.ok) {
-  const error = await response.json();
-  if (shouldFallback(error, provider)) {
-    return retryWithFallback(request);
-  }
-  throw new Error(error.detail);
-}
-```
-
-## Testing Strategy
-
-### Backend (Pytest)
-
-- **Unit tests**: Individual calculators and services
-- **Integration tests**: API endpoints with mocked providers
-- **Repository tests**: Database operations with temp databases
-
-```bash
-pytest tests/ -v
-```
-
-### Frontend (Vitest)
-
-- **Component tests**: Render and interaction testing
-- **Hook tests**: Custom hook behavior
-- **Utility tests**: Formatters and normalizers
-
-```bash
-npm test
-```
+All magic numbers are centralized:
+- `DEFAULT_TREASURY_RATE` - Risk-free rate fallback
+- `DEFAULT_TAX_RATE` - Tax rate when data missing
+- `DEFAULT_MARKET_RISK_PREMIUM` - Historical market premium
+- `DEFAULT_TERMINAL_GROWTH` - Long-term GDP growth
