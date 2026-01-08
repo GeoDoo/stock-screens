@@ -166,7 +166,7 @@ export function MonteCarloPanel({
                     ...prev, 
                     growthStd: parseFloat(e.target.value) / 100 
                   }))}
-                  className="w-16 px-2 py-1 text-sm border rounded"
+                  className="w-20 px-2 py-1 text-sm border rounded"
                   step="0.5"
                 />
                 <span className="text-xs text-gray-400">%</span>
@@ -196,7 +196,7 @@ export function MonteCarloPanel({
                     ...prev, 
                     marginStd: parseFloat(e.target.value) / 100 
                   }))}
-                  className="w-16 px-2 py-1 text-sm border rounded"
+                  className="w-20 px-2 py-1 text-sm border rounded"
                   step="0.5"
                 />
                 <span className="text-xs text-gray-400">%</span>
@@ -226,7 +226,7 @@ export function MonteCarloPanel({
                     ...prev, 
                     discountStd: parseFloat(e.target.value) / 100 
                   }))}
-                  className="w-16 px-2 py-1 text-sm border rounded"
+                  className="w-20 px-2 py-1 text-sm border rounded"
                   step="0.5"
                 />
                 <span className="text-xs text-gray-400">%</span>
