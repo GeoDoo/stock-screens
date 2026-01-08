@@ -135,21 +135,37 @@ export default function App() {
         // Also fetch accurate rate limits
         await fetchRateLimits();
         
-        // Auto-select recommended or first available providers (that aren't rate limited)
-        const fundRecommended = data.fundamental.find((p: Provider) => p.recommended && p.available);
-        const fundAvailable = data.fundamental.find((p: Provider) => p.available);
-        if (fundRecommended) {
-          setSelectedFundamentalProvider(fundRecommended.id);
-        } else if (fundAvailable) {
-          setSelectedFundamentalProvider(fundAvailable.id);
+        // Check localStorage for rate limit data (to avoid rate-limited providers)
+        const cachedLimits = localStorage.getItem('rateLimits');
+        const limits = cachedLimits ? JSON.parse(cachedLimits) : {};
+        const isLimited = (providerId: string) => limits[providerId]?.api_limited === true;
+        
+        // Try to restore saved provider, but only if not rate-limited
+        const savedFundamental = localStorage.getItem('selectedFundamentalProvider');
+        const savedTechnical = localStorage.getItem('selectedTechnicalProvider');
+        
+        // Find best fundamental provider: saved (if not limited) > recommended (if not limited) > any available
+        const fundSaved = savedFundamental && data.fundamental.find((p: Provider) => p.id === savedFundamental && p.available && !isLimited(p.id));
+        const fundRecommended = data.fundamental.find((p: Provider) => p.recommended && p.available && !isLimited(p.id));
+        const fundAvailable = data.fundamental.find((p: Provider) => p.available && !isLimited(p.id));
+        const fundFallback = data.fundamental.find((p: Provider) => p.available); // Last resort even if limited
+        
+        const selectedFund = fundSaved || fundRecommended || fundAvailable || fundFallback;
+        if (selectedFund) {
+          setSelectedFundamentalProvider(selectedFund.id);
+          localStorage.setItem('selectedFundamentalProvider', selectedFund.id);
         }
         
-        const techRecommended = data.technical.find((p: Provider) => p.recommended && p.available);
-        const techAvailable = data.technical.find((p: Provider) => p.available);
-        if (techRecommended) {
-          setSelectedTechnicalProvider(techRecommended.id);
-        } else if (techAvailable) {
-          setSelectedTechnicalProvider(techAvailable.id);
+        // Same logic for technical provider
+        const techSaved = savedTechnical && data.technical.find((p: Provider) => p.id === savedTechnical && p.available && !isLimited(p.id));
+        const techRecommended = data.technical.find((p: Provider) => p.recommended && p.available && !isLimited(p.id));
+        const techAvailable = data.technical.find((p: Provider) => p.available && !isLimited(p.id));
+        const techFallback = data.technical.find((p: Provider) => p.available);
+        
+        const selectedTech = techSaved || techRecommended || techAvailable || techFallback;
+        if (selectedTech) {
+          setSelectedTechnicalProvider(selectedTech.id);
+          localStorage.setItem('selectedTechnicalProvider', selectedTech.id);
         }
       } catch (err) {
         console.error('Failed to fetch providers:', err);
