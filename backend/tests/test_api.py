@@ -96,7 +96,7 @@ class TestStockEndpoint:
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
         mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.get("/api/stock/AAPL?provider=fmp")
 
             assert response.status_code == 200
@@ -148,7 +148,7 @@ class TestStockEndpoint:
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
         mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.get("/api/stock/TEST?provider=fmp")
             
             assert response.status_code == 200
@@ -180,7 +180,7 @@ class TestValuationEndpoint:
     def test_run_valuation_requires_all_inputs(self):
         """Valuation should require all user inputs."""
         mock_client = MagicMock()
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             # Missing required fields should fail
             response = client.post(
                 "/api/stock/AAPL/valuation?provider=fmp",
@@ -190,8 +190,8 @@ class TestValuationEndpoint:
 
     def test_run_valuation_with_all_inputs(self, mock_valuation_result):
         mock_client = MagicMock()
-        with patch("app.main.get_client_for_provider", return_value=mock_client), \
-             patch("app.main.ValuationService") as MockService:
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client), \
+             patch("app.routers.stock.ValuationService") as MockService:
             mock_instance = MockService.return_value
             mock_instance.value_stock = AsyncMock(return_value=mock_valuation_result)
 
@@ -213,8 +213,8 @@ class TestValuationEndpoint:
 
     def test_run_valuation_passes_user_inputs(self, mock_valuation_result):
         mock_client = MagicMock()
-        with patch("app.main.get_client_for_provider", return_value=mock_client), \
-             patch("app.main.ValuationService") as MockService:
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client), \
+             patch("app.routers.stock.ValuationService") as MockService:
             mock_instance = MockService.return_value
             mock_instance.value_stock = AsyncMock(return_value=mock_valuation_result)
 
@@ -248,7 +248,7 @@ class TestScenarioEndpoint:
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
         mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.post(
                 "/api/stock/AAPL/scenarios?provider=fmp",
                 json={
@@ -271,7 +271,7 @@ class TestScenarioEndpoint:
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
         mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.post(
                 "/api/stock/AAPL/scenarios?provider=fmp",
                 json={
@@ -292,7 +292,7 @@ class TestScenarioEndpoint:
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
         mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.post(
                 "/api/stock/AAPL/scenarios?provider=fmp",
                 json={
@@ -317,7 +317,7 @@ class TestAdvancedDCFOptions:
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
         mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.post(
                 "/api/stock/AAPL/valuation?provider=fmp",
                 json={
@@ -341,7 +341,7 @@ class TestAdvancedDCFOptions:
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
         mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.post(
                 "/api/stock/AAPL/valuation?provider=fmp",
                 json={
@@ -363,7 +363,7 @@ class TestAdvancedDCFOptions:
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
         mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.post(
                 "/api/stock/AAPL/valuation?provider=fmp",
                 json={
@@ -393,7 +393,7 @@ class TestAdvancedDCFOptions:
             "projection_years": 10,
         }
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             # Without mid-year discounting
             response_without = client.post(
                 "/api/stock/AAPL/valuation?provider=fmp",
@@ -418,7 +418,7 @@ class TestAdvancedDCFOptions:
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
         mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.post(
                 "/api/stock/AAPL/valuation?provider=fmp",
                 json={
@@ -454,7 +454,7 @@ class TestAdvancedDCFOptions:
             "market_risk_premium": 0.06,
         }
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             # Constant 10% growth for 10 years
             response_constant = client.post(
                 "/api/stock/AAPL/valuation?provider=fmp",
@@ -491,7 +491,7 @@ class TestFullMonteCarloEndpoint:
         mock_client = MagicMock()
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.post(
                 "/api/stock/AAPL/monte-carlo-full?provider=fmp",
                 json={
@@ -534,7 +534,7 @@ class TestFullMonteCarloEndpoint:
         mock_client = MagicMock()
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.post(
                 "/api/stock/AAPL/monte-carlo-full?provider=fmp",
                 json={
@@ -563,7 +563,7 @@ class TestFullMonteCarloEndpoint:
         mock_client = MagicMock()
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.post(
                 "/api/stock/AAPL/monte-carlo-full?provider=fmp",
                 json={

@@ -87,7 +87,7 @@ class TestBatchAnalyzeEndpoint:
         mock_client.get_peer_symbols = AsyncMock(return_value=["MSFT", "GOOGL"])
         mock_client.get_company_metrics = AsyncMock(return_value={})
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.get("/api/stock/AAPL/analyze?provider=fmp")
 
             assert response.status_code == 200
@@ -112,7 +112,7 @@ class TestBatchAnalyzeEndpoint:
         mock_client.get_peer_symbols = AsyncMock(return_value=["MSFT", "GOOGL"])
         mock_client.get_company_metrics = AsyncMock(return_value={})
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.get("/api/stock/AAPL/analyze?provider=fmp")
             
             assert response.status_code == 200
@@ -129,7 +129,7 @@ class TestBatchAnalyzeEndpoint:
         mock_client.get_peer_symbols = AsyncMock(return_value=[])
         mock_client.get_company_metrics = AsyncMock(return_value={})
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.get("/api/stock/AAPL/analyze?provider=fmp")
 
             assert response.status_code == 200
@@ -160,7 +160,7 @@ class TestDividendCalculation:
         mock_client.get_peer_symbols = AsyncMock(return_value=[])
         mock_client.get_company_metrics = AsyncMock(return_value={})
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.get("/api/stock/AAPL/analyze?provider=fmp")
 
             assert response.status_code == 200
@@ -191,7 +191,7 @@ class TestDividendCalculation:
         mock_client.get_peer_symbols = AsyncMock(return_value=[])
         mock_client.get_company_metrics = AsyncMock(return_value={})
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             response = client.get("/api/stock/AAPL/analyze?provider=fmp")
             data = response.json()
             
@@ -229,7 +229,7 @@ class TestRateLimitEndpoint:
         mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
         mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
 
-        with patch("app.main.get_client_for_provider", return_value=mock_client):
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
             client.get("/api/stock/AAPL?provider=fmp")
         
         # Reset
