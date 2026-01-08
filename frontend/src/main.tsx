@@ -4,6 +4,8 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { GlossaryPage } from './components/GlossaryPage.tsx'
+import { MemosPage } from './components/MemosPage.tsx'
+import { MemoDetailPage } from './components/MemoDetailPage.tsx'
 
 function Router() {
   const [path, setPath] = useState(window.location.pathname)
@@ -26,6 +28,16 @@ function Router() {
 
   if (path === '/glossary') {
     return <GlossaryPage />
+  }
+
+  if (path === '/memos') {
+    return <MemosPage />
+  }
+
+  // Match /memos/:id
+  const memoMatch = path.match(/^\/memos\/(\d+)$/)
+  if (memoMatch) {
+    return <MemoDetailPage memoId={parseInt(memoMatch[1])} />
   }
 
   return <App />
