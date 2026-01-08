@@ -4,7 +4,7 @@ Memo Repository - SQLite persistence for investment memos.
 Stores and retrieves investment memos with post-mortems and market snapshots.
 """
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from app.services.database import get_connection, DEFAULT_DB_PATH
@@ -350,7 +350,7 @@ class MemoRepository:
                 WHERE id = ?
             """, (
                 status.value,
-                datetime.utcnow().isoformat(),
+                datetime.now(timezone.utc).isoformat(),
                 reason,
                 memo_id,
             ))

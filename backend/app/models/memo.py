@@ -5,7 +5,7 @@ A memo captures an investment thesis at a point in time, tracks its performance,
 and allows for periodic post-mortem updates as reality unfolds.
 """
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from enum import Enum
 
@@ -110,7 +110,7 @@ class MarketSnapshot:
     price: float
     intrinsic_value: float
     pe_ratio: Optional[float] = None
-    captured_at: datetime = field(default_factory=lambda: datetime.utcnow())
+    captured_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -126,7 +126,7 @@ class MarketSnapshot:
             price=data["price"],
             intrinsic_value=data["intrinsic_value"],
             pe_ratio=data.get("pe_ratio"),
-            captured_at=datetime.fromisoformat(data["captured_at"]) if data.get("captured_at") else datetime.utcnow(),
+            captured_at=datetime.fromisoformat(data["captured_at"]) if data.get("captured_at") else datetime.now(timezone.utc),
         )
 
 
