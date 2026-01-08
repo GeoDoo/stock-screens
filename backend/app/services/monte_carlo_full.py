@@ -495,15 +495,16 @@ def run_full_monte_carlo(
             )
             
             # Terminal value (Gordon growth)
+            # Terminal perpetuity starts at year N+1; with mid-year convention,
+            # first terminal cash flow is at N + 0.5, so discount by N + offset
             final_fcf = fcf_values[-1]
+            terminal_discount_period = actual_years + discount_offset
             if final_fcf > 0:
                 terminal_value = final_fcf * (1 + terminal_growth) / (discount - terminal_growth)
-                terminal_discount_period = actual_years - discount_offset
                 pv_terminal = terminal_value / ((1 + discount) ** terminal_discount_period)
             else:
                 # Negative terminal FCF - use simplified exit multiple
                 terminal_value = final_fcf * 10  # 10x multiple for distressed
-                terminal_discount_period = actual_years - discount_offset
                 pv_terminal = terminal_value / ((1 + discount) ** terminal_discount_period)
             
             enterprise_value = pv_fcf + pv_terminal
