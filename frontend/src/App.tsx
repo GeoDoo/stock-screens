@@ -1529,30 +1529,106 @@ export default function App() {
               </table>
             </div>
 
-            {/* Projections */}
+            {/* Projections - Full FCF Breakdown */}
             {result.projections.length > 0 && (
               <div className="mb-12">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">FCF<GlossaryRef id="fcf" /> Projections</h3>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="py-3 text-left font-medium text-gray-400 uppercase text-xs tracking-wide">Year</th>
-                      <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide">Revenue</th>
-                      <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide">EBIT</th>
-                      <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide">FCF</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.projections.map((p, i) => (
-                      <tr key={i} className="border-b border-gray-100">
-                        <td className="py-3 font-mono">{i + 1}</td>
-                        <td className="py-3 text-right font-mono">{formatCurrency(p.revenue)}</td>
-                        <td className="py-3 text-right font-mono">{formatCurrency(p.ebit)}</td>
-                        <td className="py-3 text-right font-mono">{formatCurrency(p.fcf)}</td>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">FCF<GlossaryRef id="fcf" /> Projections - Full Breakdown</h3>
+                <p className="text-xs text-gray-400 mb-4">
+                  FCF = NOPAT + D&A − CapEx − ΔWC | Discount Rate: {(result.discount_rate * 100).toFixed(2)}%
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="py-3 text-left font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">Year</th>
+                        <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">Revenue</th>
+                        <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">EBIT<GlossaryRef id="ebit" /></th>
+                        <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">Taxes</th>
+                        <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">NOPAT<GlossaryRef id="nopat" /></th>
+                        <th className="py-3 text-right font-medium text-emerald-500 uppercase text-xs tracking-wide whitespace-nowrap">+ D&A<GlossaryRef id="da" /></th>
+                        <th className="py-3 text-right font-medium text-red-500 uppercase text-xs tracking-wide whitespace-nowrap">− CapEx<GlossaryRef id="capex" /></th>
+                        <th className="py-3 text-right font-medium text-red-500 uppercase text-xs tracking-wide whitespace-nowrap">− ΔWC<GlossaryRef id="working-capital" /></th>
+                        <th className="py-3 text-right font-medium text-gray-600 uppercase text-xs tracking-wide whitespace-nowrap border-l border-gray-200 pl-3">FCF</th>
+                        <th className="py-3 text-right font-medium text-gray-400 uppercase text-xs tracking-wide whitespace-nowrap">Discount</th>
+                        <th className="py-3 text-right font-medium text-emerald-600 uppercase text-xs tracking-wide whitespace-nowrap">PV of FCF</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {result.projections.map((p, i) => {
+                        const year = i + 1;
+                        const taxes = p.ebit - p.nopat;
+                        const discountFactor = Math.pow(1 + result.discount_rate, year);
+                        const pvFcf = p.fcf / discountFactor;
+                        return (
+                          <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-3 font-mono font-medium">{year}</td>
+                            <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.revenue)}</td>
+                            <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.ebit)}</td>
+                            <td className="py-3 text-right font-mono text-gray-400">({formatCurrency(Math.abs(taxes))})</td>
+                            <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.nopat)}</td>
+                            <td className="py-3 text-right font-mono text-emerald-600">+{formatCurrency(p.da)}</td>
+                            <td className="py-3 text-right font-mono text-red-600">−{formatCurrency(Math.abs(p.capex))}</td>
+                            <td className={`py-3 text-right font-mono ${p.delta_wc >= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                              {p.delta_wc >= 0 ? '−' : '+'}{formatCurrency(Math.abs(p.delta_wc))}
+                            </td>
+                            <td className={`py-3 text-right font-mono font-medium border-l border-gray-200 pl-3 ${p.fcf >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                              {formatCurrency(p.fcf)}
+                            </td>
+                            <td className="py-3 text-right font-mono text-gray-400 text-xs">
+                              ÷{discountFactor.toFixed(3)}
+                            </td>
+                            <td className={`py-3 text-right font-mono font-medium ${pvFcf >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {formatCurrency(pvFcf)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {/* Totals row */}
+                      <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                        <td className="py-3 font-mono">Total</td>
+                        <td className="py-3 text-right font-mono text-gray-600">
+                          {formatCurrency(result.projections.reduce((sum, p) => sum + p.revenue, 0))}
+                        </td>
+                        <td colSpan={6}></td>
+                        <td className="py-3 text-right font-mono border-l border-gray-200 pl-3">
+                          {formatCurrency(result.projections.reduce((sum, p) => sum + p.fcf, 0))}
+                        </td>
+                        <td></td>
+                        <td className="py-3 text-right font-mono text-emerald-600">
+                          {formatCurrency(result.projections.reduce((sum, p, i) => {
+                            const discountFactor = Math.pow(1 + result.discount_rate, i + 1);
+                            return sum + p.fcf / discountFactor;
+                          }, 0))}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                
+                {/* Terminal Value breakdown */}
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Terminal Value Calculation</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-500">Final Year FCF</span>
+                      <p className="font-mono font-medium">{formatCurrency(result.projections[result.projections.length - 1]?.fcf || 0)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Terminal Growth</span>
+                      <p className="font-mono font-medium">{((result.inputs as Record<string, number>)?.terminal_growth_rate * 100 || 2.5).toFixed(1)}%</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Terminal Value<GlossaryRef id="terminal-value" /></span>
+                      <p className="font-mono font-medium">{formatCurrency(result.terminal_value)}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">PV of Terminal Value</span>
+                      <p className="font-mono font-medium text-emerald-600">
+                        {formatCurrency(result.terminal_value / Math.pow(1 + result.discount_rate, result.projections.length))}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
