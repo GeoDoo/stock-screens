@@ -34,6 +34,7 @@ class AuditEntry:
     A commit-style audit entry capturing multiple assumption changes.
     
     Like a git commit - groups related changes with a timestamp and optional note.
+    Also captures market context at time of change for thesis tracking.
     """
     id: Optional[int]
     symbol: str
@@ -41,6 +42,10 @@ class AuditEntry:
     changes: List[AssumptionChange]
     note: Optional[str]
     is_initial: bool  # True if this is the first analysis (baseline)
+    # Market context at time of recording (for thesis tracking)
+    price_at_time: Optional[float] = None
+    intrinsic_value_at_time: Optional[float] = None
+    pe_ratio_at_time: Optional[float] = None
     
     def to_dict(self) -> dict:
         """Convert to dictionary for API responses."""
@@ -58,6 +63,9 @@ class AuditEntry:
             ],
             "note": self.note,
             "is_initial": self.is_initial,
+            "price_at_time": self.price_at_time,
+            "intrinsic_value_at_time": self.intrinsic_value_at_time,
+            "pe_ratio_at_time": self.pe_ratio_at_time,
         }
 
 

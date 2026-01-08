@@ -55,7 +55,10 @@ class AuditRepository:
                     symbol TEXT NOT NULL,
                     timestamp TEXT NOT NULL,
                     note TEXT,
-                    is_initial INTEGER NOT NULL DEFAULT 0
+                    is_initial INTEGER NOT NULL DEFAULT 0,
+                    price_at_time REAL,
+                    intrinsic_value_at_time REAL,
+                    pe_ratio_at_time REAL
                 );
                 
                 CREATE TABLE IF NOT EXISTS audit_changes (
@@ -76,6 +79,19 @@ class AuditRepository:
                 CREATE INDEX IF NOT EXISTS idx_changes_entry 
                 ON audit_changes(entry_id);
             """)
+            # Migration: Add new columns if they don't exist (for existing databases)
+            try:
+                conn.execute("ALTER TABLE audit_entries ADD COLUMN price_at_time REAL")
+            except Exception:
+                pass  # Column already exists
+            try:
+                conn.execute("ALTER TABLE audit_entries ADD COLUMN intrinsic_value_at_time REAL")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE audit_entries ADD COLUMN pe_ratio_at_time REAL")
+            except Exception:
+                pass
             conn.commit()
         finally:
             conn.close()
@@ -96,13 +112,16 @@ class AuditRepository:
             
             # Insert entry
             cursor.execute("""
-                INSERT INTO audit_entries (symbol, timestamp, note, is_initial)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO audit_entries (symbol, timestamp, note, is_initial, price_at_time, intrinsic_value_at_time, pe_ratio_at_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (
                 entry.symbol,
                 entry.timestamp.isoformat(),
                 entry.note,
                 1 if entry.is_initial else 0,
+                entry.price_at_time,
+                entry.intrinsic_value_at_time,
+                entry.pe_ratio_at_time,
             ))
             
             entry_id = cursor.lastrowid
@@ -129,6 +148,9 @@ class AuditRepository:
                 changes=entry.changes,
                 note=entry.note,
                 is_initial=entry.is_initial,
+                price_at_time=entry.price_at_time,
+                intrinsic_value_at_time=entry.intrinsic_value_at_time,
+                pe_ratio_at_time=entry.pe_ratio_at_time,
             )
         finally:
             conn.close()
@@ -150,7 +172,7 @@ class AuditRepository:
             
             # Get entries
             cursor.execute("""
-                SELECT id, symbol, timestamp, note, is_initial
+                SELECT id, symbol, timestamp, note, is_initial, price_at_time, intrinsic_value_at_time, pe_ratio_at_time
                 FROM audit_entries
                 WHERE symbol = ?
                 ORDER BY timestamp DESC
@@ -182,6 +204,9 @@ class AuditRepository:
                     changes=changes,
                     note=row["note"],
                     is_initial=bool(row["is_initial"]),
+                    price_at_time=row["price_at_time"],
+                    intrinsic_value_at_time=row["intrinsic_value_at_time"],
+                    pe_ratio_at_time=row["pe_ratio_at_time"],
                 ))
             
             return entries

@@ -59,6 +59,9 @@ describe('useAssumptionTracker', () => {
               operating_margin: 0.25,
             },
             note: 'Initial analysis',
+            price_at_time: null,
+            intrinsic_value_at_time: null,
+            pe_ratio_at_time: null,
           }),
         })
       );

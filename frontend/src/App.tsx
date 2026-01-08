@@ -17,7 +17,7 @@ import {
   formatMetric,
 } from './normalizers';
 import { shouldFallback, getAlternativeProvider, getProviderDisplayName } from './providerFallback';
-import { useAssumptionTracker, AssumptionChange } from './hooks/useAssumptionTracker';
+import { useAssumptionTracker, AssumptionChange, MarketContext } from './hooks/useAssumptionTracker';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -525,10 +525,18 @@ export default function App() {
     
     if (!stockData) return;
     
-    // Record assumptions to audit trail
+    // Record assumptions to audit trail with market context
     const assumptions = getCurrentAssumptions();
+    const marketContext = {
+      price_at_time: stockData.data.market_cap && stockData.data.shares_outstanding
+        ? stockData.data.market_cap / stockData.data.shares_outstanding
+        : undefined,
+      intrinsic_value_at_time: result?.intrinsic_value_per_share,
+      pe_ratio_at_time: ratiosResult?.valuation?.pe_ratio ?? undefined,
+    };
+    
     try {
-      await assumptionTracker.recordAssumptions(assumptions, note || undefined);
+      await assumptionTracker.recordAssumptions(assumptions, note || undefined, marketContext);
     } catch (err) {
       console.error('Failed to record assumptions:', err);
       // Continue with valuation even if audit fails
