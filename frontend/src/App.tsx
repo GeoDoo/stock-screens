@@ -494,13 +494,19 @@ export default function App() {
             stockData.symbol,
             selectedFundamentalProvider,
             fundamentalProviders,
-            async (stockResponse: StockDataResponse) => {
+            async (stockResponse: StockDataResponse, actualProvider: string) => {
+              // Update selected provider if fallback occurred
+              if (actualProvider !== selectedFundamentalProvider) {
+                setSelectedFundamentalProvider(actualProvider);
+              }
+              
               const hasWACC = stockResponse.data.wacc !== null;
               if (hasWACC) {
-                await runValuationWithData(stockResponse, undefined, selectedFundamentalProvider);
-                await runScenariosWithData(stockResponse, undefined, selectedFundamentalProvider);
+                // Use actualProvider which is correct even after fallback
+                await runValuationWithData(stockResponse, undefined, actualProvider);
+                await runScenariosWithData(stockResponse, undefined, actualProvider);
               }
-              fetchComparables(stockData.symbol, selectedFundamentalProvider);
+              fetchComparables(stockData.symbol, actualProvider);
             },
           );
         } catch (err) {
