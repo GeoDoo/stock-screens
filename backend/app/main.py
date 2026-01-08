@@ -7,9 +7,14 @@ This is a thin wiring layer. Business logic lives in:
 - routers/audit.py - Assumption audit trail endpoints
 """
 import os
+from dotenv import load_dotenv
+
+# Load .env BEFORE any imports that read environment variables
+# (routers read API keys at module level)
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 
 from app.routers import stock, memos, audit
 from app.schemas.stock import CapitalEfficiencyRequest
@@ -17,8 +22,6 @@ from app.services.capital_efficiency import analyze_value_creation
 from app.services.rate_limiter_sqlite import rate_limiter
 from app.services.fmp_provider import FMPProvider
 from app.services.massive_provider import MassiveProvider
-
-load_dotenv()
 
 app = FastAPI(title="Stock Screens API")
 

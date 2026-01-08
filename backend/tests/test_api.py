@@ -129,7 +129,7 @@ class TestStockEndpoint:
             assert "has_warnings" in result["validation"]
 
     def test_get_stock_without_api_key(self):
-        with patch("app.main.FMP_API_KEY", ""):
+        with patch("app.routers.stock.FMP_API_KEY", ""):
             response = client.get("/api/stock/AAPL?provider=fmp")
             assert response.status_code == 400
             assert "API key" in response.json()["detail"]
