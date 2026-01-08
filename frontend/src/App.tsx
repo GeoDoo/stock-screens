@@ -1857,7 +1857,11 @@ export default function App() {
                   terminalGrowth: result.inputs.terminal_growth_rate,
                   projectionYears: result.inputs.projection_years,
                 }}
-                currentPrice={stockData.profile?.price || result.current_price || 0}
+                currentPrice={
+                  stockData.data.market_cap && stockData.data.shares_outstanding
+                    ? stockData.data.market_cap / stockData.data.shares_outstanding
+                    : scenarioResult?.current_price || 0
+                }
               />
             </section>
             )}
