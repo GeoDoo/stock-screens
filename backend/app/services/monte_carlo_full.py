@@ -478,8 +478,7 @@ def run_full_monte_carlo(
                     prev_wc = (historical_working_capital[-1] 
                                if historical_working_capital else current_revenue * wc_ratio)
                 else:
-                    prev_wc = growth_schedule[year_idx - 1] if year_idx > 0 else wc
-                    prev_wc = fcfs[year_idx - 1]["wc"] if year_idx > 0 else prev_wc
+                    prev_wc = fcfs[year_idx - 1]["wc"]
                 
                 delta_wc = wc - prev_wc if year_idx > 0 else wc - (historical_working_capital[-1] if historical_working_capital else wc)
                 
