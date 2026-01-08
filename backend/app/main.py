@@ -1775,7 +1775,7 @@ async def run_monte_carlo(
     """
     # Check rate limit and auto-fallback if needed
     actual_provider = provider
-    if rate_limiter.is_rate_limited(provider):
+    if rate_limiter.is_api_limited(provider):
         actual_provider = "yahoo"  # Fallback to Yahoo
     
     # Get stock data to find base revenue
