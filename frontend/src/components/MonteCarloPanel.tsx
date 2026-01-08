@@ -113,6 +113,18 @@ export function MonteCarloPanel({
     return 'text-red-600';
   };
   
+  const getBackgroundColor = (upside: number): string => {
+    if (upside > 20) return 'bg-emerald-100';
+    if (upside > 0) return 'bg-emerald-50';
+    if (upside > -20) return 'bg-amber-50';
+    return 'bg-red-50';
+  };
+  
+  const formatUpside = (upside: number): string => {
+    const sign = upside > 0 ? '+' : '';
+    return `${sign}${upside.toFixed(0)}%`;
+  };
+  
   return (
     <div className="border border-gray-200 rounded-lg p-4">
       <div className="flex items-center justify-between mb-4">
@@ -334,35 +346,35 @@ export function MonteCarloPanel({
               
               {/* Probability Table */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                <div className="p-2 bg-red-50 rounded">
+                <div className={`p-2 rounded ${getBackgroundColor(getUpside(result.per_share.percentiles.p10))}`}>
                   <div className="text-xs text-gray-500">Bear Case (10th<GlossaryRef id="percentile" />)</div>
                   <div className="font-medium">{formatCurrency(result.per_share.percentiles.p10)}</div>
                   <div className={getUpsideColor(getUpside(result.per_share.percentiles.p10))}>
-                    {getUpside(result.per_share.percentiles.p10).toFixed(0)}%
+                    {formatUpside(getUpside(result.per_share.percentiles.p10))}
                   </div>
                 </div>
                 
-                <div className="p-2 bg-amber-50 rounded">
+                <div className={`p-2 rounded ${getBackgroundColor(getUpside(result.per_share.percentiles.p25))}`}>
                   <div className="text-xs text-gray-500">Conservative (25th)</div>
                   <div className="font-medium">{formatCurrency(result.per_share.percentiles.p25)}</div>
                   <div className={getUpsideColor(getUpside(result.per_share.percentiles.p25))}>
-                    {getUpside(result.per_share.percentiles.p25).toFixed(0)}%
+                    {formatUpside(getUpside(result.per_share.percentiles.p25))}
                   </div>
                 </div>
                 
-                <div className="p-2 bg-emerald-50 rounded">
+                <div className={`p-2 rounded ${getBackgroundColor(getUpside(result.per_share.percentiles.p75))}`}>
                   <div className="text-xs text-gray-500">Base Case (75th)</div>
                   <div className="font-medium">{formatCurrency(result.per_share.percentiles.p75)}</div>
                   <div className={getUpsideColor(getUpside(result.per_share.percentiles.p75))}>
-                    +{getUpside(result.per_share.percentiles.p75).toFixed(0)}%
+                    {formatUpside(getUpside(result.per_share.percentiles.p75))}
                   </div>
                 </div>
                 
-                <div className="p-2 bg-emerald-100 rounded">
+                <div className={`p-2 rounded ${getBackgroundColor(getUpside(result.per_share.percentiles.p90))}`}>
                   <div className="text-xs text-gray-500">Bull Case (90th)</div>
                   <div className="font-medium">{formatCurrency(result.per_share.percentiles.p90)}</div>
                   <div className={getUpsideColor(getUpside(result.per_share.percentiles.p90))}>
-                    +{getUpside(result.per_share.percentiles.p90).toFixed(0)}%
+                    {formatUpside(getUpside(result.per_share.percentiles.p90))}
                   </div>
                 </div>
               </div>
