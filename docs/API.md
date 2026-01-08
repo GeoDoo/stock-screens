@@ -975,19 +975,38 @@ POST /api/stock/{symbol}/monte-carlo-full
   "projection_years": 0,
   "iterations": 0,
   "growth_margin_correlation": 0.0,
-  "growth_capex_correlation": 0.0
+  "growth_capex_correlation": 0.0,
+  "wacc_components": {
+    "risk_free_rate": 0.0,
+    "beta": 0.0,
+    "market_risk_premium": 0.0,
+    "cost_of_debt": 0.0,
+    "market_cap": 0.0,
+    "beta_std": 0.0,
+    "market_risk_premium_std": 0.0
+  },
+  "growth_stages": [
+    {
+      "name": "string",
+      "years": 0,
+      "growth_rate": 0.0,
+      "end_growth_rate": 0.0,
+      "growth_std": 0.0
+    }
+  ],
+  "use_mid_year_discounting": true
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `base_growth` | number | Yes |  |
+| `base_growth` | number | null | No |  |
 | `base_margin` | number | Yes |  |
 | `base_da_ratio` | number | Yes |  |
 | `base_capex_ratio` | number | Yes |  |
 | `base_wc_ratio` | number | Yes |  |
 | `base_tax_rate` | number | No |  |
-| `base_discount_rate` | number | Yes |  |
+| `base_discount_rate` | number | null | No |  |
 | `base_terminal_growth` | number | No |  |
 | `growth_std` | number | No |  |
 | `margin_std` | number | No |  |
@@ -1000,6 +1019,9 @@ POST /api/stock/{symbol}/monte-carlo-full
 | `iterations` | integer | No |  |
 | `growth_margin_correlation` | number | No |  |
 | `growth_capex_correlation` | number | No |  |
+| `wacc_components` | WACCComponentsInput | null | No |  |
+| `growth_stages` | array | null | No |  |
+| `use_mid_year_discounting` | boolean | No |  |
 
 
 ---

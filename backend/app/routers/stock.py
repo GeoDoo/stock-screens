@@ -1208,6 +1208,35 @@ async def run_full_monte_carlo_endpoint(
         if market_cap and shares:
             current_price = market_cap / shares
     
+    # Convert wacc_components Pydantic model to dict if provided
+    wacc_components_dict = None
+    if request.wacc_components:
+        wacc_components_dict = {
+            "risk_free_rate": request.wacc_components.risk_free_rate,
+            "beta": request.wacc_components.beta,
+            "market_risk_premium": request.wacc_components.market_risk_premium,
+            "cost_of_debt": request.wacc_components.cost_of_debt,
+            "market_cap": request.wacc_components.market_cap,
+        }
+        if request.wacc_components.beta_std:
+            wacc_components_dict["beta_std"] = request.wacc_components.beta_std
+        if request.wacc_components.market_risk_premium_std:
+            wacc_components_dict["market_risk_premium_std"] = request.wacc_components.market_risk_premium_std
+    
+    # Convert growth_stages Pydantic models to dicts if provided
+    growth_stages_dicts = None
+    if request.growth_stages:
+        growth_stages_dicts = [
+            {
+                "name": stage.name,
+                "years": stage.years,
+                "growth_rate": stage.growth_rate,
+                "end_growth_rate": stage.end_growth_rate,
+                "growth_std": stage.growth_std,
+            }
+            for stage in request.growth_stages
+        ]
+    
     result = run_full_monte_carlo(
         historical_revenue=revenue_history,
         historical_ebit=ebit_history,
@@ -1237,6 +1266,9 @@ async def run_full_monte_carlo_endpoint(
         iterations=request.iterations,
         growth_margin_correlation=request.growth_margin_correlation,
         growth_capex_correlation=request.growth_capex_correlation,
+        wacc_components=wacc_components_dict,
+        growth_stages=growth_stages_dicts,
+        use_mid_year_discounting=request.use_mid_year_discounting,
     )
     
     return {
