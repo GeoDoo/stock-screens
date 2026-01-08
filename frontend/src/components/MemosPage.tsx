@@ -5,10 +5,10 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
 interface MemosPageProps {
   onSelectMemo: (memo: InvestmentMemo) => void;
-  onBack: () => void;
+  onClose: () => void;
 }
 
-export function MemosPage({ onSelectMemo, onBack }: MemosPageProps) {
+export function MemosPage({ onSelectMemo, onClose }: MemosPageProps) {
   const [memos, setMemos] = useState<InvestmentMemo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export function MemosPage({ onSelectMemo, onBack }: MemosPageProps) {
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <h1 className="text-lg font-medium text-gray-900">Investment Memos</h1>
           <button
-            onClick={onBack}
+            onClick={onClose}
             className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
           >
             Back
@@ -129,8 +129,8 @@ export function MemosPage({ onSelectMemo, onBack }: MemosPageProps) {
                     <>
                       <div className={`font-mono text-sm ${
                         memo.current_performance.return_percent >= 0 
-                          ? 'text-gray-900' 
-                          : 'text-gray-500'
+                          ? 'text-emerald-600' 
+                          : 'text-red-600'
                       }`}>
                         {memo.current_performance.return_percent >= 0 ? '+' : ''}
                         {memo.current_performance.return_percent.toFixed(1)}%

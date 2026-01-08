@@ -1,15 +1,20 @@
 import { useState } from 'react';
-import type { InvestmentMemo, MemoPostMortem, PostMortemAction } from '../types';
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+import type { InvestmentMemo, PostMortemAction, MemoStatus } from '../types';
 
 interface MemoDetailViewProps {
   memo: InvestmentMemo;
-  onBack: () => void;
-  onUpdate: (updated: InvestmentMemo) => void;
+  onClose: () => void;
+  onAddPostMortem: (note: string, action: PostMortemAction, price?: number, iv?: number) => Promise<void>;
+  onCloseMemo: (status: MemoStatus, reason: string) => Promise<void>;
+  onRefresh: () => void;
 }
 
-export function MemoDetailView({ memo, onBack, onUpdate }: MemoDetailViewProps) {
+export function MemoDetailView({ 
+  memo, 
+  onClose, 
+  onAddPostMortem, 
+  onCloseMemo,
+}: MemoDetailViewProps) {
   const [showPostMortem, setShowPostMortem] = useState(false);
   const [postMortemContent, setPostMortemContent] = useState('');
   const [postMortemAction, setPostMortemAction] = useState<PostMortemAction>('hold');
@@ -33,23 +38,7 @@ export function MemoDetailView({ memo, onBack, onUpdate }: MemoDetailViewProps) 
 
     setSaving(true);
     try {
-      const response = await fetch(`${API_BASE}/api/memos/${memo.id}/post-mortems`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: postMortemContent.trim(),
-          action_taken: postMortemAction,
-        }),
-      });
-
-      if (!response.ok) throw new Error('Failed to add post-mortem');
-
-      const postMortem: MemoPostMortem = await response.json();
-      const updated = {
-        ...memo,
-        post_mortems: [...(memo.post_mortems || []), postMortem],
-      };
-      onUpdate(updated);
+      await onAddPostMortem(postMortemContent.trim(), postMortemAction);
       setPostMortemContent('');
       setShowPostMortem(false);
     } catch (err) {
@@ -64,29 +53,20 @@ export function MemoDetailView({ memo, onBack, onUpdate }: MemoDetailViewProps) 
     if (!reason) return;
 
     try {
-      const response = await fetch(`${API_BASE}/api/memos/${memo.id}/close`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
-      });
-
-      if (!response.ok) throw new Error('Failed to close memo');
-
-      const updated = await response.json();
-      onUpdate(updated);
+      await onCloseMemo('closed', reason);
     } catch (err) {
       console.error('Failed to close memo:', err);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="fixed inset-0 bg-white z-50 overflow-auto">
       {/* Header */}
-      <header className="border-b border-gray-200 bg-white">
+      <header className="border-b border-gray-200 bg-white sticky top-0">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
-              onClick={onBack}
+              onClick={onClose}
               className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
             >
               Back
@@ -144,7 +124,7 @@ export function MemoDetailView({ memo, onBack, onUpdate }: MemoDetailViewProps) 
               <div>
                 <div className="text-xs text-gray-400">Return</div>
                 <div className={`font-mono mt-1 ${
-                  memo.current_performance.return_percent >= 0 ? 'text-gray-900' : 'text-gray-500'
+                  memo.current_performance.return_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
                 }`}>
                   {memo.current_performance.return_percent >= 0 ? '+' : ''}
                   {memo.current_performance.return_percent.toFixed(1)}%
@@ -196,7 +176,9 @@ export function MemoDetailView({ memo, onBack, onUpdate }: MemoDetailViewProps) 
                 <div key={scenario.name} className="border border-gray-100 rounded p-4 text-center">
                   <div className="text-xs text-gray-400 uppercase">{scenario.name}</div>
                   <div className="font-mono text-lg mt-2">${scenario.intrinsic_value.toFixed(0)}</div>
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className={`text-xs mt-1 ${
+                    scenario.upside_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
+                  }`}>
                     {scenario.upside_percent >= 0 ? '+' : ''}{scenario.upside_percent.toFixed(0)}% upside
                   </div>
                   <div className="text-xs text-gray-400 mt-2">
