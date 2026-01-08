@@ -51,10 +51,15 @@ load_dotenv()
 
 app = FastAPI(title="Stock Screens API")
 
+# CORS configuration
+# For production, set CORS_ORIGINS env var to comma-separated list of allowed origins
+# e.g., CORS_ORIGINS="https://yourapp.com,https://www.yourapp.com"
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=CORS_ORIGINS != ["*"],  # Only allow credentials with explicit origins
     allow_methods=["*"],
     allow_headers=["*"],
 )
