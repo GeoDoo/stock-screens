@@ -46,14 +46,14 @@ export function MemosPage({ onSelectMemo, onClose }: MemosPageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
         <p className="text-gray-400">Loading memos...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="fixed inset-0 bg-white z-50 overflow-auto">
       {/* Header */}
       <header className="border-b border-gray-200 bg-white">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
