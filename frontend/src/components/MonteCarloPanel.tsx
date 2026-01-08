@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { MonteCarloResult, MonteCarloRequest } from '../types';
 
+const API_BASE = 'http://localhost:8000';
+
 interface MonteCarloInputs {
   growth: number;
   growthStd: number;
@@ -75,7 +77,7 @@ export function MonteCarloPanel({
       };
       
       const response = await fetch(
-        `/api/stock/${symbol}/monte-carlo?provider=${provider}`,
+        `${API_BASE}/api/stock/${symbol}/monte-carlo?provider=${provider}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
