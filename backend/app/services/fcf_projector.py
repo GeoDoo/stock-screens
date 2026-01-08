@@ -126,6 +126,7 @@ class FCFProjector:
         da_ratio: float,
         capex_ratio: float,
         wc_ratio: float,
+        wc_mode: Optional[str] = None,
     ) -> dict:
         """
         Project FCF for a single year.
@@ -136,6 +137,9 @@ class FCFProjector:
         
         Returns dict with all components for transparency.
         """
+        # Use passed wc_mode or fall back to instance default
+        _wc_mode = wc_mode if wc_mode is not None else self.wc_mode
+        
         # Project revenue
         revenue = prior_revenue * (1 + revenue_growth)
         
@@ -152,7 +156,7 @@ class FCFProjector:
         capex = revenue * capex_ratio
         
         # Working capital change - depends on mode
-        if self.wc_mode == "incremental":
+        if _wc_mode == "incremental":
             # Incremental: ΔWC = ΔRevenue × WC_intensity
             delta_revenue = revenue - prior_revenue
             delta_wc = delta_revenue * wc_ratio
@@ -184,11 +188,15 @@ class FCFProjector:
         da_ratio: Optional[float] = None,
         capex_ratio: Optional[float] = None,
         wc_ratio: Optional[float] = None,
+        wc_mode: str = "level",
     ) -> List[dict]:
         """
         Project FCF for multiple years.
         
         All ratios default to historical averages but can be overridden.
+        
+        Args:
+            wc_mode: "level" (WC = Revenue × Ratio) or "incremental" (ΔWC = ΔRevenue × Intensity)
         """
         # Use historical averages as defaults
         _revenue_growth = revenue_growth if revenue_growth is not None else self.revenue_cagr()
@@ -210,6 +218,7 @@ class FCFProjector:
                 da_ratio=_da_ratio,
                 capex_ratio=_capex_ratio,
                 wc_ratio=_wc_ratio,
+                wc_mode=wc_mode,
             )
             projections.append(year_projection)
             

@@ -41,6 +41,9 @@ class ValuationService:
         da_ratio: Optional[float] = None,
         capex_ratio: Optional[float] = None,
         wc_ratio: Optional[float] = None,
+        # Advanced DCF options
+        use_mid_year_discounting: bool = False,
+        wc_mode: str = "level",
     ) -> dict:
         """
         Perform full DCF valuation for a stock.
@@ -130,22 +133,27 @@ class ValuationService:
             da_ratio=da_ratio,
             capex_ratio=capex_ratio,
             wc_ratio=wc_ratio,
+            wc_mode=wc_mode,
         )
 
         # 5. Run DCF
         projected_fcf = [p["fcf"] for p in projections]
         
+        # Mid-year discounting: assumes cash flows occur mid-year instead of year-end
+        # This typically increases value by ~2-5% as cash flows are "closer"
+        discount_offset = 0.5 if use_mid_year_discounting else 0.0
+        
         # Use the projected FCFs directly instead of growth-based projection
         # Calculate PV of projected FCFs
         pv_fcf = sum(
-            fcf / ((1 + discount_rate) ** year)
+            fcf / ((1 + discount_rate) ** (year - discount_offset))
             for year, fcf in enumerate(projected_fcf, start=1)
         )
 
         # Terminal value
         final_fcf = projected_fcf[-1]
         terminal_value = final_fcf * (1 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
-        pv_terminal = terminal_value / ((1 + discount_rate) ** projection_years)
+        pv_terminal = terminal_value / ((1 + discount_rate) ** (projection_years - discount_offset))
 
         enterprise_value = pv_fcf + pv_terminal
 

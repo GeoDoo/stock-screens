@@ -305,3 +305,108 @@ class TestScenarioEndpoint:
             assert response.status_code == 200
             data = response.json()
             assert data["wacc"] == 0.12  # Uses our custom rate
+
+
+class TestAdvancedDCFOptions:
+    """Test mid-year discounting and WC mode API parameters."""
+    
+    def test_valuation_accepts_mid_year_discounting(self):
+        """Valuation endpoint should accept use_mid_year_discounting parameter."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={
+                    "revenue_growth": 0.05,
+                    "operating_margin": 0.25,
+                    "terminal_growth_rate": 0.025,
+                    "market_risk_premium": 0.06,
+                    "projection_years": 10,
+                    "use_mid_year_discounting": True,
+                }
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert "intrinsic_value_per_share" in data
+    
+    def test_valuation_accepts_wc_mode_level(self):
+        """Valuation endpoint should accept wc_mode='level' parameter."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={
+                    "revenue_growth": 0.05,
+                    "operating_margin": 0.25,
+                    "terminal_growth_rate": 0.025,
+                    "market_risk_premium": 0.06,
+                    "projection_years": 10,
+                    "wc_mode": "level",
+                }
+            )
+            
+            assert response.status_code == 200
+    
+    def test_valuation_accepts_wc_mode_incremental(self):
+        """Valuation endpoint should accept wc_mode='incremental' parameter."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={
+                    "revenue_growth": 0.05,
+                    "operating_margin": 0.25,
+                    "terminal_growth_rate": 0.025,
+                    "market_risk_premium": 0.06,
+                    "projection_years": 10,
+                    "wc_mode": "incremental",
+                }
+            )
+            
+            assert response.status_code == 200
+    
+    def test_mid_year_discounting_changes_result(self):
+        """Mid-year discounting should produce higher intrinsic value."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        base_request = {
+            "revenue_growth": 0.05,
+            "operating_margin": 0.25,
+            "terminal_growth_rate": 0.025,
+            "market_risk_premium": 0.06,
+            "projection_years": 10,
+        }
+
+        with patch("app.main.get_client_for_provider", return_value=mock_client):
+            # Without mid-year discounting
+            response_without = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={**base_request, "use_mid_year_discounting": False}
+            )
+            value_without = response_without.json()["intrinsic_value_per_share"]
+            
+            # With mid-year discounting
+            response_with = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={**base_request, "use_mid_year_discounting": True}
+            )
+            value_with = response_with.json()["intrinsic_value_per_share"]
+            
+            # Mid-year discounting should give higher value (cash flows arrive sooner)
+            assert value_with > value_without
