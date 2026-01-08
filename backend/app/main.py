@@ -107,6 +107,10 @@ class ValuationRequest(BaseModel):
     market_risk_premium: float
     projection_years: int
     discount_rate_override: Optional[float] = None  # If set, use this instead of calculated WACC
+    # FCF projection ratios - passed from frontend based on selected period (TTM or Annual)
+    da_ratio: Optional[float] = None  # D&A / Revenue
+    capex_ratio: Optional[float] = None  # CapEx / Revenue
+    wc_ratio: Optional[float] = None  # Working Capital / Revenue
 
 
 class ScenarioInput(BaseModel):
@@ -367,6 +371,10 @@ async def run_valuation(symbol: str, provider: str, request: ValuationRequest):
             operating_margin=request.operating_margin,
             market_risk_premium=request.market_risk_premium,
             discount_rate_override=request.discount_rate_override,
+            # Pass FCF ratios from frontend (ensures TTM/Annual separation)
+            da_ratio=request.da_ratio,
+            capex_ratio=request.capex_ratio,
+            wc_ratio=request.wc_ratio,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Valuation error: {str(e)}")

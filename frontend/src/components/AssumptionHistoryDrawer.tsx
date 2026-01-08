@@ -6,8 +6,7 @@
  * - Shows what changed (field, old → new)
  * - Includes user notes explaining why
  */
-import React from 'react';
-import { AuditEntry } from '../hooks/useAssumptionTracker';
+import type { AuditEntry } from '../hooks/useAssumptionTracker';
 
 interface AssumptionHistoryDrawerProps {
   isOpen: boolean;

@@ -6,8 +6,8 @@
  * - Most recent change summary
  * - Click to open full history
  */
-import React, { useState } from 'react';
-import { AssumptionChange } from '../hooks/useAssumptionTracker';
+import { useState } from 'react';
+import type { AssumptionChange } from '../hooks/useAssumptionTracker';
 
 interface AssumptionHistoryIndicatorProps {
   field: string;
