@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { MonteCarloResult, MonteCarloRequest } from '../types';
+import { GlossaryRef } from './GlossaryRef';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -116,7 +117,7 @@ export function MonteCarloPanel({
     <div className="border border-gray-200 rounded-lg p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">
-          Monte Carlo Simulation
+          Monte Carlo Simulation<GlossaryRef id="monte-carlo" />
         </h3>
         <button
           onClick={() => setExpanded(!expanded)}
@@ -334,7 +335,7 @@ export function MonteCarloPanel({
               {/* Probability Table */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                 <div className="p-2 bg-red-50 rounded">
-                  <div className="text-xs text-gray-500">Bear Case (10th)</div>
+                  <div className="text-xs text-gray-500">Bear Case (10th<GlossaryRef id="percentile" />)</div>
                   <div className="font-medium">{formatCurrency(result.per_share.percentiles.p10)}</div>
                   <div className={getUpsideColor(getUpside(result.per_share.percentiles.p10))}>
                     {getUpside(result.per_share.percentiles.p10).toFixed(0)}%
