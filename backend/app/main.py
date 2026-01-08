@@ -1189,17 +1189,30 @@ async def batch_analyze(symbol: str, provider: str):
     }
     
     # === Build dividends response ===
+    # Fetch full dividend history from yfinance (not limited to financial statements)
+    import yfinance as yf
     analyzer = DividendAnalyzer()
     payments = []
-    for fin in financials:
-        if fin.dividends_paid is not None and fin.dividends_paid != 0 and shares and shares > 0:
-            # IMPORTANT: dividends_paid is TOTAL company dividends, not per-share
-            # Convert to per-share by dividing by shares outstanding
-            per_share_dividend = abs(fin.dividends_paid) / shares
-            payments.append(DividendPayment(
-                date=fin.date,
-                amount=per_share_dividend,
-            ))
+    
+    try:
+        ticker_yf = yf.Ticker(symbol.upper())
+        dividends_series = ticker_yf.dividends
+        
+        if dividends_series is not None and not dividends_series.empty:
+            for date, amount in dividends_series.items():
+                payments.append(DividendPayment(
+                    date=date.strftime("%Y-%m-%d"),
+                    amount=float(amount),
+                ))
+    except Exception as e:
+        # Fallback to financial statements if yfinance fails
+        for fin in financials:
+            if fin.dividends_paid is not None and fin.dividends_paid != 0 and shares and shares > 0:
+                per_share_dividend = abs(fin.dividends_paid) / shares
+                payments.append(DividendPayment(
+                    date=fin.date,
+                    amount=per_share_dividend,
+                ))
     
     net_income = financials[0].net_income if financials else None
     dividend_result = analyzer.analyze(payments, current_price, shares, net_income)
