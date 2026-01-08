@@ -673,6 +673,159 @@ class TestFullMonteCarloMidYearDiscounting:
         assert high_discount_diff > low_discount_diff
 
 
+class TestWACCComponentsWithoutSampling:
+    """Tests for Bug 1: WACC components without sampling std devs."""
+    
+    def test_wacc_components_without_std_uses_fixed_wacc(self):
+        """
+        When WACC components are provided without beta_std or mrp_std,
+        the simulation should use the fixed computed WACC, NOT sample it.
+        
+        Bug: Without std devs, the code was adding a 'discount' input for
+        sampling which introduced variance when there should be none.
+        """
+        random.seed(42)
+        
+        # Provide WACC components WITHOUT any std devs (fixed WACC scenario)
+        wacc_components = {
+            "risk_free_rate": 0.04,
+            "beta": 1.0,
+            "market_risk_premium": 0.06,
+            "cost_of_debt": 0.05,
+            "market_cap": 100e9,
+            # No beta_std or market_risk_premium_std
+        }
+        
+        # Run with VERY low discount_std to verify it's not being used
+        result = run_full_monte_carlo(
+            historical_revenue=[90e9, 95e9, 100e9],
+            historical_ebit=[18e9, 19e9, 20e9],
+            historical_da=[2e9, 2.1e9, 2.2e9],
+            historical_capex=[3e9, 3.2e9, 3.5e9],
+            historical_working_capital=[10e9, 11e9, 12e9],
+            shares_outstanding=1e9,
+            total_debt=20e9,
+            cash=10e9,
+            current_price=100,
+            base_margin=0.20,
+            base_da_ratio=0.02,
+            base_capex_ratio=0.035,
+            base_wc_ratio=0.12,
+            base_discount_rate=0.10,  # This should be IGNORED when wacc_components provided
+            base_terminal_growth=0.025,
+            growth_std=0.0,  # No sampling variance
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.05,  # This should be IGNORED when wacc_components provided
+            terminal_growth_std=0.0,
+            projection_years=10,
+            iterations=100,
+            wacc_components=wacc_components,
+            growth_stages=[{"name": "Stable", "years": 10, "growth_rate": 0.05}],
+        )
+        
+        # With zero variance in all inputs except discount_std (which should be ignored),
+        # all iterations should produce the SAME per-share value
+        # If discount_std is incorrectly applied, values will vary significantly
+        assert result.std_dev < 1.0, (
+            f"Std dev ({result.std_dev:.2f}) too high - discount sampling is being incorrectly applied "
+            f"when WACC components are provided without sampling std devs"
+        )
+
+
+class TestWorkingCapitalWithEmptyHistory:
+    """Tests for Bug 2: Empty historical_working_capital handling."""
+    
+    def test_empty_wc_history_uses_revenue_based_baseline(self):
+        """
+        When historical_working_capital is empty, year 0's delta_wc should
+        be calculated using historical_revenue[-1] * wc_ratio as the baseline,
+        NOT current_revenue * wc_ratio (which would make delta_wc = 0).
+        
+        Bug: When WC history is empty, prev_wc was set to current_revenue * wc_ratio,
+        making delta_wc = wc - wc = 0, which overstates FCF.
+        """
+        random.seed(42)
+        
+        # Use high WC ratio and growth to make the bug more visible
+        # With 20% WC ratio and 10% growth:
+        # - Historical baseline WC: 100e9 * 0.20 = 20e9
+        # - Y1 projected WC: 110e9 * 0.20 = 22e9
+        # - Correct delta_wc Y1: 22e9 - 20e9 = 2e9 (reduces FCF)
+        # - Bug delta_wc Y1: 22e9 - 22e9 = 0 (no WC drain, inflates FCF)
+        
+        # Run with empty WC history
+        result_empty_wc = run_full_monte_carlo(
+            historical_revenue=[90e9, 95e9, 100e9],
+            historical_ebit=[18e9, 19e9, 20e9],
+            historical_da=[2e9, 2.1e9, 2.2e9],
+            historical_capex=[3e9, 3.2e9, 3.5e9],
+            historical_working_capital=[],  # Empty WC history
+            shares_outstanding=1e9,
+            total_debt=20e9,
+            cash=10e9,
+            current_price=100,
+            base_margin=0.20,
+            base_da_ratio=0.02,
+            base_capex_ratio=0.035,
+            base_wc_ratio=0.20,  # High WC ratio to amplify bug
+            base_discount_rate=0.10,
+            base_terminal_growth=0.025,
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=10,
+            iterations=100,
+            growth_stages=[{"name": "High Growth", "years": 10, "growth_rate": 0.10}],  # High growth
+        )
+        
+        # Run with explicit WC history matching historical_revenue * wc_ratio
+        result_explicit_wc = run_full_monte_carlo(
+            historical_revenue=[90e9, 95e9, 100e9],
+            historical_ebit=[18e9, 19e9, 20e9],
+            historical_da=[2e9, 2.1e9, 2.2e9],
+            historical_capex=[3e9, 3.2e9, 3.5e9],
+            historical_working_capital=[18e9, 19e9, 20e9],  # 20% of revenue
+            shares_outstanding=1e9,
+            total_debt=20e9,
+            cash=10e9,
+            current_price=100,
+            base_margin=0.20,
+            base_da_ratio=0.02,
+            base_capex_ratio=0.035,
+            base_wc_ratio=0.20,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.025,
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=10,
+            iterations=100,
+            growth_stages=[{"name": "High Growth", "years": 10, "growth_rate": 0.10}],
+        )
+        
+        # Values should be essentially identical if empty WC is handled correctly
+        # (both use 20% of historical revenue as baseline)
+        pct_diff = abs(result_empty_wc.mean - result_explicit_wc.mean) / result_explicit_wc.mean
+        
+        assert pct_diff < 0.01, (  # Tighter tolerance: 1%
+            f"Empty WC history gives {result_empty_wc.mean:.2f}, "
+            f"explicit WC gives {result_explicit_wc.mean:.2f} "
+            f"(diff: {pct_diff*100:.1f}%). "
+            f"Empty WC should match explicit WC baseline."
+        )
+
+
 # Helper function for correlation calculation
 def _pearson_correlation(x: list, y: list) -> float:
     """Calculate Pearson correlation coefficient."""

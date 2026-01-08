@@ -356,8 +356,10 @@ def run_full_monte_carlo(
     if not use_multi_stage:
         core_inputs.insert(0, BoundedInput("growth", effective_base_growth, growth_std, -0.10, 0.50))
     
-    # Add discount input only if NOT sampling WACC components
-    if not wacc_sampling_enabled or not wacc_inputs:
+    # Add discount input only if NOT using WACC components at all.
+    # When WACC components are provided (even without sampling std devs),
+    # use the computed WACC directly, don't sample discount rate.
+    if not wacc_sampling_enabled:
         core_inputs.append(BoundedInput("discount", effective_discount_rate, discount_std, 0.04, 0.25))
     
     # Build correlation matrix for core inputs
@@ -463,7 +465,14 @@ def run_full_monte_carlo(
             
             # Project FCF year by year with growth schedule
             fcfs = []
-            current_revenue = historical_revenue[-1] if historical_revenue else 100e9
+            base_revenue = historical_revenue[-1] if historical_revenue else 100e9
+            current_revenue = base_revenue
+            
+            # Calculate baseline WC for year 0 delta calculation
+            # Use actual historical WC if available, otherwise estimate from historical revenue
+            baseline_wc = (historical_working_capital[-1] 
+                          if historical_working_capital 
+                          else base_revenue * wc_ratio)
             
             for year_idx, year_growth in enumerate(growth_schedule):
                 current_revenue = current_revenue * (1 + year_growth)
@@ -475,12 +484,11 @@ def run_full_monte_carlo(
                 
                 # Working capital change (level mode)
                 if year_idx == 0:
-                    prev_wc = (historical_working_capital[-1] 
-                               if historical_working_capital else current_revenue * wc_ratio)
+                    prev_wc = baseline_wc
                 else:
                     prev_wc = fcfs[year_idx - 1]["wc"]
                 
-                delta_wc = wc - prev_wc if year_idx > 0 else wc - (historical_working_capital[-1] if historical_working_capital else wc)
+                delta_wc = wc - prev_wc
                 
                 fcf = nopat + da - capex - delta_wc
                 fcfs.append({"fcf": fcf, "wc": wc})
