@@ -133,6 +133,9 @@ export interface ScenarioRequest {
   projection_years: number;
   market_risk_premium: number;
   discount_rate_override?: number | null;
+  // Hints for default scenario generation - clean TTM/Annual separation
+  revenue_growth_hint?: number | null;
+  operating_margin_hint?: number | null;
   // FCF ratios - passed from frontend for clean TTM/Annual separation
   da_ratio?: number | null;
   capex_ratio?: number | null;

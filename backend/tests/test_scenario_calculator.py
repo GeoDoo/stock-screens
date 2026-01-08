@@ -271,4 +271,25 @@ class TestScenarioCalculator:
         # Lower WC = less cash absorbed = higher value
         assert result_low.intrinsic_value > result_high.intrinsic_value
 
+    def test_default_scenarios_use_provided_hints(self, calculator):
+        """Default scenarios should use provided hints, enabling TTM/Annual separation."""
+        # Provide reasonable TTM hints (vs crazy annual data)
+        ttm_hints = {
+            "revenue_growth": 0.10,     # 10% growth
+            "operating_margin": 0.15,   # 15% margin (not -1349%!)
+        }
+        
+        scenarios = calculator.get_default_scenarios(ttm_hints)
+        
+        assert len(scenarios) == 3  # Bear, Base, Bull
+        
+        # All scenarios should have REASONABLE margins (derived from hints)
+        for scenario in scenarios:
+            # Margins should be between 0 and 40% for reasonable scenarios
+            assert -0.5 < scenario.operating_margin < 0.5, \
+                f"{scenario.name} has unreasonable margin: {scenario.operating_margin}"
+            # Growth should be reasonable
+            assert -0.2 < scenario.revenue_growth < 0.5, \
+                f"{scenario.name} has unreasonable growth: {scenario.revenue_growth}"
+
 
