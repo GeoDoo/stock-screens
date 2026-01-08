@@ -136,7 +136,7 @@ describe('useStockAnalysis', () => {
     expect(result.current.stockData?.symbol).toBe('MSFT');
   });
 
-  it('calls onSuccess callback with stock data', async () => {
+  it('calls onSuccess callback with stock data and provider', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve(mockStockResponse),
@@ -149,7 +149,30 @@ describe('useStockAnalysis', () => {
       await result.current.analyzeStock('AAPL', 'fmp', mockProviders, onSuccess);
     });
 
-    expect(onSuccess).toHaveBeenCalledWith(mockStockResponse.stock);
+    // onSuccess receives both the stock data and the actual provider used
+    expect(onSuccess).toHaveBeenCalledWith(mockStockResponse.stock, 'fmp');
+  });
+
+  it('awaits async onSuccess callback', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockStockResponse),
+    });
+
+    let callbackCompleted = false;
+    const asyncOnSuccess = vi.fn(async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      callbackCompleted = true;
+    });
+    
+    const { result } = renderHook(() => useStockAnalysis());
+
+    await act(async () => {
+      await result.current.analyzeStock('AAPL', 'fmp', mockProviders, asyncOnSuccess);
+    });
+
+    // The hook should wait for the async callback to complete
+    expect(callbackCompleted).toBe(true);
   });
 
   it('fetches comparables', async () => {
