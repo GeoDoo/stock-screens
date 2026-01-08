@@ -1,5 +1,5 @@
 import pytest
-from app.services.wacc_calculator import WACCCalculator
+from app.services.wacc_calculator import WACCCalculator, validate_wacc_inputs
 
 
 class TestWACCCalculator:
@@ -85,6 +85,65 @@ class TestWACCCalculator:
         wacc = calculator.calculate()
         # Should be closer to after-tax cost of debt due to high leverage
         assert wacc > 0 and wacc < 0.15
+
+
+class TestWACCInputValidation:
+    """Tests for input validation and guardrails."""
+    
+    def test_tax_rate_clamped_to_valid_range(self):
+        """Tax rate should be clamped to [0, 1]."""
+        # Tax rate > 1 should be clamped
+        calculator = WACCCalculator(
+            risk_free_rate=0.04,
+            beta=1.0,
+            market_risk_premium=0.06,
+            cost_of_debt=0.08,
+            tax_rate=1.5,  # Invalid: > 1
+            market_cap=1000,
+            total_debt=500,
+        )
+        # Should use 1.0 (max valid)
+        assert calculator.after_tax_cost_of_debt() == 0.0  # 0.08 * (1 - 1.0) = 0
+
+    def test_negative_tax_rate_clamped(self):
+        """Negative tax rate should be clamped to 0."""
+        calculator = WACCCalculator(
+            risk_free_rate=0.04,
+            beta=1.0,
+            market_risk_premium=0.06,
+            cost_of_debt=0.08,
+            tax_rate=-0.25,  # Invalid: < 0
+            market_cap=1000,
+            total_debt=500,
+        )
+        # Should use 0.0 (min valid) - no tax shield
+        assert calculator.after_tax_cost_of_debt() == 0.08  # 0.08 * (1 - 0) = 0.08
+
+    def test_negative_debt_treated_as_zero(self):
+        """Negative debt should be treated as zero (net cash position)."""
+        calculator = WACCCalculator(
+            risk_free_rate=0.04,
+            beta=1.0,
+            market_risk_premium=0.06,
+            cost_of_debt=0.08,
+            tax_rate=0.25,
+            market_cap=1000,
+            total_debt=-500,  # Negative debt
+        )
+        wacc = calculator.calculate()
+        # With no debt, WACC should equal cost of equity
+        assert abs(wacc - calculator.cost_of_equity()) < 0.0001
+
+    def test_validate_wacc_inputs_returns_warnings(self):
+        """validate_wacc_inputs should return list of warnings for bad inputs."""
+        warnings = validate_wacc_inputs(
+            tax_rate=1.5,
+            total_debt=-100,
+            market_cap=1000,
+        )
+        assert len(warnings) >= 2
+        assert any("tax" in w.lower() for w in warnings)
+        assert any("debt" in w.lower() for w in warnings)
 
 
 

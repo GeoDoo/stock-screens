@@ -4,6 +4,13 @@ from typing import Optional
 
 @dataclass
 class DCFCalculator:
+    """
+    Discounted Cash Flow calculator with optional mid-year discounting.
+    
+    Mid-year convention assumes cash flows are received at the middle of each year
+    rather than at the end. This is more realistic for most businesses and produces
+    slightly higher valuations (since cash is received sooner on average).
+    """
     current_fcf: float
     growth_rate: float
     discount_rate: float
@@ -12,6 +19,7 @@ class DCFCalculator:
     shares_outstanding: float
     total_debt: float = 0.0
     cash: float = 0.0
+    mid_year_discounting: bool = False  # Professional feature: assumes FCF received mid-year
 
     def calculate(self) -> dict:
         """
@@ -61,11 +69,18 @@ class DCFCalculator:
         result["terminal_value"] = terminal_value
 
         # Discount all cash flows to present value
+        # Mid-year convention: discount by (year - 0.5) instead of year
+        discount_offset = 0.5 if self.mid_year_discounting else 0.0
+        
         pv_fcf = sum(
-            fcf / ((1 + self.discount_rate) ** year)
+            fcf / ((1 + self.discount_rate) ** (year - discount_offset))
             for year, fcf in enumerate(projected_fcf, start=1)
         )
-        pv_terminal = terminal_value / ((1 + self.discount_rate) ** self.projection_years)
+        
+        # Terminal value is received at end of projection period
+        # Mid-year adjustment: discount terminal value at (projection_years - 0.5)
+        terminal_discount_period = self.projection_years - discount_offset
+        pv_terminal = terminal_value / ((1 + self.discount_rate) ** terminal_discount_period)
 
         enterprise_value = pv_fcf + pv_terminal
         result["enterprise_value"] = enterprise_value

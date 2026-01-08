@@ -191,4 +191,162 @@ class TestFCFProjector:
         assert abs(fcf["nopat"] - 16.5) < 0.01
 
 
+class TestWCIncrementalMode:
+    """Tests for working capital incremental intensity mode."""
+    
+    def test_level_based_wc_mode_default(self):
+        """Default mode: WC = Revenue × WC_ratio."""
+        projector = FCFProjector(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[10],
+            historical_working_capital=[15],
+            tax_rate=0.25,
+            wc_mode="level",  # Default
+        )
+        
+        fcf = projector.project_fcf_year(
+            prior_revenue=100,
+            prior_working_capital=15,
+            revenue_growth=0.10,
+            operating_margin=0.20,
+            da_ratio=0.05,
+            capex_ratio=0.10,
+            wc_ratio=0.15,
+        )
+        
+        # New WC = 110 * 0.15 = 16.5
+        # ΔWC = 16.5 - 15 = 1.5
+        assert abs(fcf["working_capital"] - 16.5) < 0.01
+        assert abs(fcf["delta_wc"] - 1.5) < 0.01
+    
+    def test_incremental_wc_mode(self):
+        """Incremental mode: ΔWC = ΔRevenue × WC_intensity."""
+        projector = FCFProjector(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[10],
+            historical_working_capital=[15],
+            tax_rate=0.25,
+            wc_mode="incremental",
+        )
+        
+        fcf = projector.project_fcf_year(
+            prior_revenue=100,
+            prior_working_capital=15,
+            revenue_growth=0.10,
+            operating_margin=0.20,
+            da_ratio=0.05,
+            capex_ratio=0.10,
+            wc_ratio=0.15,  # In incremental mode, this is WC intensity
+        )
+        
+        # Revenue change = 110 - 100 = 10
+        # ΔWC = 10 * 0.15 = 1.5
+        # New WC = 15 + 1.5 = 16.5
+        assert abs(fcf["delta_wc"] - 1.5) < 0.01
+        assert abs(fcf["working_capital"] - 16.5) < 0.01
+    
+    def test_incremental_mode_with_high_growth(self):
+        """Incremental mode handles high growth differently from level mode."""
+        # Level-based mode
+        projector_level = FCFProjector(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[10],
+            historical_working_capital=[10],  # Low WC
+            tax_rate=0.25,
+            wc_mode="level",
+        )
+        
+        # Incremental mode
+        projector_incr = FCFProjector(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[10],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            wc_mode="incremental",
+        )
+        
+        # Project with 50% growth and 20% WC ratio
+        fcf_level = projector_level.project_fcf_year(
+            prior_revenue=100,
+            prior_working_capital=10,
+            revenue_growth=0.50,
+            operating_margin=0.20,
+            da_ratio=0.05,
+            capex_ratio=0.10,
+            wc_ratio=0.20,
+        )
+        
+        fcf_incr = projector_incr.project_fcf_year(
+            prior_revenue=100,
+            prior_working_capital=10,
+            revenue_growth=0.50,
+            operating_margin=0.20,
+            da_ratio=0.05,
+            capex_ratio=0.10,
+            wc_ratio=0.20,  # WC intensity
+        )
+        
+        # Level: New WC = 150 * 0.20 = 30, ΔWC = 30 - 10 = 20
+        # Incr: ΔRevenue = 50, ΔWC = 50 * 0.20 = 10
+        assert abs(fcf_level["delta_wc"] - 20) < 0.01
+        assert abs(fcf_incr["delta_wc"] - 10) < 0.01
+        
+        # Incremental mode results in higher FCF with high growth
+        assert fcf_incr["fcf"] > fcf_level["fcf"]
+    
+    def test_incremental_mode_with_negative_growth(self):
+        """Incremental mode handles negative growth (releases WC)."""
+        projector = FCFProjector(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[10],
+            historical_working_capital=[15],
+            tax_rate=0.25,
+            wc_mode="incremental",
+        )
+        
+        fcf = projector.project_fcf_year(
+            prior_revenue=100,
+            prior_working_capital=15,
+            revenue_growth=-0.10,  # Revenue declines
+            operating_margin=0.20,
+            da_ratio=0.05,
+            capex_ratio=0.10,
+            wc_ratio=0.15,
+        )
+        
+        # Revenue change = 90 - 100 = -10
+        # ΔWC = -10 * 0.15 = -1.5 (cash release)
+        assert abs(fcf["delta_wc"] - (-1.5)) < 0.01
+        assert fcf["delta_wc"] < 0  # WC release
+    
+    def test_project_method_respects_wc_mode(self):
+        """Full projection respects wc_mode setting."""
+        projector = FCFProjector(
+            historical_revenue=[100, 110],
+            historical_ebit=[20, 22],
+            historical_da=[5, 5.5],
+            historical_capex=[10, 11],
+            historical_working_capital=[15, 16.5],
+            tax_rate=0.25,
+            wc_mode="incremental",
+        )
+        
+        projections = projector.project(years=2, revenue_growth=0.10)
+        
+        # Should have projections
+        assert len(projections) == 2
+        # WC mode is used internally
+        assert projections[0]["delta_wc"] is not None
+
+
 
