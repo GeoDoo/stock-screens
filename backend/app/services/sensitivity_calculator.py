@@ -89,6 +89,125 @@ class SensitivityCalculator:
             "base_discount_rate": base_discount_rate,
             "base_terminal_growth": base_terminal_growth,
         }
+    
+    def generate_margin_growth_matrix(
+        self,
+        base_revenue: float,
+        base_margin: float,
+        base_growth: float,
+        discount_rate: float,
+        terminal_growth: float,
+        margin_steps: List[float],  # e.g., [-0.05, -0.025, 0, 0.025, 0.05]
+        growth_steps: List[float],  # e.g., [-0.05, -0.025, 0, 0.025, 0.05]
+    ) -> dict:
+        """
+        Generate Margin vs Growth sensitivity matrix.
+        
+        Unlike the standard WACC/terminal growth matrix, this varies the
+        business assumptions (margin and growth) to show execution risk.
+        
+        For each combination, re-projects FCF and calculates intrinsic value.
+        
+        Args:
+            base_revenue: Current annual revenue
+            base_margin: Base operating margin (e.g., 0.20 for 20%)
+            base_growth: Base revenue growth rate (e.g., 0.10 for 10%)
+            discount_rate: Fixed WACC for DCF
+            terminal_growth: Fixed terminal growth rate
+            margin_steps: Adjustments to base margin
+            growth_steps: Adjustments to base growth rate
+            
+        Returns:
+            {
+                "margins": [0.15, 0.175, 0.20, 0.225, 0.25],
+                "growth_rates": [0.05, 0.075, 0.10, 0.125, 0.15],
+                "matrix": [[...], [...], ...],  # intrinsic values
+                "base_margin": 0.20,
+                "base_growth": 0.10
+            }
+        """
+        margins = [base_margin + step for step in margin_steps]
+        growth_rates = [base_growth + step for step in growth_steps]
+        
+        matrix = []
+        for margin in margins:
+            row = []
+            for growth in growth_rates:
+                value = self._calc_value_for_margin_growth(
+                    base_revenue, margin, growth,
+                    discount_rate, terminal_growth
+                )
+                row.append(value)
+            matrix.append(row)
+        
+        return {
+            "margins": margins,
+            "growth_rates": growth_rates,
+            "matrix": matrix,
+            "base_margin": base_margin,
+            "base_growth": base_growth,
+        }
+    
+    def _calc_value_for_margin_growth(
+        self,
+        base_revenue: float,
+        margin: float,
+        growth: float,
+        discount_rate: float,
+        terminal_growth: float,
+    ) -> Optional[float]:
+        """
+        Calculate intrinsic value for a specific margin/growth combination.
+        
+        Projects FCF based on revenue growth and operating margin,
+        then runs DCF to get equity value per share.
+        """
+        if discount_rate <= terminal_growth:
+            return None
+        
+        # Project revenues
+        revenues = []
+        revenue = base_revenue
+        for _ in range(self.projection_years):
+            revenue = revenue * (1 + growth)
+            revenues.append(revenue)
+        
+        # Calculate FCF from margin
+        # Simplified: FCF ≈ Revenue × Operating Margin × (1 - Tax Rate) × FCF Conversion
+        # Using typical assumptions: 25% tax, 80% FCF conversion from NOPAT
+        tax_rate = 0.25
+        fcf_conversion = 0.80  # Accounts for CapEx, WC changes
+        
+        projected_fcfs = [
+            rev * margin * (1 - tax_rate) * fcf_conversion
+            for rev in revenues
+        ]
+        
+        if not projected_fcfs or all(fcf <= 0 for fcf in projected_fcfs):
+            # Still calculate even with negative FCF
+            pass
+        
+        # PV of projected FCFs
+        pv_fcf = sum(
+            fcf / ((1 + discount_rate) ** year)
+            for year, fcf in enumerate(projected_fcfs, start=1)
+        )
+        
+        # Terminal value
+        final_fcf = projected_fcfs[-1]
+        terminal_value = final_fcf * (1 + terminal_growth) / (discount_rate - terminal_growth)
+        pv_terminal = terminal_value / ((1 + discount_rate) ** self.projection_years)
+        
+        enterprise_value = pv_fcf + pv_terminal
+        
+        # Net debt adjustment
+        net_debt = self.total_debt - self.cash
+        equity_value = enterprise_value - net_debt
+        
+        if self.shares_outstanding <= 0:
+            return None
+        
+        return equity_value / self.shares_outstanding
 
 
 
