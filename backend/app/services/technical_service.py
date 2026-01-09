@@ -97,7 +97,11 @@ class TechnicalService:
         # Calculate price change
         first_close = bars[0].close
         last_close = bars[-1].close
-        price_change_pct = ((last_close - first_close) / first_close) * 100
+        # Guard against division by zero (bad data with first_close=0)
+        if first_close != 0:
+            price_change_pct = ((last_close - first_close) / first_close) * 100
+        else:
+            price_change_pct = 0.0
         
         # Analyze signals
         trend = TechnicalIndicators.analyze_trend(sma_20_values, sma_50_values, closes)

@@ -256,3 +256,86 @@ class TestMACDAnalysis:
         assert result == "neutral"
 
 
+class TestTechnicalServiceEdgeCases:
+    """
+    Tests for TechnicalService edge cases.
+    
+    P0 Bug: price_change_pct calculation divides by first_close.
+    If first_close == 0 (bad data), this causes ZeroDivisionError.
+    """
+    
+    @pytest.mark.asyncio
+    async def test_zero_first_close_handled_gracefully(self):
+        """
+        When first bar has close=0, should not crash with ZeroDivisionError.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+        from app.services.technical_service import TechnicalService
+        from app.services.base_provider import PriceBar, HistoricalPrices
+        from datetime import datetime
+        
+        # Create mock provider
+        mock_provider = MagicMock()
+        mock_provider.supports_technical = True
+        mock_provider.name = "MockProvider"
+        
+        # Create bars with first close = 0 (edge case / bad data)
+        bars = [
+            PriceBar(
+                timestamp=datetime(2024, 1, 1).isoformat(),
+                open=0, high=0, low=0, close=0, volume=1000  # Zero close!
+            ),
+            PriceBar(
+                timestamp=datetime(2024, 1, 2).isoformat(),
+                open=100, high=105, low=95, close=100, volume=2000
+            ),
+        ]
+        
+        mock_provider.get_historical_prices = AsyncMock(
+            return_value=HistoricalPrices(symbol="TEST", bars=bars, provider="Mock")
+        )
+        
+        service = TechnicalService(mock_provider)
+        
+        # This should NOT raise ZeroDivisionError
+        result = await service.analyze("TEST", days=30)
+        
+        # Should handle gracefully - price_change_pct should be exactly 0.0
+        assert result is not None
+        assert result.price_change_pct == 0.0
+    
+    @pytest.mark.asyncio
+    async def test_normal_price_change_calculation(self):
+        """
+        Normal price change calculation should work correctly.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+        from app.services.technical_service import TechnicalService
+        from app.services.base_provider import PriceBar, HistoricalPrices
+        from datetime import datetime
+        
+        mock_provider = MagicMock()
+        mock_provider.supports_technical = True
+        mock_provider.name = "MockProvider"
+        
+        # Create bars with normal prices
+        bars = [
+            PriceBar(
+                timestamp=datetime(2024, 1, 1).isoformat(),
+                open=100, high=105, low=95, close=100, volume=1000
+            ),
+            PriceBar(
+                timestamp=datetime(2024, 1, 2).isoformat(),
+                open=100, high=115, low=95, close=110, volume=2000
+            ),
+        ]
+        
+        mock_provider.get_historical_prices = AsyncMock(
+            return_value=HistoricalPrices(symbol="TEST", bars=bars, provider="Mock")
+        )
+        
+        service = TechnicalService(mock_provider)
+        result = await service.analyze("TEST", days=30)
+        
+        # Price went from 100 to 110 = 10% gain
+        assert result.price_change_pct == pytest.approx(10.0, rel=0.01)
