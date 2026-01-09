@@ -43,8 +43,9 @@ class ScenarioAnalysisResult:
     symbol: str
     current_price: Optional[float]
     scenarios: List[ScenarioResult]
-    probability_weighted_value: Optional[float]  # If probabilities sum to 1
+    probability_weighted_value: Optional[float]  # Computed from (normalized) probabilities
     upside_range: tuple  # (min%, max%) vs current price
+    probabilities_normalized: bool = False  # True if probabilities were auto-normalized to sum to 1.0
     
 
 class ScenarioCalculator:
@@ -226,11 +227,24 @@ class ScenarioCalculator:
         
         results = [self.run_scenario(s) for s in scenarios]
         
-        # Calculate probability-weighted value if probabilities sum to ~1
+        # Calculate total probability
         total_prob = sum(r.probability for r in results)
+        
+        # Normalize probabilities if they don't sum to 1.0
         weighted_value = None
-        if 0.99 <= total_prob <= 1.01:  # Allow small rounding errors
+        probabilities_normalized = False
+        
+        if total_prob > 0:
+            # Check if normalization is needed (not already ~1.0)
+            if not (0.99 <= total_prob <= 1.01):
+                # Normalize: scale each probability so they sum to 1.0
+                probabilities_normalized = True
+                for result in results:
+                    result.probability = result.probability / total_prob
+            
+            # Now probabilities sum to 1.0, calculate weighted value
             weighted_value = sum(r.intrinsic_value * r.probability for r in results)
+        # If total_prob == 0, can't normalize, weighted_value stays None
         
         # Calculate upside range vs current price
         values = [r.intrinsic_value for r in results]
@@ -249,6 +263,7 @@ class ScenarioCalculator:
             scenarios=results,
             probability_weighted_value=weighted_value,
             upside_range=upside_range,
+            probabilities_normalized=probabilities_normalized,
         )
 
 
