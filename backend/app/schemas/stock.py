@@ -1,5 +1,5 @@
 """Stock-related request/response schemas."""
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 
 from app.constants import DEFAULT_TAX_RATE, DEFAULT_TERMINAL_GROWTH, DEFAULT_MARKET_RISK_PREMIUM
@@ -69,6 +69,36 @@ class ValuationRequest(BaseModel):
     wc_mode: str = "level"  # "level" or "incremental"
     # Multi-stage growth - if provided, overrides revenue_growth and projection_years
     growth_stages: Optional[List[GrowthStageInput]] = None
+    
+    @field_validator('terminal_growth_rate')
+    @classmethod
+    def validate_terminal_growth(cls, v: float) -> float:
+        """Terminal growth must be 0-10%. Higher than GDP growth is unrealistic perpetually."""
+        if v < 0:
+            raise ValueError("terminal_growth_rate cannot be negative")
+        if v > 0.10:
+            raise ValueError("terminal_growth_rate cannot exceed 10% (0.10)")
+        return v
+    
+    @field_validator('operating_margin')
+    @classmethod
+    def validate_operating_margin(cls, v: float) -> float:
+        """Operating margin should be -50% to 80%. Higher is unrealistic."""
+        if v < -0.50:
+            raise ValueError("operating_margin cannot be below -50% (-0.50)")
+        if v > 0.80:
+            raise ValueError("operating_margin cannot exceed 80% (0.80)")
+        return v
+    
+    @field_validator('projection_years')
+    @classmethod
+    def validate_projection_years(cls, v: int) -> int:
+        """Projection years should be 1-30. Beyond 30 years is unreliable."""
+        if v < 1:
+            raise ValueError("projection_years must be at least 1")
+        if v > 30:
+            raise ValueError("projection_years cannot exceed 30")
+        return v
 
 
 class ScenarioInput(BaseModel):
@@ -79,6 +109,26 @@ class ScenarioInput(BaseModel):
     terminal_growth: float  # e.g., 0.03 for 3%
     probability: float = 0.0  # 0-1, for weighted average
     description: str = ""
+    
+    @field_validator('terminal_growth')
+    @classmethod
+    def validate_terminal_growth(cls, v: float) -> float:
+        """Terminal growth must be 0-10%."""
+        if v < 0:
+            raise ValueError("terminal_growth cannot be negative")
+        if v > 0.10:
+            raise ValueError("terminal_growth cannot exceed 10% (0.10)")
+        return v
+    
+    @field_validator('probability')
+    @classmethod
+    def validate_probability(cls, v: float) -> float:
+        """Probability must be 0-1."""
+        if v < 0:
+            raise ValueError("probability cannot be negative")
+        if v > 1.0:
+            raise ValueError("probability cannot exceed 1.0")
+        return v
 
 
 class ScenarioRequest(BaseModel):
