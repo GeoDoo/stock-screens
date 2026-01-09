@@ -236,11 +236,14 @@ class ValuationService:
             operating_margin=operating_margin or fcf_projector.operating_margin(),
         )
 
-        # 8. Terminal Value sanity check via Exit Multiple
+        # 8. Terminal Value sanity check via Exit Multiple AND dominance warning
         # Professional valuation cross-checks Gordon Growth with implied EV/EBITDA
+        # Also warns if terminal value dominates (>70% of EV)
         terminal_value_check = self._calculate_terminal_value_check(
             terminal_value=terminal_value,
             terminal_year_projection=projections[-1],
+            pv_terminal=pv_terminal,
+            enterprise_value=enterprise_value,
         )
 
         return {
@@ -356,30 +359,41 @@ class ValuationService:
         self,
         terminal_value: float,
         terminal_year_projection: Dict,
+        pv_terminal: float,
+        enterprise_value: float,
     ) -> Dict:
         """
-        Calculate implied exit multiple as sanity check for terminal value.
+        Calculate implied exit multiple and terminal dominance as sanity checks.
         
         Professional valuation cross-checks Gordon Growth Model terminal value
         with an implied EV/EBITDA exit multiple. If the implied multiple is
         unrealistically high (> 25x for mature companies), it suggests the
         terminal growth assumption may be too aggressive.
         
+        Also checks if terminal value dominates enterprise value (>70%),
+        indicating the DCF is essentially a terminal value guess.
+        
         Returns dict with:
         - terminal_ebitda: EBIT + D&A in terminal year
         - implied_exit_multiple: Terminal Value / Terminal EBITDA
+        - terminal_value_pct: PV(Terminal) / Enterprise Value
         - warning: Optional warning if multiple seems unrealistic
+        - dominance_warning: Optional warning if TV dominates EV
         """
         # Terminal year EBITDA = EBIT + D&A
         terminal_ebit = terminal_year_projection.get("ebit", 0)
         terminal_da = terminal_year_projection.get("da", 0)
         terminal_ebitda = terminal_ebit + terminal_da
         
-        # Avoid division by zero
+        # Calculate terminal value % of EV
+        terminal_value_pct = pv_terminal / enterprise_value if enterprise_value > 0 else 0
+        
+        # Avoid division by zero for exit multiple
         if terminal_ebitda <= 0:
             return {
                 "terminal_ebitda": terminal_ebitda,
                 "implied_exit_multiple": None,
+                "terminal_value_pct": terminal_value_pct,
                 "warning": "Cannot calculate exit multiple - terminal EBITDA is zero or negative",
             }
         
@@ -389,6 +403,7 @@ class ValuationService:
         result = {
             "terminal_ebitda": terminal_ebitda,
             "implied_exit_multiple": implied_multiple,
+            "terminal_value_pct": terminal_value_pct,
         }
         
         # Add warning if multiple is unrealistically high
@@ -399,6 +414,16 @@ class ValuationService:
                 f"Implied exit multiple ({implied_multiple:.1f}x EV/EBITDA) is high. "
                 "Consider whether terminal growth assumption is too aggressive, "
                 "or if the company's growth profile justifies this premium."
+            )
+        
+        # Add dominance warning if terminal value is >70% of EV
+        if terminal_value_pct > 0.70:
+            result["dominance_warning"] = (
+                f"Terminal value represents {terminal_value_pct:.0%} of enterprise value. "
+                "When >70%, the DCF is essentially a terminal value guess. Consider: "
+                "(1) extending projection period until steady state, "
+                "(2) using revenue/EBITDA multiples instead, or "
+                "(3) validating terminal assumptions carefully."
             )
         
         return result

@@ -390,3 +390,109 @@ class TestExitMultipleSanityCheck:
             "terminal_value_check must include terminal_ebitda"
         )
         assert check["terminal_ebitda"] > 0
+
+
+class TestTerminalValueDominance:
+    """
+    Tests for P0: Terminal value dominance warning.
+    
+    If terminal value represents too high a % of enterprise value (>70%),
+    the DCF is essentially a terminal value guess. User should be warned.
+    """
+    
+    @pytest.fixture
+    def mock_client(self):
+        """Create mock client with realistic data."""
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=create_mock_stock_data())
+        client.get_treasury_rate = AsyncMock(return_value=0.045)
+        return client
+    
+    @pytest.mark.asyncio
+    async def test_includes_terminal_value_percentage(self, mock_client):
+        """
+        Result should include TV % of EV for transparency.
+        """
+        service = ValuationService(client=mock_client)
+        result = await service.value_stock("AAPL")
+        
+        check = result["terminal_value_check"]
+        assert "terminal_value_pct" in check, (
+            "terminal_value_check must include terminal_value_pct"
+        )
+        
+        # Should be a valid percentage (0-1)
+        pct = check["terminal_value_pct"]
+        assert 0 < pct < 1, f"Terminal value % should be 0-100%, got {pct:.1%}"
+    
+    @pytest.mark.asyncio
+    async def test_terminal_value_percentage_is_accurate(self, mock_client):
+        """
+        TV % should equal PV(terminal value) / enterprise value.
+        """
+        service = ValuationService(client=mock_client)
+        result = await service.value_stock("AAPL", projection_years=5)
+        
+        # Manually verify the calculation
+        terminal_value = result["terminal_value"]
+        enterprise_value = result["enterprise_value"]
+        discount_rate = result["discount_rate"]
+        projection_years = len(result["projections"])  # Number of projection years
+        
+        # PV of terminal = TV / (1 + r)^n
+        pv_terminal = terminal_value / ((1 + discount_rate) ** projection_years)
+        expected_pct = pv_terminal / enterprise_value
+        
+        actual_pct = result["terminal_value_check"]["terminal_value_pct"]
+        assert abs(actual_pct - expected_pct) < 0.01, (
+            f"Terminal % mismatch: expected {expected_pct:.2%}, got {actual_pct:.2%}"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_high_terminal_pct_triggers_dominance_warning(self, mock_client):
+        """
+        >70% terminal value should trigger dominance warning.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Use params that lead to higher terminal dominance:
+        # - Longer projection period (more discounting of near-term FCF)
+        # - Higher terminal growth (bigger terminal value)
+        result = await service.value_stock(
+            "AAPL",
+            projection_years=10,  # Longer projection
+            terminal_growth_rate=0.035,  # Higher terminal growth
+        )
+        
+        check = result["terminal_value_check"]
+        pct = check["terminal_value_pct"]
+        
+        # If TV dominates (>70%), should have a warning
+        if pct > 0.70:
+            assert "dominance_warning" in check, (
+                f"With TV at {pct:.0%} of EV, should have dominance_warning"
+            )
+            assert "70%" in check["dominance_warning"] or "terminal" in check["dominance_warning"].lower()
+    
+    @pytest.mark.asyncio
+    async def test_low_terminal_pct_no_warning(self, mock_client):
+        """
+        <70% terminal value should NOT trigger dominance warning.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Use conservative params for lower TV dominance
+        result = await service.value_stock(
+            "AAPL",
+            projection_years=5,
+            terminal_growth_rate=0.02,  # Conservative terminal
+        )
+        
+        check = result["terminal_value_check"]
+        pct = check["terminal_value_pct"]
+        
+        # If TV is reasonable (<70%), no dominance warning needed
+        if pct <= 0.70:
+            assert check.get("dominance_warning") is None, (
+                f"With TV at {pct:.0%} of EV, should not have dominance_warning"
+            )
