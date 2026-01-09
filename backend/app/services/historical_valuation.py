@@ -142,6 +142,14 @@ class HistoricalValuationAnalyzer:
             if ym:
                 yearly_metrics.append(ym)
         
+        # Guard: If financials were provided but none could be parsed, raise error
+        # This prevents silently returning empty results when data is malformed
+        if financials and not yearly_metrics:
+            raise ValueError(
+                "No valid financial years could be parsed. "
+                "Check that each financial record has a valid 'date' field (e.g., '2024-12-31')."
+            )
+        
         result.yearly_metrics = yearly_metrics
         
         # Calculate 5-year averages (need at least 2 years)
