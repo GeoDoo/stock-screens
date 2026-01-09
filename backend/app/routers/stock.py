@@ -227,7 +227,7 @@ async def get_stock(symbol: str, provider: str):
         total_debt=extractor.total_debt(),
         cash=extractor.cash(),
         tax_rate=extractor.tax_rate(),
-        cost_of_debt=extractor.cost_of_debt(),
+        cost_of_debt=extractor.cost_of_debt(risk_free_rate=risk_free_rate),
         revenue_history=extractor.revenue_history(),
         ebit_history=extractor.ebit_history(),
         da_history=extractor.da_history(),
@@ -248,7 +248,7 @@ async def get_stock(symbol: str, provider: str):
 
     # Calculate WACC for display (only if ALL required components available)
     beta = extractor.beta()
-    cost_of_debt = extractor.cost_of_debt()
+    cost_of_debt = extractor.cost_of_debt(risk_free_rate=risk_free_rate)
     tax_rate = extractor.tax_rate()
     market_cap = extractor.market_cap()
     total_debt = extractor.total_debt()
@@ -280,7 +280,7 @@ async def get_stock(symbol: str, provider: str):
             total_equity=extractor.total_equity(),
             cash=extractor.cash(),
             tax_rate=extractor.tax_rate(),
-            cost_of_debt=extractor.cost_of_debt(),
+            cost_of_debt=extractor.cost_of_debt(risk_free_rate=risk_free_rate),
             shares_outstanding=extractor.shares_outstanding(),
             risk_free_rate=risk_free_rate,
             wacc=wacc,
@@ -388,7 +388,7 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
     extractor = DataExtractor(data, market_risk_premium=request.market_risk_premium)
     
     beta = extractor.beta()
-    cost_of_debt = extractor.cost_of_debt()
+    cost_of_debt = extractor.cost_of_debt(risk_free_rate=risk_free_rate)
     tax_rate = extractor.tax_rate()
     market_cap = extractor.market_cap()
     total_debt = extractor.total_debt()
@@ -881,7 +881,7 @@ async def batch_analyze(symbol: str, provider: str):
     extractor = DataExtractor(data)
     
     beta = extractor.beta()
-    cost_of_debt = extractor.cost_of_debt()
+    cost_of_debt = extractor.cost_of_debt(risk_free_rate=risk_free_rate)
     tax_rate = extractor.tax_rate()
     market_cap = extractor.market_cap()
     total_debt = extractor.total_debt()

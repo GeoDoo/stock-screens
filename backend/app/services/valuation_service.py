@@ -76,7 +76,7 @@ class ValuationService:
 
         # 3. Calculate WACC (only if all required components are available)
         beta = extractor.beta()
-        cost_of_debt = extractor.cost_of_debt()
+        cost_of_debt = extractor.cost_of_debt(risk_free_rate=risk_free_rate)
         tax_rate = extractor.tax_rate()
         market_cap = extractor.market_cap()
         total_debt = extractor.total_debt()
@@ -262,7 +262,7 @@ class ValuationService:
                 "risk_free_rate": risk_free_rate,
                 "beta": extractor.beta(),
                 "market_risk_premium": extractor.market_risk_premium(),
-                "cost_of_debt": extractor.cost_of_debt(),
+                "cost_of_debt": extractor.cost_of_debt(risk_free_rate=risk_free_rate),
                 "tax_rate": extractor.tax_rate(),
                 "revenue_growth": revenue_growth or fcf_projector.revenue_cagr(),
                 "operating_margin": operating_margin or fcf_projector.operating_margin(),

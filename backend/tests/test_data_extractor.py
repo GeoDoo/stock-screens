@@ -1087,3 +1087,148 @@ class TestLTMDataMerging:
         # Should use TTM tax rate (25%), not annual (20%)
         tax_rate = extractor.tax_rate()
         assert 0.24 <= tax_rate <= 0.26, f"Expected ~25%, got {tax_rate:.2%}"
+
+
+class TestRiskFreeRateConsistency:
+    """
+    Tests for P0 bug: cost_of_debt uses hardcoded DEFAULT_TREASURY_RATE 
+    while cost_of_equity uses fetched risk_free_rate.
+    
+    This creates inconsistent capital market assumptions in WACC:
+    - CoE: Rf_fetched + beta * MRP  (using e.g. 4.2% fetched rate)
+    - CoD: Rf_hardcoded + spread   (using 4.5% hardcoded)
+    
+    Fix: cost_of_debt() should accept optional risk_free_rate parameter.
+    """
+    
+    def test_cost_of_debt_uses_passed_risk_free_rate(self):
+        """
+        When risk_free_rate is provided, cost_of_debt should use it
+        instead of DEFAULT_TREASURY_RATE.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": 100_000_000_000,
+                "interestExpense": 5_000_000_000,  # ICR = 20x → AAA (~0.63% spread)
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Use a distinctly different risk-free rate (3.8%)
+        custom_rf = 0.038
+        cod = extractor.cost_of_debt(risk_free_rate=custom_rf)
+        
+        # AAA spread is ~0.63%, so synthetic = 3.8% + 0.63% = 4.43%
+        # Historical = 5B / 100B = 5%
+        # max(4.43%, 5%) = 5%
+        expected = max(custom_rf + 0.0063, 0.05)  # AAA spread + max with historical
+        
+        assert cod is not None
+        assert abs(cod - expected) < 0.005, (
+            f"With Rf={custom_rf:.2%}, expected ~{expected:.2%}, got {cod:.2%}"
+        )
+    
+    def test_cost_of_debt_defaults_to_constant_when_not_passed(self):
+        """
+        When risk_free_rate is NOT provided, cost_of_debt should fall back
+        to DEFAULT_TREASURY_RATE for backward compatibility.
+        """
+        from app.constants import DEFAULT_TREASURY_RATE
+        
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": 100_000_000_000,
+                "interestExpense": 5_000_000_000,  # ICR = 20x → AAA
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Call without parameter
+        cod_default = extractor.cost_of_debt()
+        
+        # Call with explicit default
+        cod_explicit = extractor.cost_of_debt(risk_free_rate=DEFAULT_TREASURY_RATE)
+        
+        # Should produce identical results
+        assert cod_default == cod_explicit, (
+            f"Default ({cod_default:.4f}) should equal explicit DEFAULT_TREASURY_RATE ({cod_explicit:.4f})"
+        )
+    
+    def test_cost_of_debt_reflects_rate_changes(self):
+        """
+        Different risk_free_rates should produce different cost_of_debt
+        (when synthetic rate dominates).
+        """
+        # Low historical rate so synthetic dominates
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": 100_000_000_000,
+                "interestExpense": 2_000_000_000,  # ICR = 50x → AAA, historical = 2%
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        cod_low_rf = extractor.cost_of_debt(risk_free_rate=0.03)   # 3%
+        cod_high_rf = extractor.cost_of_debt(risk_free_rate=0.05)  # 5%
+        
+        # Higher risk-free rate should produce higher cost of debt
+        assert cod_high_rf > cod_low_rf, (
+            f"CoD with 5% Rf ({cod_high_rf:.2%}) should be > CoD with 3% Rf ({cod_low_rf:.2%})"
+        )
+        
+        # The difference should be approximately 2% (the Rf difference)
+        diff = cod_high_rf - cod_low_rf
+        assert 0.015 < diff < 0.025, f"Difference should be ~2%, got {diff:.2%}"
+    
+    def test_wacc_uses_consistent_risk_free_rate(self):
+        """
+        Integration test: WACC calculation should use the same risk-free
+        rate for both cost of equity and cost of debt.
+        """
+        from app.services.wacc_calculator import WACCCalculator
+        
+        data = {
+            "profile": {"marketCap": 2_000_000_000_000, "beta": 1.1},
+            "income_statement": [{
+                "operatingIncome": 100_000_000_000,
+                "interestExpense": 5_000_000_000,  # ICR = 20x → AAA
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Use consistent risk-free rate
+        risk_free_rate = 0.042  # 4.2%
+        
+        # Get cost of debt with the SAME risk-free rate
+        cost_of_debt = extractor.cost_of_debt(risk_free_rate=risk_free_rate)
+        
+        # Now calculate WACC
+        wacc_calc = WACCCalculator(
+            risk_free_rate=risk_free_rate,  # Same rate!
+            beta=extractor.beta(),
+            market_risk_premium=0.06,
+            cost_of_debt=cost_of_debt,
+            tax_rate=0.21,
+            market_cap=extractor.market_cap(),
+            total_debt=extractor.total_debt(),
+        )
+        
+        wacc = wacc_calc.calculate()
+        
+        # WACC should be reasonable (7-12% for most companies)
+        assert 0.07 < wacc < 0.12, f"WACC should be 7-12%, got {wacc:.2%}"
+        
+        # Verify cost of equity uses our risk-free rate
+        expected_coe = risk_free_rate + 1.1 * 0.06  # Rf + beta * MRP
+        assert abs(wacc_calc.cost_of_equity() - expected_coe) < 0.001
