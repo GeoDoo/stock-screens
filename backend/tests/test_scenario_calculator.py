@@ -293,3 +293,97 @@ class TestScenarioCalculator:
                 f"{scenario.name} has unreasonable growth: {scenario.revenue_growth}"
 
 
+
+
+class TestDiscountRateTerminalGrowthGuard:
+    """
+    Regression tests for r > g enforcement.
+    
+    Bug: ScenarioCalculator.run_scenario() did not guard against
+    discount_rate <= terminal_growth, which causes division by zero
+    or negative terminal values (nonsense results).
+    
+    The main valuation path enforces this; scenarios must too.
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        """Basic calculator with sample historical data."""
+        return ScenarioCalculator(
+            historical_revenue=[100, 110, 121],
+            historical_ebit=[20, 22, 24.2],
+            historical_da=[5, 5.5, 6],
+            historical_capex=[-8, -8.8, -9.6],
+            historical_working_capital=[10, 11, 12.1],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=50,
+            cash=100,
+            base_wacc=0.10,  # 10% WACC
+            projection_years=5,
+            current_price=50,
+        )
+    
+    def test_rejects_terminal_growth_equal_to_discount_rate(self, calculator):
+        """
+        Should raise ValueError when terminal_growth == discount_rate.
+        
+        This would cause division by zero: terminal_value = FCF / (r - g)
+        """
+        scenario = Scenario(
+            name="Invalid",
+            revenue_growth=0.08,
+            operating_margin=0.20,
+            terminal_growth=0.10,  # Same as WACC (10%)
+        )
+        
+        with pytest.raises(ValueError, match="discount rate.*greater than.*terminal growth"):
+            calculator.run_scenario(scenario)
+    
+    def test_rejects_terminal_growth_greater_than_discount_rate(self, calculator):
+        """
+        Should raise ValueError when terminal_growth > discount_rate.
+        
+        This would produce negative terminal value (nonsense).
+        """
+        scenario = Scenario(
+            name="Invalid",
+            revenue_growth=0.08,
+            operating_margin=0.20,
+            terminal_growth=0.15,  # Higher than WACC (10%)
+        )
+        
+        with pytest.raises(ValueError, match="discount rate.*greater than.*terminal growth"):
+            calculator.run_scenario(scenario)
+    
+    def test_accepts_terminal_growth_less_than_discount_rate(self, calculator):
+        """
+        Should work normally when terminal_growth < discount_rate.
+        """
+        scenario = Scenario(
+            name="Valid",
+            revenue_growth=0.08,
+            operating_margin=0.20,
+            terminal_growth=0.03,  # Less than WACC (10%)
+        )
+        
+        # Should not raise
+        result = calculator.run_scenario(scenario)
+        assert result.intrinsic_value > 0
+    
+    def test_uses_scenario_discount_rate_for_validation(self, calculator):
+        """
+        When scenario has custom discount_rate, that should be used for validation.
+        """
+        # Scenario with custom discount rate lower than base WACC
+        scenario = Scenario(
+            name="Low DR",
+            revenue_growth=0.08,
+            operating_margin=0.20,
+            terminal_growth=0.08,  # Equal to custom discount rate
+            discount_rate=0.08,    # Custom DR lower than base WACC
+        )
+        
+        # Should reject because custom discount_rate == terminal_growth
+        with pytest.raises(ValueError, match="discount rate.*greater than.*terminal growth"):
+            calculator.run_scenario(scenario)
