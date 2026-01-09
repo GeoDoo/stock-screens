@@ -63,6 +63,16 @@ export function FinancialRatiosTable({ ratios }: Props) {
               <td className="py-2 text-sm text-gray-500">ROA<GlossaryRef id="roa" /></td>
               <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratios.profitability.roa)}</td>
             </tr>
+            <tr className="border-b border-gray-100">
+              <td className="py-2 text-sm text-gray-500">ROIC<GlossaryRef id="roic" /></td>
+              <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratios.profitability.roic)}</td>
+            </tr>
+            {ratios.profitability.rotic != null && (
+              <tr className="border-b border-gray-100">
+                <td className="py-2 text-sm text-gray-500">ROTIC<GlossaryRef id="rotic" /></td>
+                <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratios.profitability.rotic)}</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -104,6 +114,84 @@ export function FinancialRatiosTable({ ratios }: Props) {
           </tbody>
         </table>
       </div>
+
+      {/* Risk Metrics (institutional-grade) */}
+      {ratios.risk && (ratios.risk.altman_z_score != null || ratios.risk.beneish_m_score != null || ratios.risk.accrual_ratio != null) && (
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-600 mb-4">Risk Analysis</h3>
+          <table className="w-full">
+            <tbody>
+              {ratios.risk.altman_z_score != null && (
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-sm text-gray-500">Altman Z-Score<GlossaryRef id="altman-z-score" /></td>
+                  <td className="py-2 text-sm font-mono font-medium text-right">
+                    <span className={
+                      ratios.risk.z_score_zone === 'safe' ? 'text-green-600' :
+                      ratios.risk.z_score_zone === 'distress' ? 'text-red-600' :
+                      'text-amber-600'
+                    }>
+                      {formatNumber(ratios.risk.altman_z_score)}
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {ratios.risk.beneish_m_score != null && (
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-sm text-gray-500">Beneish M-Score<GlossaryRef id="beneish-m-score" /></td>
+                  <td className="py-2 text-sm font-mono font-medium text-right">
+                    <span className={ratios.risk.m_score_zone === 'high_risk' ? 'text-red-600' : 'text-green-600'}>
+                      {formatNumber(ratios.risk.beneish_m_score)}
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {ratios.risk.accrual_ratio != null && (
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-sm text-gray-500">Accrual Ratio<GlossaryRef id="accrual-ratio" /></td>
+                  <td className="py-2 text-sm font-mono font-medium text-right">
+                    <span className={
+                      ratios.risk.accrual_quality === 'good' ? 'text-green-600' :
+                      ratios.risk.accrual_quality === 'warning' ? 'text-red-600' :
+                      'text-amber-600'
+                    }>
+                      {formatPercent(ratios.risk.accrual_ratio)}
+                    </span>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* SBC Analysis */}
+      {ratios.sbc && ratios.sbc.sbc_percent_revenue != null && (
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-purple-600 mb-4">Stock-Based Comp</h3>
+          <table className="w-full">
+            <tbody>
+              <tr className="border-b border-gray-100">
+                <td className="py-2 text-sm text-gray-500">SBC % Revenue<GlossaryRef id="sbc-percent-revenue" /></td>
+                <td className="py-2 text-sm font-mono font-medium text-right">
+                  <span className={
+                    ratios.sbc.sbc_level === 'high' ? 'text-red-600' :
+                    ratios.sbc.sbc_level === 'elevated' ? 'text-amber-600' :
+                    'text-green-600'
+                  }>
+                    {formatPercent(ratios.sbc.sbc_percent_revenue)}
+                  </span>
+                </td>
+              </tr>
+              {ratios.sbc.fcf_adjusted != null && (
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-sm text-gray-500">FCF (SBC-adj)<GlossaryRef id="fcf-adjusted" /></td>
+                  <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratios.sbc.fcf_adjusted / 1e9, 1)}B</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
