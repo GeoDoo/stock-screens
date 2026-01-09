@@ -68,6 +68,9 @@ class StockDataCache:
             self._misses += 1
             return None
         
+        # Move to end for true LRU behavior (mark as recently used)
+        self._cache.move_to_end(key)
+        
         self._hits += 1
         return entry["value"]
     

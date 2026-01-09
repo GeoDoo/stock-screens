@@ -122,3 +122,24 @@ class TestStockDataCache:
         assert cache.get("AAPL") is None  # Evicted
         assert cache.get("MSFT") is not None
         assert cache.get("GOOGL") is not None
+    
+    def test_cache_lru_eviction_respects_access_order(self):
+        """
+        LRU eviction should evict least recently USED, not just oldest SET.
+        
+        Bug: get() must update item order, otherwise it's FIFO not LRU.
+        """
+        cache = StockDataCache(default_ttl=300, max_size=2)
+        
+        cache.set("AAPL", {"price": 150})  # Oldest
+        cache.set("MSFT", {"price": 400})
+        
+        # Access AAPL - makes it "recently used"
+        cache.get("AAPL")
+        
+        # Add new entry - should evict MSFT (least recently used), not AAPL
+        cache.set("GOOGL", {"price": 140})
+        
+        assert cache.get("AAPL") is not None, "AAPL was accessed recently, should NOT be evicted"
+        assert cache.get("MSFT") is None, "MSFT was least recently used, should be evicted"
+        assert cache.get("GOOGL") is not None
