@@ -42,6 +42,7 @@ class StockDataResponse(BaseModel):
     data: CompanyData
     hints: HistoricalHints
     validation: ValidationResponse
+    is_using_ltm: bool = False  # True if using Last Twelve Months (TTM) data
 
 
 class GrowthStageInput(BaseModel):
