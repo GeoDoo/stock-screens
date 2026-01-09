@@ -848,6 +848,11 @@ export default function App() {
                   <span className="px-2 py-0.5 text-xs font-medium rounded bg-gray-100 text-gray-500 uppercase tracking-wide">
                     via {selectedFundamentalProvider}
                   </span>
+                  {stockData.is_using_ltm && (
+                    <span className="px-2 py-0.5 text-xs font-medium rounded bg-emerald-50 text-emerald-600 uppercase tracking-wide" title="Using Last Twelve Months (TTM) data - more current than annual">
+                      LTM
+                    </span>
+                  )}
                 </div>
                 {stockData.industry && (
                   <p className="text-sm text-gray-500">{stockData.industry}{stockData.sector && ` · ${stockData.sector}`}</p>
@@ -980,6 +985,16 @@ export default function App() {
                     <p className="text-2xl font-medium text-gray-900">
                       {formatPercent(dividendResult.payout_ratio)}
                     </p>
+                    {/* FCF-based payout ratio (more accurate) */}
+                    {dividendResult.fcf_payout_ratio != null && (
+                      <p className={`text-xs mt-1 ${
+                        dividendResult.fcf_payout_ratio > 1 ? 'text-red-500' :
+                        dividendResult.fcf_payout_ratio > 0.8 ? 'text-amber-500' :
+                        'text-gray-400'
+                      }`}>
+                        FCF: {formatPercent(dividendResult.fcf_payout_ratio)}
+                      </p>
+                    )}
                   </div>
                   
                   <div className="border border-gray-100 rounded p-4">
@@ -1398,6 +1413,38 @@ export default function App() {
                     <td className="py-3 text-sm text-gray-500">Net Debt<GlossaryRef id="net-debt" /></td>
                     <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.net_debt)}</td>
                   </tr>
+                  {/* Equity Bridge - Institutional Grade */}
+                  {result.equity_bridge && (result.equity_bridge.minority_interest !== 0 || 
+                    result.equity_bridge.preferred_stock !== 0 || 
+                    result.equity_bridge.deferred_tax_assets !== 0 || 
+                    result.equity_bridge.pension_deficit !== 0) && (
+                    <>
+                      {result.equity_bridge.minority_interest !== 0 && (
+                        <tr className="border-b border-gray-50">
+                          <td className="py-2 text-xs text-gray-400 pl-4">− Minority Interest</td>
+                          <td className="py-2 text-xs font-mono text-gray-500 text-right">{formatCurrency(result.equity_bridge.minority_interest)}</td>
+                        </tr>
+                      )}
+                      {result.equity_bridge.preferred_stock !== 0 && (
+                        <tr className="border-b border-gray-50">
+                          <td className="py-2 text-xs text-gray-400 pl-4">− Preferred Stock</td>
+                          <td className="py-2 text-xs font-mono text-gray-500 text-right">{formatCurrency(result.equity_bridge.preferred_stock)}</td>
+                        </tr>
+                      )}
+                      {result.equity_bridge.deferred_tax_assets !== 0 && (
+                        <tr className="border-b border-gray-50">
+                          <td className="py-2 text-xs text-green-600 pl-4">+ NOLs/Tax Assets</td>
+                          <td className="py-2 text-xs font-mono text-green-600 text-right">{formatCurrency(result.equity_bridge.deferred_tax_assets)}</td>
+                        </tr>
+                      )}
+                      {result.equity_bridge.pension_deficit !== 0 && (
+                        <tr className="border-b border-gray-50">
+                          <td className="py-2 text-xs text-gray-400 pl-4">− Pension Deficit</td>
+                          <td className="py-2 text-xs font-mono text-gray-500 text-right">{formatCurrency(result.equity_bridge.pension_deficit)}</td>
+                        </tr>
+                      )}
+                    </>
+                  )}
                   <tr className="border-b border-gray-100">
                     <td className="py-3 text-sm text-gray-500">
                       {result.using_custom_discount_rate ? 'Discount Rate (custom)' : 'Discount Rate (WACC)'}<GlossaryRef id="discount-rate" />
@@ -1616,6 +1663,12 @@ export default function App() {
 
             {scenarioResult && scenarioResult.probability_weighted_value !== null && (
               <div className="space-y-8">
+                {/* Probabilities Normalized Warning */}
+                {scenarioResult.probabilities_normalized && (
+                  <div className="px-3 py-2 rounded bg-amber-50 border border-amber-200 text-sm text-amber-700">
+                    ⚠️ Scenario probabilities were auto-adjusted to sum to 100%
+                  </div>
+                )}
                 {/* Summary */}
                 <div className="flex items-baseline gap-4">
                   <span className="text-4xl font-bold font-mono">${scenarioResult.probability_weighted_value.toFixed(2)}</span>
@@ -2085,7 +2138,7 @@ export default function App() {
                 )}
 
                 {/* Signal Summary */}
-                <div className="grid grid-cols-3 gap-6 max-w-xl">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl">
                   <div className="p-4 rounded-lg border border-gray-100">
                     <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Trend</div>
                     <div className={`text-lg font-medium capitalize ${
@@ -2094,6 +2147,14 @@ export default function App() {
                     }`}>
                       {technicalResult.signals.trend}
                     </div>
+                    {/* Volume Confirmation Badge */}
+                    {technicalResult.signals.volume_confirmation && technicalResult.signals.volume_confirmation !== 'neutral' && (
+                      <div className={`mt-1 text-xs font-medium ${
+                        technicalResult.signals.volume_confirmation === 'confirmed' ? 'text-emerald-500' : 'text-amber-500'
+                      }`}>
+                        {technicalResult.signals.volume_confirmation === 'confirmed' ? '✓ Vol Confirmed' : '⚠ Low Volume'}
+                      </div>
+                    )}
                   </div>
                   <div className="p-4 rounded-lg border border-gray-100">
                     <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Momentum</div>
@@ -2105,13 +2166,32 @@ export default function App() {
                     </div>
                   </div>
                   <div className="p-4 rounded-lg border border-gray-100">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Momentum Trend</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">MACD</div>
                     <div className={`text-lg font-medium capitalize ${
                       technicalResult.signals.macd === 'bullish' ? 'text-emerald-600' :
                       technicalResult.signals.macd === 'bearish' ? 'text-red-600' : 'text-gray-400'
                     }`}>
                       {technicalResult.signals.macd}
                     </div>
+                  </div>
+                  {/* Volume Metrics */}
+                  <div className="p-4 rounded-lg border border-gray-100">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Volume<GlossaryRef id="relative-volume" /></div>
+                    {technicalResult.volume?.relative_volume != null ? (
+                      <div className={`text-lg font-medium ${
+                        technicalResult.volume.relative_volume >= 1.2 ? 'text-emerald-600' :
+                        technicalResult.volume.relative_volume <= 0.8 ? 'text-amber-500' : 'text-gray-600'
+                      }`}>
+                        {technicalResult.volume.relative_volume.toFixed(1)}x
+                      </div>
+                    ) : (
+                      <div className="text-lg font-medium text-gray-400">—</div>
+                    )}
+                    {technicalResult.volume?.average_volume != null && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        Avg: {(technicalResult.volume.average_volume / 1e6).toFixed(1)}M
+                      </div>
+                    )}
                   </div>
                 </div>
 
