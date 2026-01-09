@@ -159,6 +159,13 @@ class ScenarioCalculator:
         # Use scenario discount rate or fall back to WACC
         discount_rate = scenario.discount_rate if scenario.discount_rate is not None else self.base_wacc
         
+        # Guard: r > g is required for valid terminal value
+        if discount_rate <= scenario.terminal_growth:
+            raise ValueError(
+                f"Invalid scenario '{scenario.name}': discount rate ({discount_rate:.2%}) "
+                f"must be greater than terminal growth ({scenario.terminal_growth:.2%})"
+            )
+        
         # Project FCF
         fcf_projector = FCFProjector(
             historical_revenue=self.historical_revenue,
