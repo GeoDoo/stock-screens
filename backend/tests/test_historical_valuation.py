@@ -232,3 +232,150 @@ class TestEdgeCases:
         assert len(result.yearly_metrics) == 0
 
 
+class TestTrueHistoricalValuation:
+    """
+    Tests for true historical valuation using actual historical prices.
+    
+    Bug: Previous implementation used current market cap to calculate 
+    "historical" multiples, which is misleading. True historical valuation
+    requires the stock price FROM that year.
+    
+    Example showing the difference:
+    - 2021 Net Income: $70B
+    - Current Market Cap: $2.4T → "Historical" P/E = 34x (WRONG)
+    - 2021 Stock Price: $100 → Shares: 16B → Market Cap: $1.6T → True P/E = 23x (CORRECT)
+    """
+    
+    @pytest.fixture
+    def sample_historical_prices(self):
+        """
+        Historical prices at year-end for each fiscal year.
+        Format: {year: price_at_year_end}
+        """
+        return {
+            2024: 150.0,  # Most recent - should match current
+            2023: 130.0,  # Stock was lower last year
+            2022: 110.0,  # Even lower 2 years ago
+            2021: 100.0,  # Lower still
+            2020: 85.0,   # Lowest
+        }
+    
+    def test_true_historical_uses_actual_prices(self, analyzer, sample_financials, sample_profile, sample_historical_prices):
+        """
+        When historical prices are provided, use them for true historical multiples.
+        """
+        result = analyzer.analyze(
+            sample_financials, 
+            sample_profile,
+            historical_prices=sample_historical_prices,
+        )
+        
+        # Should indicate that true historical prices were used
+        assert result.uses_true_historical_prices is True
+        
+        # For 2021: price=$100, shares=16B → market cap = $1.6T
+        # Net income 2021 = $70B
+        # True P/E = 1.6T / 70B = 22.86
+        year_2021 = next((ym for ym in result.yearly_metrics if ym.year == 2021), None)
+        assert year_2021 is not None
+        
+        # With current market cap proxy, P/E would be 2.4T/70B = 34.3
+        # With true historical price, P/E should be ~22.9
+        assert year_2021.pe is not None
+        assert 20 < year_2021.pe < 25, (
+            f"2021 P/E should be ~22.9 with historical price, got {year_2021.pe}. "
+            "Ensure historical price is used, not current market cap."
+        )
+    
+    def test_proxy_mode_without_historical_prices(self, analyzer, sample_financials, sample_profile):
+        """
+        Without historical prices, fall back to proxy mode (current market cap).
+        """
+        result = analyzer.analyze(sample_financials, sample_profile)
+        
+        # Should indicate proxy mode
+        assert result.uses_true_historical_prices is False
+        
+        # With proxy mode, all years use current market cap ($2.4T)
+        # 2021 Net income = $70B → P/E = 2.4T/70B = 34.3
+        year_2021 = next((ym for ym in result.yearly_metrics if ym.year == 2021), None)
+        assert year_2021 is not None
+        assert year_2021.pe is not None
+        assert 30 < year_2021.pe < 40, (
+            f"2021 P/E in proxy mode should be ~34.3, got {year_2021.pe}"
+        )
+    
+    def test_historical_ps_uses_historical_prices(self, analyzer, sample_financials, sample_profile, sample_historical_prices):
+        """
+        P/S should also use historical market cap when historical prices available.
+        """
+        result = analyzer.analyze(
+            sample_financials, 
+            sample_profile,
+            historical_prices=sample_historical_prices,
+        )
+        
+        # For 2021: price=$100, shares=16B → market cap = $1.6T
+        # Revenue 2021 = $300B
+        # True P/S = 1.6T / 300B = 5.33
+        year_2021 = next((ym for ym in result.yearly_metrics if ym.year == 2021), None)
+        assert year_2021 is not None
+        
+        # With current market cap: 2.4T/300B = 8
+        # With historical price: 1.6T/300B = 5.33
+        assert year_2021.ps is not None
+        assert 4.5 < year_2021.ps < 6.5, (
+            f"2021 P/S should be ~5.33 with historical price, got {year_2021.ps}"
+        )
+    
+    def test_averages_reflect_true_historical(self, analyzer, sample_financials, sample_profile, sample_historical_prices):
+        """
+        5-year averages should be calculated from true historical multiples.
+        """
+        result = analyzer.analyze(
+            sample_financials, 
+            sample_profile,
+            historical_prices=sample_historical_prices,
+        )
+        
+        # Average P/E with true historical should be lower than with proxy
+        # because stock price was lower in past years
+        assert result.avg_pe_5yr is not None
+        
+        # Calculate proxy average for comparison
+        proxy_result = analyzer.analyze(sample_financials, sample_profile)
+        
+        # True historical average should be lower (stock was cheaper in past)
+        assert result.avg_pe_5yr < proxy_result.avg_pe_5yr, (
+            f"True historical avg P/E ({result.avg_pe_5yr:.1f}) should be lower "
+            f"than proxy avg ({proxy_result.avg_pe_5yr:.1f}) since stock was cheaper in past"
+        )
+    
+    def test_missing_year_falls_back_to_proxy(self, analyzer, sample_financials, sample_profile):
+        """
+        If historical price missing for a year, use proxy for that year only.
+        """
+        partial_prices = {
+            2024: 150.0,
+            2023: 130.0,
+            # 2022, 2021, 2020 missing
+        }
+        
+        result = analyzer.analyze(
+            sample_financials, 
+            sample_profile,
+            historical_prices=partial_prices,
+        )
+        
+        # 2024 and 2023 should use historical prices
+        # Other years should fall back to current market cap
+        year_2023 = next((ym for ym in result.yearly_metrics if ym.year == 2023), None)
+        year_2021 = next((ym for ym in result.yearly_metrics if ym.year == 2021), None)
+        
+        assert year_2023 is not None
+        assert year_2021 is not None
+        
+        # Both should have P/E calculated (mixed mode should work)
+        assert year_2023.pe is not None
+        assert year_2021.pe is not None
+

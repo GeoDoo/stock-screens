@@ -52,6 +52,9 @@ class HistoricalValuation:
     
     # Yearly breakdown
     yearly_metrics: List[YearlyMetrics] = field(default_factory=list)
+    
+    # Methodology transparency
+    uses_true_historical_prices: bool = False  # True if actual historical prices used
 
 
 class HistoricalValuationAnalyzer:
@@ -70,6 +73,7 @@ class HistoricalValuationAnalyzer:
         self,
         financials: List[dict],
         profile: dict,
+        historical_prices: Optional[Dict[int, float]] = None,
     ) -> HistoricalValuation:
         """
         Analyze historical valuation.
@@ -77,11 +81,17 @@ class HistoricalValuationAnalyzer:
         Args:
             financials: List of annual financial statements (most recent first)
             profile: Current company profile with price, market_cap, shares
+            historical_prices: Optional dict mapping year to year-end stock price.
+                If provided, uses true historical prices to calculate historical
+                market caps for accurate historical multiples. Format: {2023: 150.0, 2022: 120.0, ...}
             
         Returns:
             HistoricalValuation with current vs historical comparison
         """
         result = HistoricalValuation()
+        
+        # Determine if we're using true historical prices
+        result.uses_true_historical_prices = bool(historical_prices)
         
         if not financials:
             return result
@@ -123,7 +133,12 @@ class HistoricalValuationAnalyzer:
         # Calculate yearly metrics (for historical comparison)
         yearly_metrics = []
         for fin in financials:
-            ym = self._calculate_yearly_metrics(fin, market_cap)
+            ym = self._calculate_yearly_metrics(
+                fin, 
+                current_market_cap=market_cap,
+                shares=shares,
+                historical_prices=historical_prices,
+            )
             if ym:
                 yearly_metrics.append(ym)
         
@@ -168,8 +183,16 @@ class HistoricalValuationAnalyzer:
         self,
         fin: dict,
         current_market_cap: Optional[float],
+        shares: Optional[float] = None,
+        historical_prices: Optional[Dict[int, float]] = None,
     ) -> Optional[YearlyMetrics]:
-        """Calculate metrics for a single year."""
+        """
+        Calculate metrics for a single year.
+        
+        If historical_prices contains the year and shares are available,
+        uses the true historical market cap (price × shares) for accurate
+        historical multiples. Otherwise falls back to current market cap.
+        """
         date_str = fin.get("date")
         if not date_str:
             return None
@@ -200,21 +223,28 @@ class HistoricalValuationAnalyzer:
             equity=equity,
         )
         
-        # Calculate ratios using current market cap (for historical comparison)
-        # Note: Ideally we'd use historical prices, but we'll use current market cap
-        # as a proxy to show how the business metrics have evolved
-        if current_market_cap and current_market_cap > 0:
+        # Determine market cap to use for this year
+        # Priority: true historical price × shares, else current market cap as proxy
+        market_cap_for_year = current_market_cap
+        
+        if historical_prices and shares and shares > 0 and year in historical_prices:
+            # Use true historical market cap
+            historical_price = historical_prices[year]
+            market_cap_for_year = historical_price * shares
+        
+        # Calculate ratios
+        if market_cap_for_year and market_cap_for_year > 0:
             if net_income and net_income > 0:
-                metrics.pe = current_market_cap / net_income
+                metrics.pe = market_cap_for_year / net_income
             
             if revenue and revenue > 0:
-                metrics.ps = current_market_cap / revenue
+                metrics.ps = market_cap_for_year / revenue
             
             if equity and equity > 0:
-                metrics.pb = current_market_cap / equity
+                metrics.pb = market_cap_for_year / equity
             
             if ebitda and ebitda > 0:
-                ev = current_market_cap + debt - cash
+                ev = market_cap_for_year + debt - cash
                 metrics.ev_ebitda = ev / ebitda
         
         return metrics
