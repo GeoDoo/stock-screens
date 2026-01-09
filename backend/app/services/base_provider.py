@@ -48,6 +48,7 @@ class FinancialStatement:
     short_term_debt: Optional[float] = None  # For Non-Cash Working Capital
     goodwill: Optional[float] = None  # For ROTIC calculation
     intangible_assets: Optional[float] = None  # For ROTIC calculation
+    retained_earnings: Optional[float] = None  # For Altman Z-Score
     
     # Cash Flow
     operating_cash_flow: Optional[float] = None

@@ -156,6 +156,7 @@ class FMPProvider(StockDataProvider):
                 short_term_debt=bal.get("shortTermDebt"),
                 goodwill=bal.get("goodwill"),
                 intangible_assets=bal.get("intangibleAssets"),
+                retained_earnings=bal.get("retainedEarnings"),
                 # Cash Flow
                 operating_cash_flow=cf.get("operatingCashFlow"),
                 capital_expenditure=cf.get("capitalExpenditure"),

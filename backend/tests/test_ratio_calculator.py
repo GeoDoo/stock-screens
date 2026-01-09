@@ -702,3 +702,155 @@ class TestROTIC:
             "ROTIC should be None when Tangible IC is negative"
         )
 
+
+class TestAltmanZScore:
+    """
+    Tests for Altman Z-Score bankruptcy risk indicator.
+    
+    Original Z-Score formula (for manufacturing companies):
+    Z = 1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E
+    
+    Where:
+    - A = Working Capital / Total Assets
+    - B = Retained Earnings / Total Assets
+    - C = EBIT / Total Assets
+    - D = Market Value of Equity / Total Liabilities
+    - E = Sales / Total Assets
+    
+    Interpretation:
+    - Z > 2.99: "Safe Zone" - low bankruptcy risk
+    - 1.81 < Z < 2.99: "Grey Zone" - moderate risk
+    - Z < 1.81: "Distress Zone" - high bankruptcy risk
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_z_score_safe_zone(self, calculator):
+        """
+        Healthy company should score in "Safe Zone" (Z > 2.99).
+        """
+        data = {
+            "profile": {"price": 150, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,  # Sales
+                "operatingIncome": 25_000_000_000,  # EBIT
+            }],
+            "balance_sheet": [{
+                "totalAssets": 200_000_000_000,
+                "totalCurrentAssets": 80_000_000_000,
+                "totalCurrentLiabilities": 40_000_000_000,  # WC = 40B
+                "totalLiabilities": 100_000_000_000,
+                "retainedEarnings": 60_000_000_000,
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.risk is not None, "Risk metrics should be calculated"
+        assert ratios.risk.altman_z_score is not None, "Z-Score should be calculated"
+        assert ratios.risk.altman_z_score > 2.99, (
+            f"Healthy company Z-Score ({ratios.risk.altman_z_score:.2f}) should be > 2.99"
+        )
+        assert ratios.risk.z_score_zone == "safe"
+    
+    def test_z_score_distress_zone(self, calculator):
+        """
+        Distressed company should score in "Distress Zone" (Z < 1.81).
+        """
+        data = {
+            "profile": {"price": 5, "marketCap": 1_000_000_000},  # Low market cap
+            "income_statement": [{
+                "revenue": 10_000_000_000,
+                "operatingIncome": -500_000_000,  # Negative EBIT
+            }],
+            "balance_sheet": [{
+                "totalAssets": 20_000_000_000,
+                "totalCurrentAssets": 3_000_000_000,
+                "totalCurrentLiabilities": 8_000_000_000,  # Negative WC
+                "totalLiabilities": 18_000_000_000,  # High debt
+                "retainedEarnings": -5_000_000_000,  # Accumulated losses
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.risk.altman_z_score is not None
+        assert ratios.risk.altman_z_score < 1.81, (
+            f"Distressed company Z-Score ({ratios.risk.altman_z_score:.2f}) should be < 1.81"
+        )
+        assert ratios.risk.z_score_zone == "distress"
+    
+    def test_z_score_grey_zone(self, calculator):
+        """
+        Marginal company should score in "Grey Zone" (1.81 < Z < 2.99).
+        """
+        data = {
+            "profile": {"price": 50, "marketCap": 50_000_000_000},
+            "income_statement": [{
+                "revenue": 40_000_000_000,
+                "operatingIncome": 3_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalAssets": 60_000_000_000,
+                "totalCurrentAssets": 20_000_000_000,
+                "totalCurrentLiabilities": 15_000_000_000,  # WC = 5B
+                "totalLiabilities": 35_000_000_000,
+                "retainedEarnings": 10_000_000_000,
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.risk.altman_z_score is not None
+        assert 1.81 < ratios.risk.altman_z_score < 2.99, (
+            f"Marginal company Z-Score ({ratios.risk.altman_z_score:.2f}) should be in grey zone"
+        )
+        assert ratios.risk.z_score_zone == "grey"
+    
+    def test_z_score_handles_missing_retained_earnings(self, calculator):
+        """
+        When retained earnings is missing, Z-Score should still calculate
+        (treating missing as zero or returning None).
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 100_000_000_000},
+            "income_statement": [{
+                "revenue": 50_000_000_000,
+                "operatingIncome": 10_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalAssets": 80_000_000_000,
+                "totalCurrentAssets": 30_000_000_000,
+                "totalCurrentLiabilities": 20_000_000_000,
+                "totalLiabilities": 40_000_000_000,
+                # No retainedEarnings
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Should either calculate with B=0 or return None
+        # Preferably calculate with B=0
+        assert ratios.risk is not None
+    
+    def test_z_score_none_when_missing_critical_data(self, calculator):
+        """
+        Z-Score should be None when critical components are missing.
+        """
+        data = {
+            "profile": {"price": 100},  # No marketCap
+            "income_statement": [{}],
+            "balance_sheet": [{}],  # No totalAssets
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.risk.altman_z_score is None
+

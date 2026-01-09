@@ -55,6 +55,13 @@ class EfficiencyRatios:
 
 
 @dataclass
+class RiskMetrics:
+    """Risk and bankruptcy indicators."""
+    altman_z_score: Optional[float] = None
+    z_score_zone: Optional[str] = None  # "safe", "grey", or "distress"
+
+
+@dataclass
 class FinancialRatios:
     """Complete set of financial ratios."""
     valuation: ValuationRatios
@@ -62,6 +69,7 @@ class FinancialRatios:
     profitability: ProfitabilityRatios
     liquidity: LiquidityRatios
     efficiency: EfficiencyRatios
+    risk: RiskMetrics
 
 
 class RatioCalculator:
@@ -109,11 +117,13 @@ class RatioCalculator:
         current_assets = balance_sheet.get("totalCurrentAssets")
         inventory = balance_sheet.get("inventory") or 0
         current_liabilities = balance_sheet.get("totalCurrentLiabilities")
+        total_liabilities = balance_sheet.get("totalLiabilities")
         total_debt = balance_sheet.get("totalDebt") or 0
         equity = balance_sheet.get("totalStockholdersEquity")
         cash = balance_sheet.get("cashAndCashEquivalents") or 0
         goodwill = balance_sheet.get("goodwill") or 0
         intangibles = balance_sheet.get("intangibleAssets") or 0
+        retained_earnings = balance_sheet.get("retainedEarnings") or 0
         
         dividends_paid = abs(cash_flow.get("dividendsPaid") or 0)
         
@@ -145,6 +155,11 @@ class RatioCalculator:
             ),
             efficiency=self._calc_efficiency(
                 revenue, total_assets, cogs, inventory
+            ),
+            risk=self._calc_risk(
+                current_assets, current_liabilities, total_assets,
+                retained_earnings, operating_income, market_cap,
+                total_liabilities, revenue
             ),
         )
     
@@ -325,6 +340,79 @@ class RatioCalculator:
         # Inventory Turnover
         if cogs and inventory and inventory > 0:
             ratios.inventory_turnover = cogs / inventory
+        
+        return ratios
+    
+    def _calc_risk(
+        self,
+        current_assets: Optional[float],
+        current_liabilities: Optional[float],
+        total_assets: Optional[float],
+        retained_earnings: float,
+        operating_income: Optional[float],
+        market_cap: Optional[float],
+        total_liabilities: Optional[float],
+        revenue: Optional[float],
+    ) -> RiskMetrics:
+        """
+        Calculate risk metrics including Altman Z-Score.
+        
+        Altman Z-Score formula (original for manufacturing):
+        Z = 1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E
+        
+        Where:
+        - A = Working Capital / Total Assets
+        - B = Retained Earnings / Total Assets
+        - C = EBIT / Total Assets
+        - D = Market Value of Equity / Total Liabilities
+        - E = Sales / Total Assets
+        
+        Interpretation:
+        - Z > 2.99: "Safe Zone" - low bankruptcy risk
+        - 1.81 < Z < 2.99: "Grey Zone" - moderate risk
+        - Z < 1.81: "Distress Zone" - high bankruptcy risk
+        """
+        ratios = RiskMetrics()
+        
+        # Check for critical data needed for Z-Score
+        if not total_assets or total_assets <= 0:
+            return ratios
+        if not total_liabilities or total_liabilities <= 0:
+            return ratios
+        if market_cap is None:
+            return ratios
+        
+        # Calculate components
+        working_capital = 0
+        if current_assets is not None and current_liabilities is not None:
+            working_capital = current_assets - current_liabilities
+        
+        # A = Working Capital / Total Assets
+        a = working_capital / total_assets
+        
+        # B = Retained Earnings / Total Assets
+        b = retained_earnings / total_assets
+        
+        # C = EBIT / Total Assets
+        c = (operating_income or 0) / total_assets
+        
+        # D = Market Value of Equity / Total Liabilities
+        d = market_cap / total_liabilities
+        
+        # E = Sales / Total Assets
+        e = (revenue or 0) / total_assets
+        
+        # Calculate Z-Score
+        z_score = 1.2 * a + 1.4 * b + 3.3 * c + 0.6 * d + 1.0 * e
+        ratios.altman_z_score = z_score
+        
+        # Determine zone
+        if z_score > 2.99:
+            ratios.z_score_zone = "safe"
+        elif z_score < 1.81:
+            ratios.z_score_zone = "distress"
+        else:
+            ratios.z_score_zone = "grey"
         
         return ratios
 
