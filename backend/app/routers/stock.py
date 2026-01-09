@@ -84,6 +84,97 @@ def get_client_for_provider(provider: str) -> StockDataClient:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
 
 
+async def _fetch_year_end_prices(
+    symbol: str, 
+    financials: list, 
+    client: StockDataClient,
+) -> dict:
+    """
+    Fetch year-end stock prices for true historical valuation.
+    
+    For each fiscal year-end date in financials, finds the closing price
+    on or near that date from historical price data.
+    
+    Args:
+        symbol: Stock ticker symbol
+        financials: List of merged financial statements with date field
+        client: StockDataClient with providers that support historical prices
+        
+    Returns:
+        Dict mapping year to year-end price: {2023: 150.0, 2022: 120.0, ...}
+        Empty dict if historical prices cannot be fetched.
+    """
+    if not financials:
+        return {}
+    
+    # Extract fiscal year-end dates
+    fiscal_dates = []
+    for fin in financials:
+        date_str = fin.get("date")
+        if date_str:
+            fiscal_dates.append(date_str)
+    
+    if not fiscal_dates:
+        return {}
+    
+    # Need about 5 years of price data (1825 days, round up to 2000)
+    try:
+        # Use the first available provider that supports historical prices
+        provider = client.providers[0] if client.providers else None
+        if not provider or not getattr(provider, 'supports_technical', False):
+            return {}
+        
+        historical = await provider.get_historical_prices(symbol.upper(), days=2000)
+        
+        if not historical.bars:
+            return {}
+        
+        # Build a date -> price lookup
+        price_by_date = {bar.timestamp: bar.close for bar in historical.bars}
+        
+        # For each fiscal year-end, find the closest price
+        year_end_prices = {}
+        for date_str in fiscal_dates:
+            try:
+                year = int(date_str[:4])
+            except (ValueError, TypeError):
+                continue
+            
+            # Try exact match first
+            if date_str in price_by_date:
+                year_end_prices[year] = price_by_date[date_str]
+                continue
+            
+            # Find closest date within 10 days
+            from datetime import datetime, timedelta
+            try:
+                target_date = datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                continue
+            
+            best_price = None
+            best_delta = None
+            for bar_date_str, price in price_by_date.items():
+                try:
+                    bar_date = datetime.strptime(bar_date_str, "%Y-%m-%d")
+                except ValueError:
+                    continue
+                
+                delta = abs((bar_date - target_date).days)
+                if delta <= 10 and (best_delta is None or delta < best_delta):
+                    best_delta = delta
+                    best_price = price
+            
+            if best_price is not None:
+                year_end_prices[year] = best_price
+        
+        return year_end_prices
+        
+    except Exception:
+        # If historical prices fail, return empty dict to fall back to proxy mode
+        return {}
+
+
 @router.get("/{symbol}", response_model=StockDataResponse)
 async def get_stock(symbol: str, provider: str):
     """
@@ -598,6 +689,10 @@ async def get_historical_valuation(symbol: str, provider: str):
     Compares current valuation multiples (P/E, P/S, P/B, EV/EBITDA)
     to 5-year averages to assess if stock is cheap or expensive
     relative to its own history.
+    
+    Uses true historical prices when available for accurate historical
+    multiples, falling back to current market cap proxy if historical
+    prices cannot be fetched.
     """
     client = get_client_for_provider(provider)
     
@@ -630,11 +725,15 @@ async def get_historical_valuation(symbol: str, provider: str):
     
     profile = data.get("profile", {})
     
+    # Fetch historical prices for true historical valuation
+    historical_prices = await _fetch_year_end_prices(symbol, merged_financials, client)
+    
     analyzer = HistoricalValuationAnalyzer()
-    result = analyzer.analyze(merged_financials, profile)
+    result = analyzer.analyze(merged_financials, profile, historical_prices=historical_prices)
     
     return {
         "symbol": symbol.upper(),
+        "uses_true_historical_prices": result.uses_true_historical_prices,
         "current": {
             "pe": result.current_pe,
             "ps": result.current_ps,

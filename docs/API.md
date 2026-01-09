@@ -820,6 +820,10 @@ Compares current valuation multiples (P/E, P/S, P/B, EV/EBITDA)
 to 5-year averages to assess if stock is cheap or expensive
 relative to its own history.
 
+Uses true historical prices when available for accurate historical
+multiples, falling back to current market cap proxy if historical
+prices cannot be fetched.
+
 ```
 GET /api/stock/{symbol}/historical-valuation
 ```
