@@ -219,7 +219,7 @@ async def get_stock(symbol: str, provider: str):
     data = stock_data_to_legacy(stock_data)
     extractor = DataExtractor(data)
 
-    # Run validation
+    # Run validation (including business-type warnings)
     validator = DataValidator(
         market_cap=extractor.market_cap(),
         beta=extractor.beta(),
@@ -233,6 +233,9 @@ async def get_stock(symbol: str, provider: str):
         da_history=extractor.da_history(),
         capex_history=extractor.capex_history(),
         working_capital_history=extractor.working_capital_history(),
+        sector=extractor.sector(),
+        industry=extractor.industry(),
+        free_cash_flow=extractor.free_cash_flow(),
     )
     validation_result = validator.validate()
 
@@ -921,6 +924,9 @@ async def batch_analyze(symbol: str, provider: str):
         da_history=extractor.da_history() or [],
         capex_history=extractor.capex_history() or [],
         working_capital_history=extractor.working_capital_history() or [],
+        sector=extractor.sector(),
+        industry=extractor.industry(),
+        free_cash_flow=extractor.free_cash_flow(),
     )
     validation_result = validator.validate()
     

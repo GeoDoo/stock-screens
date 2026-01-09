@@ -59,6 +59,28 @@ class ValidationResult:
         }
 
 
+# Financial sectors/industries where DCF is not appropriate
+FINANCIAL_SECTORS = {"Financial Services", "Financial"}
+FINANCIAL_INDUSTRIES = {
+    "Banks—Regional", "Banks—Diversified", "Banks - Regional", "Banks - Diversified",
+    "Insurance—Life", "Insurance—Property & Casualty", "Insurance—Diversified",
+    "Insurance - Life", "Insurance - Property & Casualty", "Insurance - Diversified",
+    "Insurance—Reinsurance", "Insurance - Reinsurance",
+    "Asset Management", "Capital Markets",
+    "Credit Services", "Mortgage Finance",
+}
+
+# Cyclical sectors/industries that need mid-cycle normalization
+CYCLICAL_SECTORS = {"Energy", "Basic Materials"}
+CYCLICAL_INDUSTRIES = {
+    "Oil & Gas E&P", "Oil & Gas Integrated", "Oil & Gas Midstream",
+    "Oil & Gas Refining & Marketing", "Oil & Gas Equipment & Services",
+    "Gold", "Silver", "Copper", "Steel", "Aluminum",
+    "Coal", "Uranium", "Industrial Metals & Minerals",
+    "Agricultural Inputs", "Lumber & Wood Production",
+}
+
+
 class DataValidator:
     """
     Validates stock data for DCF valuation.
@@ -76,6 +98,11 @@ class DataValidator:
     - tax_rate: Affects NOPAT (can use default 25%)
     - cost_of_debt: Affects WACC (can use default 5%)
     - D&A, CapEx, Working Capital: Affects FCF detail (can estimate)
+    
+    Business-type warnings:
+    - Financial sector: DCF not appropriate (use P/B, dividend discount)
+    - Pre-FCF companies: Terminal value dominates valuation
+    - Cyclical industries: Need mid-cycle normalization
     """
     
     def __init__(
@@ -92,6 +119,9 @@ class DataValidator:
         da_history: List[float],
         capex_history: List[float],
         working_capital_history: List[float],
+        sector: Optional[str] = None,
+        industry: Optional[str] = None,
+        free_cash_flow: Optional[float] = None,
     ):
         self.market_cap = market_cap
         self.beta = beta
@@ -105,6 +135,9 @@ class DataValidator:
         self.da_history = da_history
         self.capex_history = capex_history
         self.working_capital_history = working_capital_history
+        self.sector = sector
+        self.industry = industry
+        self.free_cash_flow = free_cash_flow
     
     def validate(self) -> ValidationResult:
         """Run all validations and return result."""
@@ -229,6 +262,68 @@ class DataValidator:
                 impacts="dcf",
             ))
         
+        # Business-type warnings
+        self._validate_business_type(result)
+        
         return result
+    
+    def _validate_business_type(self, result: ValidationResult) -> None:
+        """Add warnings for business types where DCF is inappropriate."""
+        
+        # Financial sector warning
+        if self._is_financial_company():
+            result.issues.append(ValidationIssue(
+                field="business_type",
+                message=(
+                    "Financial services company detected. Traditional DCF may not be appropriate "
+                    "as the balance sheet IS the product. Consider using Price/Book, Dividend "
+                    "Discount Model, or Residual Income Model instead."
+                ),
+                severity=Severity.WARNING,
+                impacts="dcf",
+            ))
+        
+        # Pre-FCF company warning
+        if self.free_cash_flow is not None and self.free_cash_flow < 0:
+            result.issues.append(ValidationIssue(
+                field="business_type",
+                message=(
+                    "Negative free cash flow detected. For pre-FCF companies, terminal value "
+                    "dominates the DCF valuation, making it highly sensitive to assumptions. "
+                    "Consider revenue/earnings multiples or scenario analysis with explicit "
+                    "path to profitability."
+                ),
+                severity=Severity.WARNING,
+                impacts="dcf",
+            ))
+        
+        # Cyclical industry warning
+        if self._is_cyclical_company():
+            result.issues.append(ValidationIssue(
+                field="business_type",
+                message=(
+                    "Cyclical industry detected. Standard DCF using recent margins may overvalue "
+                    "at cycle peaks or undervalue at troughs. Consider using mid-cycle normalized "
+                    "earnings/margins for more accurate valuation."
+                ),
+                severity=Severity.WARNING,
+                impacts="dcf",
+            ))
+    
+    def _is_financial_company(self) -> bool:
+        """Check if company is in financial services sector."""
+        if self.sector and self.sector in FINANCIAL_SECTORS:
+            return True
+        if self.industry and self.industry in FINANCIAL_INDUSTRIES:
+            return True
+        return False
+    
+    def _is_cyclical_company(self) -> bool:
+        """Check if company is in a highly cyclical industry."""
+        if self.sector and self.sector in CYCLICAL_SECTORS:
+            return True
+        if self.industry and self.industry in CYCLICAL_INDUSTRIES:
+            return True
+        return False
 
 
