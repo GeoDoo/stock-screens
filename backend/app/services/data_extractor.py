@@ -163,6 +163,21 @@ class DataExtractor:
         
         # Last resort: profile shares (less accurate, but better than nothing)
         return self.profile.get("sharesOutstanding")
+    
+    def shares_outstanding_type(self) -> str:
+        """
+        Returns the source of shares used for valuation transparency.
+        
+        Returns:
+            'diluted' - Fully Diluted Shares from income statement (preferred)
+            'basic' - Basic shares from income statement
+            'profile' - Shares from company profile (least accurate)
+        """
+        if self._get_latest(self.income_statement, "weightedAverageShsOutDil") is not None:
+            return "diluted"
+        if self._get_latest(self.income_statement, "weightedAverageShsOut") is not None:
+            return "basic"
+        return "profile"
 
     def market_risk_premium(self) -> float:
         """
