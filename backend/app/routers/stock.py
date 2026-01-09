@@ -977,6 +977,8 @@ async def batch_analyze(symbol: str, provider: str):
             "net_margin": ratios.profitability.net_margin,
             "roe": ratios.profitability.roe,
             "roa": ratios.profitability.roa,
+            "roic": ratios.profitability.roic,
+            "rotic": ratios.profitability.rotic,
         },
         "liquidity": {
             "current_ratio": ratios.liquidity.current_ratio,
@@ -986,6 +988,19 @@ async def batch_analyze(symbol: str, provider: str):
         "efficiency": {
             "asset_turnover": ratios.efficiency.asset_turnover,
             "inventory_turnover": ratios.efficiency.inventory_turnover,
+        },
+        "risk": {
+            "altman_z_score": ratios.risk.altman_z_score,
+            "z_score_zone": ratios.risk.z_score_zone,
+            "accrual_ratio": ratios.risk.accrual_ratio,
+            "accrual_quality": ratios.risk.accrual_quality,
+            "beneish_m_score": ratios.risk.beneish_m_score,
+            "m_score_zone": ratios.risk.manipulation_risk,
+        },
+        "sbc": {
+            "fcf_adjusted": ratios.sbc.fcf_adjusted,
+            "sbc_percent_revenue": ratios.sbc.sbc_percent_revenue,
+            "sbc_level": ratios.sbc.sbc_level,
         },
     }
     
@@ -1033,6 +1048,8 @@ async def batch_analyze(symbol: str, provider: str):
                     "net_margin": ttm_ratios.profitability.net_margin,
                     "roe": ttm_ratios.profitability.roe,
                     "roa": ttm_ratios.profitability.roa,
+                    "roic": ttm_ratios.profitability.roic,
+                    "rotic": ttm_ratios.profitability.rotic,
                 },
                 "liquidity": {
                     "current_ratio": ttm_ratios.liquidity.current_ratio,
@@ -1042,6 +1059,19 @@ async def batch_analyze(symbol: str, provider: str):
                 "efficiency": {
                     "asset_turnover": ttm_ratios.efficiency.asset_turnover,
                     "inventory_turnover": ttm_ratios.efficiency.inventory_turnover,
+                },
+                "risk": {
+                    "altman_z_score": ttm_ratios.risk.altman_z_score,
+                    "z_score_zone": ttm_ratios.risk.z_score_zone,
+                    "accrual_ratio": ttm_ratios.risk.accrual_ratio,
+                    "accrual_quality": ttm_ratios.risk.accrual_quality,
+                    "beneish_m_score": ttm_ratios.risk.beneish_m_score,
+                    "m_score_zone": ttm_ratios.risk.manipulation_risk,
+                },
+                "sbc": {
+                    "fcf_adjusted": ttm_ratios.sbc.fcf_adjusted,
+                    "sbc_percent_revenue": ttm_ratios.sbc.sbc_percent_revenue,
+                    "sbc_level": ttm_ratios.sbc.sbc_level,
                 },
             }
             
