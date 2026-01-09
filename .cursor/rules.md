@@ -51,10 +51,29 @@ All bugfixes must add a regression test for the exact failure mode:
 - All API responses must pass through normalizers at the boundary.
 - Types must match backend reality (OpenAPI is source-of-truth):
   - treat optional fields as optional (e.g. validation `impacts` until backend is unified).
-- Minimal UI/UX:
-  - prefer progressive disclosure (advanced options hidden)
-  - warnings near fields (WACC missing, extreme margins, provider limited)
-  - no noisy UI: calm colors, small components, consistent spacing.
+- Minimal UI/UX (Design System Principles):
+  - **White space first**: generous padding/margins; avoid dense dashboards.
+  - **Readable typography**:
+    - default body text: 15–16px, line-height ~1.5–1.7
+    - clear hierarchy (H1/H2/H3) with consistent scale
+    - avoid more than 2 font families; prefer system font stack unless strong reason.
+  - **Good proportions & rhythm**:
+    - use a spacing scale (e.g. 4/8/12/16/24/32) and stick to it
+    - consistent vertical rhythm; align baselines and section spacing.
+  - **Simple layout**:
+    - constrain content width (avoid full-bleed paragraphs); center primary column
+    - use cards/panels sparingly; prefer sections with whitespace over borders.
+  - **Progressive disclosure**:
+    - advanced inputs hidden behind “Advanced” toggles
+    - show only the next-most-likely action (avoid option overload).
+  - **Calm, low-noise visual language**:
+    - minimal borders, subtle dividers, muted palette; avoid heavy shadows
+    - color communicates meaning (error/warn/success) — not decoration.
+  - **Clarity near decisions**:
+    - warnings next to the relevant fields/outputs (missing WACC inputs, extreme margins, terminal value dominance, provider limitations)
+    - display units and sign conventions explicitly (%, $, per-share).
+  - **Accessibility basics are mandatory**:
+    - sufficient contrast, focus states, keyboard navigation, and sensible heading order.
 
 ## KISS/DRY Rules (Practical for this repo)
 - KISS: prefer explicit code for valuation flows (clarity > abstraction).
