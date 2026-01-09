@@ -176,3 +176,17 @@ class TestScenarioInputValidation:
                 probability=1.5,  # Invalid - > 1
             )
         assert "probability" in str(exc_info.value)
+    
+    def test_scenario_operating_margin_validated(self):
+        """
+        Bug: ScenarioInput.operating_margin lacked validator while 
+        ValuationRequest had one. Both should reject unrealistic values.
+        """
+        with pytest.raises(ValidationError) as exc_info:
+            ScenarioInput(
+                name="Test",
+                revenue_growth=0.10,
+                operating_margin=0.95,  # Invalid - 95%
+                terminal_growth=0.03,
+            )
+        assert "operating_margin" in str(exc_info.value)

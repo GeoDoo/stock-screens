@@ -120,6 +120,16 @@ class ScenarioInput(BaseModel):
             raise ValueError("terminal_growth cannot exceed 10% (0.10)")
         return v
     
+    @field_validator('operating_margin')
+    @classmethod
+    def validate_operating_margin(cls, v: float) -> float:
+        """Operating margin should be -50% to 80%. Higher is unrealistic."""
+        if v < -0.50:
+            raise ValueError("operating_margin cannot be below -50% (-0.50)")
+        if v > 0.80:
+            raise ValueError("operating_margin cannot exceed 80% (0.80)")
+        return v
+    
     @field_validator('probability')
     @classmethod
     def validate_probability(cls, v: float) -> float:
