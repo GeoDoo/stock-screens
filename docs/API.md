@@ -611,7 +611,8 @@ GET /api/stock/{symbol}
         "message": "string"
       }
     ]
-  }
+  },
+  "is_using_ltm": true
 }
 ```
 

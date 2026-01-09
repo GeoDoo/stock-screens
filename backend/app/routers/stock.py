@@ -295,6 +295,7 @@ async def get_stock(symbol: str, provider: str):
             wc_ratio=fcf_projector.wc_to_revenue_ratio() if extractor.working_capital_history() else None,
         ),
         validation=ValidationResponse(**validation_result.to_dict()),
+        is_using_ltm=extractor.is_using_ltm(),
     )
 
 
@@ -831,11 +832,17 @@ async def get_technical_analysis(symbol: str, provider: str = "massive", days: i
                 {"timestamp": v.timestamp, "macd": v.macd, "signal": v.signal, "histogram": v.histogram}
                 for v in result.macd
             ],
+            "vwap": [{"timestamp": v.timestamp, "value": v.value} for v in result.vwap] if result.vwap else [],
         },
         "signals": {
             "trend": result.trend,
             "rsi": result.rsi_signal,
             "macd": result.macd_signal,
+            "volume_confirmation": result.volume_confirmation,
+        },
+        "volume": {
+            "average_volume": result.average_volume,
+            "relative_volume": result.relative_volume,
         },
     }
 
