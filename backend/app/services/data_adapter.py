@@ -48,8 +48,9 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
             "incomeBeforeTax": (fin.net_income + fin.income_tax_expense) 
                 if fin.net_income is not None and fin.income_tax_expense is not None 
                 else None,
-            # weightedAverageShsOut not in standardized format, use profile
-            "weightedAverageShsOut": profile.shares_outstanding,
+            # Share counts - prefer financial statement data, fallback to profile
+            "weightedAverageShsOut": fin.weighted_avg_shares or profile.shares_outstanding,
+            "weightedAverageShsOutDil": fin.weighted_avg_shares_diluted,
         })
         
         # Balance sheet

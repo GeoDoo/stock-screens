@@ -33,6 +33,10 @@ class FinancialStatement:
     interest_expense: Optional[float] = None
     income_tax_expense: Optional[float] = None
     
+    # Share counts (from income statement)
+    weighted_avg_shares: Optional[float] = None  # Basic shares
+    weighted_avg_shares_diluted: Optional[float] = None  # FDSO - required for DCF
+    
     # Balance Sheet
     total_assets: Optional[float] = None
     total_liabilities: Optional[float] = None

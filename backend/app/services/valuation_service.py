@@ -167,8 +167,10 @@ class ValuationService:
         net_debt = total_debt - cash
         equity_value = enterprise_value - net_debt
 
-        # Intrinsic value per share
+        # Intrinsic value per share (prefer diluted shares for DCF)
         shares = extractor.shares_outstanding() or 1
+        # Determine which shares figure was used for transparency
+        shares_type = "diluted" if extractor.diluted_shares_outstanding() is not None else "basic"
         intrinsic_value_per_share = equity_value / shares
 
         # 6. Sensitivity Analysis
@@ -230,7 +232,7 @@ class ValuationService:
                 "projection_years": projection_years,
                 "discount_rate_override": discount_rate_override,
                 "shares_outstanding": shares,
-                "shares_type": "basic",  # FMP provides basic shares; diluted would be preferred
+                "shares_type": shares_type,  # "diluted" (preferred) or "basic" (fallback)
             },
             "sensitivity": sensitivity,
             "value_drivers": value_drivers,

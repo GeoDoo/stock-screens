@@ -425,3 +425,135 @@ class TestNonCashWorkingCapital:
         assert history[0] == 15000000000, "Year 1 NCWC should be 15B"
         assert history[1] == 20000000000, "Year 2 NCWC should be 20B"
 
+
+class TestDilutedShares:
+    """
+    Regression tests for Fully Diluted Shares Outstanding (FDSO).
+    
+    Bug: DataExtractor used Basic Shares Outstanding from income statement.
+    
+    Professional DCF requires Fully Diluted Shares Outstanding because:
+    - Stock options, RSUs, convertible securities will dilute shareholders
+    - Using basic shares OVERVALUES the company by ignoring dilution
+    - This affects intrinsic value per share calculation
+    """
+    
+    def test_diluted_shares_extracted(self):
+        """
+        Diluted shares should be extracted from income statement.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "weightedAverageShsOut": 15000000000,  # 15B basic
+                "weightedAverageShsOutDil": 15500000000,  # 15.5B diluted
+            }],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        diluted = extractor.diluted_shares_outstanding()
+        assert diluted == 15500000000, (
+            f"Diluted shares should be 15.5B, got {diluted}. "
+            "Must extract weightedAverageShsOutDil from income statement."
+        )
+    
+    def test_shares_outstanding_prefers_diluted(self):
+        """
+        shares_outstanding() should prefer diluted over basic.
+        
+        Professional valuation ALWAYS uses diluted shares to account
+        for future dilution from options, RSUs, and convertibles.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "weightedAverageShsOut": 15000000000,  # 15B basic
+                "weightedAverageShsOutDil": 15500000000,  # 15.5B diluted
+            }],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        shares = extractor.shares_outstanding()
+        assert shares == 15500000000, (
+            f"shares_outstanding() should return diluted (15.5B), got {shares}. "
+            "Diluted shares must be preferred over basic for DCF."
+        )
+    
+    def test_shares_outstanding_falls_back_to_basic(self):
+        """
+        When diluted shares not available, fall back to basic.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "weightedAverageShsOut": 15000000000,  # Only basic available
+            }],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        shares = extractor.shares_outstanding()
+        assert shares == 15000000000, (
+            "Should fall back to basic shares when diluted not available."
+        )
+    
+    def test_diluted_shares_handles_missing_data(self):
+        """
+        Returns None when diluted shares not available.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "weightedAverageShsOut": 15000000000,  # Only basic
+            }],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        diluted = extractor.diluted_shares_outstanding()
+        assert diluted is None, "Should return None when diluted shares missing."
+    
+    def test_shares_outstanding_uses_profile_as_last_resort(self):
+        """
+        When neither diluted nor basic in income statement, use profile.
+        """
+        data = {
+            "profile": {"sharesOutstanding": 14000000000},
+            "income_statement": [{}],  # No share data
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        shares = extractor.shares_outstanding()
+        assert shares == 14000000000, (
+            "Should fall back to profile shares when income statement missing both."
+        )
+    
+    def test_diluted_shares_impact_on_valuation(self):
+        """
+        Demonstrate the valuation impact of using diluted vs basic.
+        
+        With 3.3% more diluted shares, per-share value decreases by ~3.2%.
+        This is the error we're fixing.
+        """
+        equity_value = 3_000_000_000_000  # $3T equity value
+        basic_shares = 15_000_000_000
+        diluted_shares = 15_500_000_000  # 3.3% more shares
+        
+        per_share_basic = equity_value / basic_shares  # $200
+        per_share_diluted = equity_value / diluted_shares  # $193.55
+        
+        overvaluation_pct = (per_share_basic - per_share_diluted) / per_share_diluted * 100
+        
+        assert overvaluation_pct > 3.0, (
+            f"Using basic shares overvalues by {overvaluation_pct:.1f}%. "
+            "This demonstrates why diluted shares are required."
+        )
+

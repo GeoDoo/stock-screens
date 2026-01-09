@@ -142,6 +142,9 @@ class FMPProvider(StockDataProvider):
                 net_income=inc.get("netIncome"),
                 interest_expense=inc.get("interestExpense"),
                 income_tax_expense=inc.get("incomeTaxExpense"),
+                # Share counts
+                weighted_avg_shares=inc.get("weightedAverageShsOut"),
+                weighted_avg_shares_diluted=inc.get("weightedAverageShsOutDil"),
                 # Balance Sheet
                 total_assets=bal.get("totalAssets"),
                 total_liabilities=bal.get("totalLiabilities"),
