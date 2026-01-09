@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-09 15:10
+> Last updated: 2026-01-09 15:12
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -21,6 +21,7 @@ Stock Screens is a full-stack stock analysis application with:
 |---------|---------|
 | `audit_repository.py` | SQLite-based repository for assumption audit entries. |
 | `base_provider.py` | Standardized company profile data. |
+| `cache.py` | Simple in-memory cache with TTL and size limits. |
 | `capital_efficiency.py` | Calculator for capital efficiency metrics. |
 | `comparable_analyzer.py` | Key valuation metrics for a company. |
 | `data_adapter.py` | — |
@@ -149,7 +150,7 @@ Weighted Average Cost of Capital calculator.
 
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
-| Backend | 29 test files | pytest |
+| Backend | 30 test files | pytest |
 | Frontend | 13 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)
