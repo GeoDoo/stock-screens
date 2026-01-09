@@ -154,6 +154,7 @@ class ComparableAnalyzer:
         # Calculate ratios from financial data
         financials = data.get("income_statement", [])
         balance_sheet = data.get("balance_sheet", [])
+        cash_flow = data.get("cash_flow", [])
         
         pe_ratio = None
         price_to_sales = None
@@ -164,6 +165,7 @@ class ComparableAnalyzer:
         if financials and price and market_cap:
             latest = financials[0] if financials else {}
             latest_bs = balance_sheet[0] if balance_sheet else {}
+            latest_cf = cash_flow[0] if cash_flow else {}
             
             # P/E ratio
             net_income = latest.get("netIncome")
@@ -190,7 +192,9 @@ class ComparableAnalyzer:
             enterprise_value = market_cap + total_debt - cash
             
             operating_income = latest.get("operatingIncome")
-            da = latest.get("depreciationAndAmortization") or 0
+            # D&A comes from cash_flow, not income_statement
+            # (stock_data_to_legacy places it in cash_flow)
+            da = latest_cf.get("depreciationAndAmortization") or 0
             if operating_income:
                 ebitda = operating_income + da
                 if ebitda > 0:

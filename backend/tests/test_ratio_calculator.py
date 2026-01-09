@@ -7,7 +7,12 @@ from app.services.ratio_calculator import RatioCalculator, FinancialRatios
 
 @pytest.fixture
 def sample_stock_data():
-    """Sample stock data for testing."""
+    """
+    Sample stock data for testing.
+    
+    Mirrors the structure produced by stock_data_to_legacy():
+    - D&A is in cash_flow (not income_statement)
+    """
     return {
         "profile": {
             "price": 150.0,
@@ -24,7 +29,7 @@ def sample_stock_data():
                 "netIncome": 100000000000,  # 100B (25% margin)
                 "interestExpense": 3000000000,  # 3B
                 "incomeBeforeTax": 103000000000,
-                "depreciationAndAmortization": 10000000000,
+                # NOTE: D&A is NOT here - it's in cash_flow (as per stock_data_to_legacy)
             }
         ],
         "balance_sheet": [
@@ -41,6 +46,7 @@ def sample_stock_data():
         "cash_flow": [
             {
                 "dividendsPaid": -15000000000,  # 15B dividends
+                "depreciationAndAmortization": 10000000000,  # 10B D&A
             }
         ],
     }
@@ -227,6 +233,105 @@ class TestEfficiencyRatios:
         ratios = calculator.calculate(sample_stock_data)
         # 220B / 5B = 44
         assert ratios.efficiency.inventory_turnover == pytest.approx(44.0, rel=0.01)
+
+
+class TestEBITDAWiring:
+    """
+    Regression tests for EBITDA calculation.
+    
+    Bug: D&A was being read from income_statement, but stock_data_to_legacy()
+    places it in cash_flow. This caused EBITDA to equal operating_income
+    (D&A treated as 0), making EV/EBITDA incorrect.
+    """
+
+    def test_da_read_from_cash_flow_not_income_statement(self, calculator):
+        """
+        D&A should be read from cash_flow, not income_statement.
+        
+        This is how stock_data_to_legacy() structures the data.
+        EBITDA = Operating Income + D&A (from cash_flow)
+        """
+        # Realistic data structure: D&A in cash_flow only (as produced by stock_data_to_legacy)
+        data = {
+            "profile": {
+                "price": 150.0,
+                "marketCap": 2400000000000,  # 2.4T
+                "sharesOutstanding": 16000000000,
+            },
+            "income_statement": [
+                {
+                    "revenue": 400000000000,
+                    "operatingIncome": 120000000000,
+                    # NOTE: No depreciationAndAmortization here!
+                }
+            ],
+            "balance_sheet": [
+                {
+                    "totalDebt": 100000000000,
+                    "cashAndCashEquivalents": 25000000000,
+                }
+            ],
+            "cash_flow": [
+                {
+                    # D&A is in cash_flow, as produced by stock_data_to_legacy()
+                    "depreciationAndAmortization": 10000000000,  # 10B
+                }
+            ],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # EBITDA = Operating Income (120B) + D&A (10B) = 130B
+        # EV = 2.4T + 100B - 25B = 2.475T
+        # EV/EBITDA = 2.475T / 130B = 19.04
+        
+        # If bug exists: EBITDA = 120B (D&A=0 because read from wrong location)
+        # EV/EBITDA would be 2.475T / 120B = 20.625 (WRONG)
+        
+        assert ratios.valuation.ev_to_ebitda == pytest.approx(19.04, rel=0.01), (
+            f"EV/EBITDA should be ~19.04 but got {ratios.valuation.ev_to_ebitda}. "
+            "D&A is being read from income_statement instead of cash_flow."
+        )
+
+    def test_ebitda_includes_da_from_cash_flow(self, calculator):
+        """EBITDA must include D&A from cash_flow statement."""
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 1000000000000,  # 1T
+                "sharesOutstanding": 10000000000,
+            },
+            "income_statement": [
+                {
+                    "operatingIncome": 50000000000,  # 50B
+                    # No D&A in income statement
+                }
+            ],
+            "balance_sheet": [
+                {
+                    "totalDebt": 0,
+                    "cashAndCashEquivalents": 0,
+                }
+            ],
+            "cash_flow": [
+                {
+                    "depreciationAndAmortization": 20000000000,  # 20B
+                }
+            ],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # EBITDA = 50B + 20B = 70B
+        # EV = 1T (no debt, no cash)
+        # EV/EBITDA = 1T / 70B = 14.29
+        
+        # If bug: EV/EBITDA = 1T / 50B = 20 (D&A ignored)
+        
+        assert ratios.valuation.ev_to_ebitda == pytest.approx(14.29, rel=0.01), (
+            f"EBITDA should include D&A from cash_flow. "
+            f"Expected EV/EBITDA ~14.29, got {ratios.valuation.ev_to_ebitda}"
+        )
 
 
 class TestEdgeCases:

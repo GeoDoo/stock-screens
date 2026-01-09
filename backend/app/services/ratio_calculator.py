@@ -98,8 +98,11 @@ class RatioCalculator:
         net_income = income_stmt.get("netIncome")
         interest_expense = income_stmt.get("interestExpense")
         income_before_tax = income_stmt.get("incomeBeforeTax")
-        depreciation = income_stmt.get("depreciationAndAmortization") or 0
         cogs = income_stmt.get("costOfRevenue")
+        
+        # D&A comes from cash_flow, not income_statement
+        # (stock_data_to_legacy places it in cash_flow)
+        depreciation = cash_flow.get("depreciationAndAmortization") or 0
         
         total_assets = balance_sheet.get("totalAssets")
         current_assets = balance_sheet.get("totalCurrentAssets")
