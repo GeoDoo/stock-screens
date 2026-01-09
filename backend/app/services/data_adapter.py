@@ -66,6 +66,7 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
             "shortTermDebt": fin.short_term_debt,
             "goodwill": fin.goodwill,
             "intangibleAssets": fin.intangible_assets,
+            "retainedEarnings": fin.retained_earnings,
         })
         
         # Cash flow
