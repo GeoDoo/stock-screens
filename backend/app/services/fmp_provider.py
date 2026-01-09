@@ -150,6 +150,7 @@ class FMPProvider(StockDataProvider):
                 cash_and_equivalents=bal.get("cashAndCashEquivalents"),
                 current_assets=bal.get("totalCurrentAssets"),
                 current_liabilities=bal.get("totalCurrentLiabilities"),
+                short_term_debt=bal.get("shortTermDebt"),
                 # Cash Flow
                 operating_cash_flow=cf.get("operatingCashFlow"),
                 capital_expenditure=cf.get("capitalExpenditure"),

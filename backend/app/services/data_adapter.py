@@ -62,6 +62,7 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
             "cashAndCashEquivalents": fin.cash_and_equivalents,
             "totalCurrentAssets": fin.current_assets,
             "totalCurrentLiabilities": fin.current_liabilities,
+            "shortTermDebt": fin.short_term_debt,
         })
         
         # Cash flow
