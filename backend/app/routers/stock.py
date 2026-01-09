@@ -133,11 +133,18 @@ async def _fetch_year_end_prices(
         price_by_date = {bar.timestamp: bar.close for bar in historical.bars}
         
         # For each fiscal year-end, find the closest price
+        # Financial statements are sorted most-recent-first, so the first date
+        # we encounter for each year is the fiscal year-end. Skip subsequent
+        # dates for the same year (e.g., quarterly data) to avoid overwriting.
         year_end_prices = {}
         for date_str in fiscal_dates:
             try:
                 year = int(date_str[:4])
             except (ValueError, TypeError):
+                continue
+            
+            # Skip if we already have this year (keep first/most-recent date)
+            if year in year_end_prices:
                 continue
             
             # Try exact match first
