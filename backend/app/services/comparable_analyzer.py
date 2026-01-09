@@ -19,6 +19,11 @@ class CompanyMetrics:
     price_to_sales: Optional[float] = None
     price_to_book: Optional[float] = None
     ev_to_revenue: Optional[float] = None
+    # Additional fields for proper EV/EBITDA implied price calculation
+    # (needed to bridge from EV to Equity correctly)
+    ebitda: Optional[float] = None
+    net_debt: Optional[float] = None
+    shares_outstanding: Optional[float] = None
     
 
 @dataclass
@@ -150,6 +155,7 @@ class ComparableAnalyzer:
         # Get basic info
         price = profile.get("price")
         market_cap = profile.get("marketCap")
+        shares = profile.get("sharesOutstanding")
         
         # Calculate ratios from financial data
         financials = data.get("income_statement", [])
@@ -161,6 +167,8 @@ class ComparableAnalyzer:
         price_to_book = None
         ev_to_ebitda = None
         ev_to_revenue = None
+        ebitda_calc = None
+        net_debt_calc = None
         
         if financials and price and market_cap:
             latest = financials[0] if financials else {}
@@ -169,7 +177,6 @@ class ComparableAnalyzer:
             
             # P/E ratio
             net_income = latest.get("netIncome")
-            shares = profile.get("sharesOutstanding")
             if net_income and shares and net_income > 0:
                 eps = net_income / shares
                 pe_ratio = price / eps if eps > 0 else None
@@ -186,19 +193,20 @@ class ComparableAnalyzer:
                 book_per_share = total_equity / shares
                 price_to_book = price / book_per_share if book_per_share > 0 else None
             
-            # EV/EBITDA
+            # EV/EBITDA - calculate component values for proper implied price later
             total_debt = latest_bs.get("totalDebt") or 0
             cash = latest_bs.get("cashAndCashEquivalents") or latest_bs.get("cashAndShortTermInvestments") or 0
-            enterprise_value = market_cap + total_debt - cash
+            net_debt_calc = total_debt - cash
+            enterprise_value = market_cap + net_debt_calc
             
             operating_income = latest.get("operatingIncome")
             # D&A comes from cash_flow, not income_statement
             # (stock_data_to_legacy places it in cash_flow)
             da = latest_cf.get("depreciationAndAmortization") or 0
             if operating_income:
-                ebitda = operating_income + da
-                if ebitda > 0:
-                    ev_to_ebitda = enterprise_value / ebitda
+                ebitda_calc = operating_income + da
+                if ebitda_calc > 0:
+                    ev_to_ebitda = enterprise_value / ebitda_calc
                     ev_to_revenue = enterprise_value / revenue if revenue and revenue > 0 else None
         
         return CompanyMetrics(
@@ -211,6 +219,10 @@ class ComparableAnalyzer:
             price_to_sales=price_to_sales,
             price_to_book=price_to_book,
             ev_to_revenue=ev_to_revenue,
+            # Additional fields for proper EV-to-Equity bridge
+            ebitda=ebitda_calc,
+            net_debt=net_debt_calc,
+            shares_outstanding=shares,
         )
     
     def _calculate_medians(self, peers: List[CompanyMetrics]) -> dict:
@@ -274,11 +286,19 @@ class ComparableAnalyzer:
                 upside_percent=upside,
             ))
         
-        # EV/EBITDA implied valuation
-        if target.ev_to_ebitda and target.price and peer_medians.get("ev_to_ebitda"):
-            ratio_diff = peer_medians["ev_to_ebitda"] / target.ev_to_ebitda if target.ev_to_ebitda else 1
-            implied = target.price * ratio_diff
-            upside = ((implied - target.price) / target.price) * 100 if target.price else None
+        # EV/EBITDA implied valuation - use proper EV-to-Equity bridge
+        # NOT the "ratio of ratios" shortcut which is invalid for leveraged companies
+        if (target.ev_to_ebitda and target.price and peer_medians.get("ev_to_ebitda")
+            and target.ebitda and target.net_debt is not None and target.shares_outstanding):
+            # Correct method:
+            # 1. Implied EV = Peer EV/EBITDA × Target EBITDA
+            # 2. Implied Equity = Implied EV - Target Net Debt
+            # 3. Implied Price = Implied Equity / Shares
+            implied_ev = peer_medians["ev_to_ebitda"] * target.ebitda
+            implied_equity = implied_ev - target.net_debt
+            implied = implied_equity / target.shares_outstanding if target.shares_outstanding > 0 else None
+            
+            upside = ((implied - target.price) / target.price) * 100 if target.price and implied else None
             valuations.append(ImpliedValuation(
                 metric_name="EV/EBITDA",
                 peer_median=peer_medians["ev_to_ebitda"],
