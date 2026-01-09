@@ -80,7 +80,57 @@ class AuditRepository:
                 conn.execute("ALTER TABLE audit_entries ADD COLUMN pe_ratio_at_time REAL")
             except Exception:
                 pass
+            
+            # Migration: Allow NULL in new_value column (for clearing assumptions)
+            # SQLite doesn't support ALTER COLUMN, so we recreate the table
+            self._migrate_audit_changes_allow_null_new_value(conn)
+            
             conn.commit()
+    
+    def _migrate_audit_changes_allow_null_new_value(self, conn):
+        """
+        Migrate audit_changes table to allow NULL in new_value column.
+        
+        Existing databases have new_value REAL NOT NULL, but we now
+        allow NULL for clearing assumptions. SQLite requires table
+        recreation to change column constraints.
+        """
+        cursor = conn.cursor()
+        
+        # Check if migration is needed by inspecting table schema
+        cursor.execute("PRAGMA table_info(audit_changes)")
+        columns = cursor.fetchall()
+        
+        # Find new_value column and check if it has NOT NULL constraint
+        # PRAGMA table_info returns: (cid, name, type, notnull, dflt_value, pk)
+        for col in columns:
+            if col[1] == "new_value" and col[3] == 1:  # notnull == 1
+                # Migration needed - recreate table without NOT NULL
+                cursor.executescript("""
+                    -- Create new table with correct schema
+                    CREATE TABLE audit_changes_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        entry_id INTEGER NOT NULL,
+                        field TEXT NOT NULL,
+                        old_value REAL,
+                        new_value REAL,  -- Now allows NULL
+                        FOREIGN KEY (entry_id) REFERENCES audit_entries(id)
+                    );
+                    
+                    -- Copy data from old table
+                    INSERT INTO audit_changes_new (id, entry_id, field, old_value, new_value)
+                    SELECT id, entry_id, field, old_value, new_value FROM audit_changes;
+                    
+                    -- Drop old table
+                    DROP TABLE audit_changes;
+                    
+                    -- Rename new table
+                    ALTER TABLE audit_changes_new RENAME TO audit_changes;
+                    
+                    -- Recreate index
+                    CREATE INDEX IF NOT EXISTS idx_changes_entry ON audit_changes(entry_id);
+                """)
+                break
     
     def save_entry(self, entry: AuditEntry) -> AuditEntry:
         """

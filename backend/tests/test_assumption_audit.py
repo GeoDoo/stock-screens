@@ -451,3 +451,79 @@ class TestNullNewValue:
         result = entry.to_dict()
         
         assert result["changes"][0]["new_value"] is None
+
+
+class TestSchemaMigration:
+    """
+    Regression tests for schema migrations on existing databases.
+    
+    Bug: The audit_changes table was created with new_value NOT NULL,
+    but we now allow NULL (for clearing assumptions). Existing databases
+    retain the old constraint and fail on NULL inserts.
+    """
+    
+    def test_migration_allows_null_new_value_on_old_schema(self):
+        """
+        Databases created with old schema should be migrated to allow NULL.
+        
+        This simulates an existing database with the NOT NULL constraint.
+        """
+        import sqlite3
+        
+        fd, path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        
+        try:
+            # Create "old" schema with NOT NULL constraint
+            conn = sqlite3.connect(path)
+            conn.executescript("""
+                CREATE TABLE audit_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    note TEXT,
+                    is_initial INTEGER NOT NULL DEFAULT 0
+                );
+                
+                CREATE TABLE audit_changes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    entry_id INTEGER NOT NULL,
+                    field TEXT NOT NULL,
+                    old_value REAL,
+                    new_value REAL NOT NULL,  -- OLD: NOT NULL constraint
+                    FOREIGN KEY (entry_id) REFERENCES audit_entries(id)
+                );
+            """)
+            conn.commit()
+            conn.close()
+            
+            # Now open with AuditRepository (should migrate)
+            repo = AuditRepository(db_path=path)
+            
+            # Try to insert an entry with new_value=None
+            entry = AuditEntry(
+                id=None,
+                symbol="AAPL",
+                timestamp=datetime.now(),
+                changes=[
+                    AssumptionChange(
+                        field=AssumptionField.DISCOUNT_RATE,
+                        old_value=0.10,
+                        new_value=None,  # This should work after migration
+                    )
+                ],
+                note="Clear discount rate",
+                is_initial=False,
+            )
+            
+            # Should NOT raise IntegrityError
+            saved = repo.save_entry(entry)
+            assert saved.id is not None
+            
+            # Verify it was saved correctly
+            history = repo.get_history("AAPL")
+            assert len(history) == 1
+            assert history[0].changes[0].new_value is None
+            
+        finally:
+            os.unlink(path)
