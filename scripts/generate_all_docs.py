@@ -470,14 +470,18 @@ npm run build
 # dist/ folder contains static files for nginx/caddy
 ```
 
-## Security Checklist
+## Production Checklist
 
-From `validate_configuration()` in `main.py`:
-
+### Security (from `validate_configuration()`)
 - [ ] Set `FMP_API_KEY` - FMP provider unavailable without it
 - [ ] Set `CORS_ORIGINS` explicitly - wildcard `*` is dev-only
-- [ ] Use HTTPS in production
-- [ ] Secure API keys with secrets management
+- [ ] Use HTTPS/TLS in production
+- [ ] Secure API keys with secrets management (not .env files)
+
+### Operations
+- [ ] Set up database backups (see Troubleshooting section)
+- [ ] Configure rate limits per provider (check `{rate_limits_endpoint}`)
+- [ ] Add monitoring (Sentry, Datadog, or Prometheus `GET /metrics`)
 
 ## Docker
 
