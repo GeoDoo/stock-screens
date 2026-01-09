@@ -152,6 +152,14 @@ class YahooProvider(StockDataProvider):
             # If financials fail, return empty list (profile still valid)
             pass
         
+        # Try to prepend TTM data for more current flow metrics
+        try:
+            ttm = self._get_ttm_financials(ticker)
+            if ttm:
+                financials.insert(0, ttm)  # TTM goes first (most recent)
+        except Exception:
+            pass  # TTM is optional enhancement
+        
         return financials
     
     def _get_ttm_financials(self, ticker: yf.Ticker) -> Optional[FinancialStatement]:

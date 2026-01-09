@@ -957,3 +957,133 @@ class TestSyntheticCreditRating:
         cod = extractor.cost_of_debt()
         assert cod is not None
         assert cod > 0
+
+
+class TestLTMDataMerging:
+    """
+    Tests for Last Twelve Months (LTM) data merging.
+    
+    From Gemini review: Professional valuation uses LTM data, not just
+    the last annual report (which can be 9+ months stale).
+    
+    Flow items (revenue, income, cash flow): Sum last 4 quarters OR use TTM record
+    Balance sheet items: Use most recent (already point-in-time)
+    """
+    
+    def test_prefers_ttm_revenue_over_annual(self):
+        """
+        When TTM data is available, should prefer it over annual.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"period": "TTM", "revenue": 400_000_000_000},  # TTM record
+                {"period": "FY", "revenue": 380_000_000_000},  # Last annual
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Should use TTM revenue (400B), not annual (380B)
+        assert extractor.latest_revenue() == 400_000_000_000
+    
+    def test_falls_back_to_annual_when_no_ttm(self):
+        """
+        When no TTM record, should use annual data as before.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"period": "FY", "revenue": 380_000_000_000},
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        assert extractor.latest_revenue() == 380_000_000_000
+    
+    def test_prefers_ttm_for_flow_items(self):
+        """
+        TTM should be preferred for all flow items (income, cash flow).
+        """
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"period": "TTM", "revenue": 400_000, "operatingIncome": 80_000, "netIncome": 60_000},
+                {"period": "FY", "revenue": 350_000, "operatingIncome": 70_000, "netIncome": 50_000},
+            ],
+            "balance_sheet": [],
+            "cash_flow": [
+                {"period": "TTM", "freeCashFlow": 55_000},
+                {"period": "FY", "freeCashFlow": 45_000},
+            ],
+        }
+        extractor = DataExtractor(data)
+        
+        assert extractor.latest_revenue() == 400_000
+        assert extractor.free_cash_flow() == 55_000
+    
+    def test_balance_sheet_uses_latest_always(self):
+        """
+        Balance sheet is point-in-time, so use most recent regardless of period.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [
+                {"totalAssets": 500_000_000_000, "totalDebt": 100_000_000_000},
+            ],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        assert extractor.total_debt() == 100_000_000_000
+    
+    def test_data_freshness_indicator(self):
+        """
+        Should expose whether LTM/TTM data was used.
+        """
+        data_with_ttm = {
+            "profile": {},
+            "income_statement": [
+                {"period": "TTM", "revenue": 400_000_000_000},
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        
+        data_annual_only = {
+            "profile": {},
+            "income_statement": [
+                {"period": "FY", "revenue": 380_000_000_000},
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        
+        extractor_ttm = DataExtractor(data_with_ttm)
+        extractor_annual = DataExtractor(data_annual_only)
+        
+        assert extractor_ttm.is_using_ltm() is True
+        assert extractor_annual.is_using_ltm() is False
+    
+    def test_ttm_tax_rate_calculation(self):
+        """
+        Tax rate should also use TTM data when available.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"period": "TTM", "incomeTaxExpense": 25_000, "incomeBeforeTax": 100_000},  # 25%
+                {"period": "FY", "incomeTaxExpense": 20_000, "incomeBeforeTax": 100_000},  # 20%
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Should use TTM tax rate (25%), not annual (20%)
+        tax_rate = extractor.tax_rate()
+        assert 0.24 <= tax_rate <= 0.26, f"Expected ~25%, got {tax_rate:.2%}"

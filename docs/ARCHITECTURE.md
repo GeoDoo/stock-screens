@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-09 17:01
+> Last updated: 2026-01-09 17:08
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -57,11 +57,11 @@ Stock Screens is a full-stack stock analysis application with:
 Extracts financial metrics from FMP data for use in valuation models.
 
 **Key Methods:**
+- `is_using_ltm()` - Check if LTM/TTM data is available for flow items.
 - `beta()` - Stock beta from profile.
 - `market_cap()` - Market capitalization from profile.
 - `total_debt()` - Total debt from balance sheet.
 - `total_equity()` - Total stockholders equity from balance sheet.
-- `cash()` - Cash and equivalents from balance sheet.
 
 #### `dcf_calculator.py` - DCFCalculator
 

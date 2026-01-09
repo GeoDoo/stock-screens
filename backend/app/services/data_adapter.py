@@ -36,7 +36,7 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
         # Income statement
         income_statements.append({
             "date": fin.date,
-            "period": "FY" if fin.period == "annual" else "Q",
+            "period": "TTM" if fin.period in ("ttm", "TTM") else ("FY" if fin.period == "annual" else "Q"),
             "revenue": fin.revenue,
             "costOfRevenue": fin.cost_of_revenue,
             "grossProfit": fin.gross_profit,

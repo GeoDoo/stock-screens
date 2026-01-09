@@ -45,6 +45,42 @@ class DataExtractor:
         if not statements:
             return None
         return statements[0].get(key)
+    
+    def _get_ttm(self, statements: list, key: str) -> Optional[Any]:
+        """
+        Get value preferring TTM (Trailing Twelve Months) data.
+        
+        For flow items (revenue, income, cash flow), TTM is more current
+        than the last annual report, which can be 9+ months stale.
+        
+        Returns TTM value if available, otherwise falls back to latest.
+        """
+        if not statements:
+            return None
+        
+        # Look for TTM/LTM record first
+        for stmt in statements:
+            period = stmt.get("period", "").upper()
+            if period in ("TTM", "LTM"):
+                val = stmt.get(key)
+                if val is not None:
+                    return val
+        
+        # Fallback to most recent (annual)
+        return statements[0].get(key)
+    
+    def is_using_ltm(self) -> bool:
+        """
+        Check if LTM/TTM data is available for flow items.
+        
+        Returns True if the most recent income statement is TTM/LTM period.
+        This indicates we're using current (rolling 12 month) data
+        rather than potentially stale annual data.
+        """
+        if not self.income_statement:
+            return False
+        period = self.income_statement[0].get("period", "").upper()
+        return period in ("TTM", "LTM")
 
     def _get_history(self, statements: list, key: str) -> List[float]:
         """Get historical values (oldest first for CAGR calculation)."""
@@ -123,22 +159,37 @@ class DataExtractor:
 
     def tax_rate(self) -> Optional[float]:
         """
-        Effective tax rate using multi-year average for stability.
+        Effective tax rate, preferring TTM data when available.
+        
+        If TTM data is available and valid, use it directly (most current).
+        Otherwise, use 3-year average for stability.
         
         Effective tax rates are notoriously volatile due to one-time items:
         - R&D tax credits
         - Foreign tax adjustments  
         - Deferred tax benefits/charges
         - One-time restructuring charges
-        
-        Using a single year can badly distort 10-year FCF projections.
-        We use a 3-year average, excluding:
-        - Years with negative income (loss years)
-        - Years with extreme rates (< 0% or > 50%)
         """
+        # Check for TTM data first (most current)
+        # Only use TTM if there's an actual TTM record (not fallback)
+        if self.is_using_ltm():
+            ttm_tax = self._get_ttm(self.income_statement, "incomeTaxExpense")
+            ttm_income = self._get_ttm(self.income_statement, "incomeBeforeTax")
+            
+            if ttm_tax is not None and ttm_income is not None and ttm_income > 0:
+                rate = ttm_tax / ttm_income
+                # Only use TTM if it's reasonable (0% to 50%)
+                if 0 <= rate <= 0.50:
+                    return rate
+        
+        # Fallback to multi-year average
         valid_rates = []
         
         for statement in self.income_statement[:3]:  # Up to 3 years
+            # Skip TTM record in the averaging (already tried above)
+            if statement.get("period", "").upper() in ("TTM", "LTM"):
+                continue
+                
             tax_expense = statement.get("incomeTaxExpense")
             income_before_tax = statement.get("incomeBeforeTax")
             
