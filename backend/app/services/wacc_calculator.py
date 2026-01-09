@@ -4,6 +4,13 @@ from typing import List, Optional
 
 # Maximum beta cap for edge cases (insolvent companies, etc.)
 MAX_BETA = 5.0
+# Minimum beta (some defensive stocks can have very low or even negative beta)
+MIN_BETA = 0.0
+
+
+def _clamp_beta(beta: float) -> float:
+    """Clamp beta to valid range [MIN_BETA, MAX_BETA]."""
+    return max(MIN_BETA, min(MAX_BETA, beta))
 
 
 def unlever_beta(
@@ -27,22 +34,23 @@ def unlever_beta(
         tax_rate: Effective tax rate (0-1)
     
     Returns:
-        Unlevered (asset) beta
+        Unlevered (asset) beta, clamped to [0, MAX_BETA]
     """
     if equity <= 0:
         # Edge case: zero or negative equity means company is insolvent
-        # Return a high beta but cap it for safety
-        return min(levered_beta, MAX_BETA)
+        # Return a high beta but clamp to valid range
+        return _clamp_beta(levered_beta)
     
     if debt <= 0:
-        # No debt means no leverage effect
-        return levered_beta
+        # No debt means no leverage effect, but still clamp
+        return _clamp_beta(levered_beta)
     
     tax_rate = _clamp(tax_rate, 0.0, 1.0)
     debt_equity_ratio = debt / equity
     leverage_factor = 1 + (1 - tax_rate) * debt_equity_ratio
     
-    return levered_beta / leverage_factor
+    unlevered = levered_beta / leverage_factor
+    return _clamp_beta(unlevered)
 
 
 def relever_beta(
@@ -66,7 +74,7 @@ def relever_beta(
         tax_rate: Effective tax rate (0-1)
     
     Returns:
-        Relevered (equity) beta, capped at MAX_BETA
+        Relevered (equity) beta, clamped to [0, MAX_BETA]
     """
     if equity <= 0:
         # Edge case: zero or negative equity means company is insolvent
@@ -74,8 +82,8 @@ def relever_beta(
         return MAX_BETA
     
     if debt <= 0:
-        # No debt means no leverage effect
-        return unlevered_beta
+        # No debt means no leverage effect, but still clamp
+        return _clamp_beta(unlevered_beta)
     
     tax_rate = _clamp(tax_rate, 0.0, 1.0)
     debt_equity_ratio = debt / equity
@@ -83,8 +91,7 @@ def relever_beta(
     
     relevered = unlevered_beta * leverage_factor
     
-    # Cap at MAX_BETA for sanity
-    return min(relevered, MAX_BETA)
+    return _clamp_beta(relevered)
 
 
 def calculate_adjusted_beta(
