@@ -25,7 +25,7 @@ class AssumptionChange:
     """A single change to an assumption field."""
     field: AssumptionField
     old_value: Optional[float]
-    new_value: float
+    new_value: Optional[float]  # Can be None when clearing an assumption
 
 
 @dataclass
@@ -147,7 +147,7 @@ class AssumptionSnapshot:
             elif change.field == AssumptionField.DISCOUNT_RATE:
                 new_snapshot.discount_rate = change.new_value
             elif change.field == AssumptionField.PROJECTION_YEARS:
-                new_snapshot.projection_years = int(change.new_value)
+                new_snapshot.projection_years = int(change.new_value) if change.new_value is not None else None
             elif change.field == AssumptionField.MARKET_RISK_PREMIUM:
                 new_snapshot.market_risk_premium = change.new_value
         
