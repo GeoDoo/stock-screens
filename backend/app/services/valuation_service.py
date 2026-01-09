@@ -47,6 +47,8 @@ class ValuationService:
         wc_mode: str = "level",
         # Multi-stage growth - if provided, overrides revenue_growth
         growth_schedule: Optional[List[float]] = None,
+        # SBC dilution - annual share growth rate from stock-based compensation
+        annual_dilution_rate: float = 0.0,
     ) -> dict:
         """
         Perform full DCF valuation for a stock.
@@ -193,16 +195,22 @@ class ValuationService:
         }
 
         # Intrinsic value per share (prefer diluted shares for DCF)
-        shares = extractor.shares_outstanding() or 1
+        current_shares = extractor.shares_outstanding() or 1
         # Determine which shares figure was used for transparency
         shares_type = extractor.shares_outstanding_type()
-        intrinsic_value_per_share = equity_value / shares
+        
+        # Account for SBC dilution over projection period
+        # Terminal shares = current shares * (1 + dilution_rate)^years
+        terminal_shares = current_shares * ((1 + annual_dilution_rate) ** projection_years)
+        
+        # Use terminal shares for per-share value (accounts for future dilution)
+        intrinsic_value_per_share = equity_value / terminal_shares
 
         # 6. Sensitivity Analysis
         sensitivity_calc = SensitivityCalculator(
             projected_fcfs=projected_fcf,
             projection_years=projection_years,
-            shares_outstanding=shares,
+            shares_outstanding=terminal_shares,  # Use terminal shares for consistency
             total_debt=total_debt,
             cash=cash,
             # Pass equity bridge components for consistency
@@ -229,7 +237,7 @@ class ValuationService:
             discount_rate=discount_rate,
             terminal_growth_rate=terminal_growth_rate,
             projection_years=projection_years,
-            shares=shares,
+            shares=terminal_shares,  # Use terminal shares for consistency
             total_debt=total_debt,
             cash=cash,
             revenue_growth=revenue_growth or fcf_projector.revenue_cagr(),
@@ -272,8 +280,10 @@ class ValuationService:
                 "terminal_growth_rate": terminal_growth_rate,
                 "projection_years": projection_years,
                 "discount_rate_override": discount_rate_override,
-                "shares_outstanding": shares,
+                "shares_outstanding": current_shares,
                 "shares_type": shares_type,  # "diluted" (preferred) or "basic" (fallback)
+                "annual_dilution_rate": annual_dilution_rate,
+                "terminal_shares": terminal_shares,  # Shares at end of projection period
             },
             "sensitivity": sensitivity,
             "value_drivers": value_drivers,
