@@ -854,3 +854,142 @@ class TestAltmanZScore:
         
         assert ratios.risk.altman_z_score is None
 
+
+class TestAccrualRatio:
+    """
+    Tests for Accrual Ratio earnings quality metric.
+    
+    Accrual Ratio = (Net Income - Operating Cash Flow) / Total Assets
+    
+    High positive ratio = earnings quality warning (earnings > cash flow)
+    Negative ratio = good quality (cash flow > earnings)
+    
+    Professional interpretation:
+    - Ratio > 10%: High accruals, potential earnings manipulation
+    - Ratio > 5%: Elevated accruals, watch carefully
+    - Ratio < 0%: Cash earnings, generally healthy
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_accrual_ratio_high_quality_cash_earnings(self, calculator):
+        """
+        When cash flow exceeds net income, accrual ratio should be negative
+        (indicating high earnings quality).
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 100_000_000_000},
+            "income_statement": [{
+                "netIncome": 10_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalAssets": 200_000_000_000,
+            }],
+            "cash_flow": [{
+                "operatingCashFlow": 15_000_000_000,  # CFO > Net Income
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.risk.accrual_ratio is not None
+        # (10B - 15B) / 200B = -2.5%
+        assert ratios.risk.accrual_ratio < 0, (
+            f"Accrual ratio ({ratios.risk.accrual_ratio:.2%}) should be negative "
+            "when CFO exceeds net income"
+        )
+        assert ratios.risk.accrual_quality == "good"
+    
+    def test_accrual_ratio_warning_high_accruals(self, calculator):
+        """
+        When net income far exceeds cash flow, accrual ratio should be high
+        (indicating potential earnings manipulation).
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 50_000_000_000},
+            "income_statement": [{
+                "netIncome": 20_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalAssets": 100_000_000_000,
+            }],
+            "cash_flow": [{
+                "operatingCashFlow": 5_000_000_000,  # CFO << Net Income
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # (20B - 5B) / 100B = 15%
+        assert ratios.risk.accrual_ratio is not None
+        assert ratios.risk.accrual_ratio > 0.10, (
+            f"Accrual ratio ({ratios.risk.accrual_ratio:.2%}) should be > 10% "
+            "when earnings far exceed cash flow"
+        )
+        assert ratios.risk.accrual_quality == "warning"
+    
+    def test_accrual_ratio_moderate(self, calculator):
+        """
+        Moderate accrual ratio (5-10%) should be flagged as 'elevated'.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 50_000_000_000},
+            "income_statement": [{
+                "netIncome": 15_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalAssets": 200_000_000_000,
+            }],
+            "cash_flow": [{
+                "operatingCashFlow": 5_000_000_000,
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # (15B - 5B) / 200B = 5%
+        assert ratios.risk.accrual_ratio is not None
+        assert 0.05 <= ratios.risk.accrual_ratio <= 0.10
+        assert ratios.risk.accrual_quality == "elevated"
+    
+    def test_accrual_ratio_none_when_missing_data(self, calculator):
+        """
+        Accrual ratio should be None when critical data is missing.
+        """
+        data = {
+            "profile": {"price": 100},
+            "income_statement": [{}],  # No netIncome
+            "balance_sheet": [{}],  # No totalAssets
+            "cash_flow": [{}],  # No operatingCashFlow
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.risk.accrual_ratio is None
+        assert ratios.risk.accrual_quality is None
+    
+    def test_accrual_ratio_with_negative_income(self, calculator):
+        """
+        Companies with losses can still have accrual analysis.
+        """
+        data = {
+            "profile": {"price": 10, "marketCap": 5_000_000_000},
+            "income_statement": [{
+                "netIncome": -2_000_000_000,  # Net loss
+            }],
+            "balance_sheet": [{
+                "totalAssets": 50_000_000_000,
+            }],
+            "cash_flow": [{
+                "operatingCashFlow": 1_000_000_000,  # Still generating cash
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # (-2B - 1B) / 50B = -6%
+        assert ratios.risk.accrual_ratio is not None
+        assert ratios.risk.accrual_ratio < 0  # Cash exceeds (negative) earnings
+
