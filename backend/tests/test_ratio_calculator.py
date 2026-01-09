@@ -1170,3 +1170,179 @@ class TestSBCAdjustment:
         assert ratios.sbc.sbc_percent_revenue < 0.05
         assert ratios.sbc.sbc_level == "normal"
 
+
+class TestBeneishMScore:
+    """
+    Tests for Beneish M-Score fraud detection.
+    
+    The M-Score uses 8 indices comparing current to prior year to detect
+    earnings manipulation. M-Score > -1.78 suggests high manipulation risk.
+    
+    M = -4.84 + 0.920*DSRI + 0.528*GMI + 0.404*AQI + 0.892*SGI 
+        + 0.115*DEPI - 0.172*SGAI + 4.679*TATA - 0.327*LVGI
+    
+    From Gemini review: "Beneish M-Score for earnings manipulation detection."
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_m_score_low_risk_company(self, calculator):
+        """
+        A stable, honest company should have M-Score below -1.78.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 100_000_000_000},
+            "income_statement": [
+                {  # Current year
+                    "revenue": 50_000_000_000,
+                    "grossProfit": 20_000_000_000,  # 40% margin
+                    "netIncome": 8_000_000_000,
+                    "sellingGeneralAndAdministrative": 5_000_000_000,
+                },
+                {  # Prior year
+                    "revenue": 48_000_000_000,  # 4% growth
+                    "grossProfit": 19_200_000_000,  # 40% margin (same)
+                    "netIncome": 7_500_000_000,
+                    "sellingGeneralAndAdministrative": 4_800_000_000,
+                },
+            ],
+            "balance_sheet": [
+                {  # Current year
+                    "totalAssets": 80_000_000_000,
+                    "totalCurrentAssets": 30_000_000_000,
+                    "netReceivables": 8_000_000_000,
+                    "propertyPlantEquipmentNet": 25_000_000_000,
+                    "totalDebt": 20_000_000_000,
+                },
+                {  # Prior year
+                    "totalAssets": 75_000_000_000,
+                    "totalCurrentAssets": 28_000_000_000,
+                    "netReceivables": 7_500_000_000,
+                    "propertyPlantEquipmentNet": 24_000_000_000,
+                    "totalDebt": 18_000_000_000,
+                },
+            ],
+            "cash_flow": [
+                {"operatingCashFlow": 10_000_000_000, "depreciationAndAmortization": 3_000_000_000},
+                {"operatingCashFlow": 9_000_000_000, "depreciationAndAmortization": 2_800_000_000},
+            ],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.risk.beneish_m_score is not None
+        assert ratios.risk.beneish_m_score < -1.78, (
+            f"Low-risk company M-Score ({ratios.risk.beneish_m_score:.2f}) should be < -1.78"
+        )
+        assert ratios.risk.manipulation_risk == "low"
+    
+    def test_m_score_high_risk_company(self, calculator):
+        """
+        A company with manipulation red flags should have M-Score above -1.78.
+        Red flags: rapid revenue growth, margin deterioration, receivables spike,
+        high accruals, asset quality decline.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 50_000_000_000},
+            "income_statement": [
+                {  # Current year - suspicious patterns
+                    "revenue": 60_000_000_000,  # 50% revenue growth!
+                    "grossProfit": 18_000_000_000,  # 30% margin (dropped from 35%)
+                    "netIncome": 6_000_000_000,
+                    "sellingGeneralAndAdministrative": 4_000_000_000,
+                },
+                {  # Prior year
+                    "revenue": 40_000_000_000,
+                    "grossProfit": 14_000_000_000,  # 35% margin
+                    "netIncome": 4_000_000_000,
+                    "sellingGeneralAndAdministrative": 4_500_000_000,
+                },
+            ],
+            "balance_sheet": [
+                {  # Current year - suspicious
+                    "totalAssets": 100_000_000_000,
+                    "totalCurrentAssets": 35_000_000_000,
+                    "netReceivables": 20_000_000_000,  # Receivables grew faster than sales
+                    "propertyPlantEquipmentNet": 20_000_000_000,
+                    "totalDebt": 50_000_000_000,  # Leverage increased
+                },
+                {  # Prior year
+                    "totalAssets": 60_000_000_000,
+                    "totalCurrentAssets": 25_000_000_000,
+                    "netReceivables": 10_000_000_000,
+                    "propertyPlantEquipmentNet": 18_000_000_000,
+                    "totalDebt": 25_000_000_000,
+                },
+            ],
+            "cash_flow": [
+                {"operatingCashFlow": 2_000_000_000, "depreciationAndAmortization": 2_500_000_000},  # Low CFO vs income
+                {"operatingCashFlow": 5_000_000_000, "depreciationAndAmortization": 2_200_000_000},
+            ],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.risk.beneish_m_score is not None
+        assert ratios.risk.beneish_m_score > -1.78, (
+            f"High-risk company M-Score ({ratios.risk.beneish_m_score:.2f}) should be > -1.78"
+        )
+        assert ratios.risk.manipulation_risk == "high"
+    
+    def test_m_score_none_without_prior_year(self, calculator):
+        """
+        M-Score requires prior year data for comparison indices.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 50_000_000_000},
+            "income_statement": [
+                {"revenue": 50_000_000_000, "grossProfit": 20_000_000_000},
+                # No prior year
+            ],
+            "balance_sheet": [
+                {"totalAssets": 80_000_000_000, "netReceivables": 8_000_000_000},
+            ],
+            "cash_flow": [
+                {"operatingCashFlow": 10_000_000_000},
+            ],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Without prior year data, M-Score should be None
+        assert ratios.risk.beneish_m_score is None
+    
+    def test_m_score_components_calculated(self, calculator):
+        """
+        Verify individual M-Score components are calculated.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 100_000_000_000},
+            "income_statement": [
+                {"revenue": 50_000_000_000, "grossProfit": 20_000_000_000, 
+                 "netIncome": 8_000_000_000, "sellingGeneralAndAdministrative": 5_000_000_000},
+                {"revenue": 45_000_000_000, "grossProfit": 18_000_000_000,
+                 "netIncome": 7_000_000_000, "sellingGeneralAndAdministrative": 4_500_000_000},
+            ],
+            "balance_sheet": [
+                {"totalAssets": 80_000_000_000, "totalCurrentAssets": 30_000_000_000,
+                 "netReceivables": 8_000_000_000, "propertyPlantEquipmentNet": 25_000_000_000,
+                 "totalDebt": 20_000_000_000},
+                {"totalAssets": 70_000_000_000, "totalCurrentAssets": 26_000_000_000,
+                 "netReceivables": 7_000_000_000, "propertyPlantEquipmentNet": 22_000_000_000,
+                 "totalDebt": 18_000_000_000},
+            ],
+            "cash_flow": [
+                {"operatingCashFlow": 10_000_000_000, "depreciationAndAmortization": 3_000_000_000},
+                {"operatingCashFlow": 8_500_000_000, "depreciationAndAmortization": 2_500_000_000},
+            ],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Should have both M-Score and individual components
+        assert ratios.risk.beneish_m_score is not None
+        # SGI (Sales Growth Index) should be calculated
+        # Revenue grew from 45B to 50B = 11% growth
+

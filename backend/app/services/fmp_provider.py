@@ -142,6 +142,7 @@ class FMPProvider(StockDataProvider):
                 net_income=inc.get("netIncome"),
                 interest_expense=inc.get("interestExpense"),
                 income_tax_expense=inc.get("incomeTaxExpense"),
+                selling_general_admin=inc.get("sellingGeneralAndAdministrativeExpenses"),
                 # Share counts
                 weighted_avg_shares=inc.get("weightedAverageShsOut"),
                 weighted_avg_shares_diluted=inc.get("weightedAverageShsOutDil"),
@@ -157,6 +158,8 @@ class FMPProvider(StockDataProvider):
                 goodwill=bal.get("goodwill"),
                 intangible_assets=bal.get("intangibleAssets"),
                 retained_earnings=bal.get("retainedEarnings"),
+                net_receivables=bal.get("netReceivables"),
+                property_plant_equipment=bal.get("propertyPlantEquipmentNet"),
                 # Cash Flow
                 operating_cash_flow=cf.get("operatingCashFlow"),
                 capital_expenditure=cf.get("capitalExpenditure"),

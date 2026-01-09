@@ -44,6 +44,7 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
             "netIncome": fin.net_income,
             "interestExpense": fin.interest_expense,
             "incomeTaxExpense": fin.income_tax_expense,
+            "sellingGeneralAndAdministrative": fin.selling_general_admin,
             # Calculate incomeBeforeTax for tax rate calculation
             "incomeBeforeTax": (fin.net_income + fin.income_tax_expense) 
                 if fin.net_income is not None and fin.income_tax_expense is not None 
@@ -67,6 +68,8 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
             "goodwill": fin.goodwill,
             "intangibleAssets": fin.intangible_assets,
             "retainedEarnings": fin.retained_earnings,
+            "netReceivables": fin.net_receivables,
+            "propertyPlantEquipmentNet": fin.property_plant_equipment,
         })
         
         # Cash flow
