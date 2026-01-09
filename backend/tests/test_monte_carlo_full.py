@@ -826,6 +826,232 @@ class TestWorkingCapitalWithEmptyHistory:
         )
 
 
+class TestEquityBridgeIntegration:
+    """
+    Tests for P0: Monte Carlo should use full institutional equity bridge,
+    not just net debt.
+    
+    Equity = EV - Net Debt - Minority Interest - Preferred + NOLs - Pension
+    """
+    
+    def test_accepts_equity_bridge_components(self):
+        """Monte Carlo should accept equity bridge parameters."""
+        result = run_full_monte_carlo(
+            historical_revenue=[90e9, 95e9, 100e9],
+            historical_ebit=[18e9, 19e9, 20e9],
+            historical_da=[2e9, 2.1e9, 2.2e9],
+            historical_capex=[3e9, 3.2e9, 3.5e9],
+            historical_working_capital=[9e9, 9.5e9, 10e9],
+            shares_outstanding=1e9,
+            total_debt=20e9,
+            cash=10e9,
+            current_price=100,
+            base_margin=0.20,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.025,
+            iterations=100,
+            seed=42,
+            # Equity bridge components
+            minority_interest=1e9,
+            preferred_stock=500e6,
+            deferred_tax_assets=2e9,  # NOLs - adds value
+            pension_deficit=300e6,
+        )
+        
+        assert result.mean > 0
+        assert result.iterations == 100
+    
+    def test_minority_interest_reduces_value(self):
+        """Minority interest should reduce per-share value."""
+        base_result = run_full_monte_carlo(
+            historical_revenue=[90e9, 95e9, 100e9],
+            historical_ebit=[18e9, 19e9, 20e9],
+            historical_da=[2e9, 2.1e9, 2.2e9],
+            historical_capex=[3e9, 3.2e9, 3.5e9],
+            historical_working_capital=[9e9, 9.5e9, 10e9],
+            shares_outstanding=1e9,
+            total_debt=20e9,
+            cash=10e9,
+            current_price=100,
+            base_margin=0.20,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.025,
+            growth_std=0.0,  # Zero variance for deterministic comparison
+            margin_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            iterations=10,
+            seed=42,
+        )
+        
+        with_minority = run_full_monte_carlo(
+            historical_revenue=[90e9, 95e9, 100e9],
+            historical_ebit=[18e9, 19e9, 20e9],
+            historical_da=[2e9, 2.1e9, 2.2e9],
+            historical_capex=[3e9, 3.2e9, 3.5e9],
+            historical_working_capital=[9e9, 9.5e9, 10e9],
+            shares_outstanding=1e9,
+            total_debt=20e9,
+            cash=10e9,
+            current_price=100,
+            base_margin=0.20,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.025,
+            growth_std=0.0,
+            margin_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            iterations=10,
+            seed=42,
+            minority_interest=5e9,  # $5B minority interest
+        )
+        
+        # Minority interest reduces equity value
+        # With 1B shares, 5B minority = $5 per share reduction
+        expected_reduction = 5e9 / 1e9  # $5 per share
+        actual_reduction = base_result.mean - with_minority.mean
+        
+        assert actual_reduction > 0, "Minority interest should reduce value"
+        assert abs(actual_reduction - expected_reduction) < 0.10, (
+            f"Expected ~${expected_reduction:.2f} reduction, got ${actual_reduction:.2f}"
+        )
+    
+    def test_deferred_tax_assets_add_value(self):
+        """Deferred tax assets (NOLs) should increase per-share value."""
+        base_result = run_full_monte_carlo(
+            historical_revenue=[90e9, 95e9, 100e9],
+            historical_ebit=[18e9, 19e9, 20e9],
+            historical_da=[2e9, 2.1e9, 2.2e9],
+            historical_capex=[3e9, 3.2e9, 3.5e9],
+            historical_working_capital=[9e9, 9.5e9, 10e9],
+            shares_outstanding=1e9,
+            total_debt=20e9,
+            cash=10e9,
+            current_price=100,
+            base_margin=0.20,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.025,
+            growth_std=0.0,
+            margin_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            iterations=10,
+            seed=42,
+        )
+        
+        with_nols = run_full_monte_carlo(
+            historical_revenue=[90e9, 95e9, 100e9],
+            historical_ebit=[18e9, 19e9, 20e9],
+            historical_da=[2e9, 2.1e9, 2.2e9],
+            historical_capex=[3e9, 3.2e9, 3.5e9],
+            historical_working_capital=[9e9, 9.5e9, 10e9],
+            shares_outstanding=1e9,
+            total_debt=20e9,
+            cash=10e9,
+            current_price=100,
+            base_margin=0.20,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.025,
+            growth_std=0.0,
+            margin_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            iterations=10,
+            seed=42,
+            deferred_tax_assets=3e9,  # $3B NOLs
+        )
+        
+        # NOLs add to equity value
+        expected_increase = 3e9 / 1e9  # $3 per share
+        actual_increase = with_nols.mean - base_result.mean
+        
+        assert actual_increase > 0, "NOLs should increase value"
+        assert abs(actual_increase - expected_increase) < 0.10, (
+            f"Expected ~${expected_increase:.2f} increase, got ${actual_increase:.2f}"
+        )
+    
+    def test_full_equity_bridge_combined(self):
+        """Full equity bridge should reflect all components."""
+        base_result = run_full_monte_carlo(
+            historical_revenue=[90e9, 95e9, 100e9],
+            historical_ebit=[18e9, 19e9, 20e9],
+            historical_da=[2e9, 2.1e9, 2.2e9],
+            historical_capex=[3e9, 3.2e9, 3.5e9],
+            historical_working_capital=[9e9, 9.5e9, 10e9],
+            shares_outstanding=1e9,
+            total_debt=20e9,
+            cash=10e9,
+            current_price=100,
+            base_margin=0.20,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.025,
+            growth_std=0.0,
+            margin_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            iterations=10,
+            seed=42,
+        )
+        
+        # Equity = EV - Net Debt - Minority - Preferred + NOLs - Pension
+        # Net impact: -1B - 0.5B + 2B - 0.3B = +0.2B = +$0.20/share
+        with_bridge = run_full_monte_carlo(
+            historical_revenue=[90e9, 95e9, 100e9],
+            historical_ebit=[18e9, 19e9, 20e9],
+            historical_da=[2e9, 2.1e9, 2.2e9],
+            historical_capex=[3e9, 3.2e9, 3.5e9],
+            historical_working_capital=[9e9, 9.5e9, 10e9],
+            shares_outstanding=1e9,
+            total_debt=20e9,
+            cash=10e9,
+            current_price=100,
+            base_margin=0.20,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.025,
+            growth_std=0.0,
+            margin_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            iterations=10,
+            seed=42,
+            minority_interest=1e9,    # -$1B
+            preferred_stock=0.5e9,    # -$0.5B
+            deferred_tax_assets=2e9,  # +$2B
+            pension_deficit=0.3e9,    # -$0.3B
+        )
+        
+        # Net impact = +0.2B on 1B shares = +$0.20/share
+        expected_delta = 0.2e9 / 1e9  # $0.20
+        actual_delta = with_bridge.mean - base_result.mean
+        
+        assert abs(actual_delta - expected_delta) < 0.05, (
+            f"Expected ~${expected_delta:.2f} net change, got ${actual_delta:.2f}"
+        )
+    
+    def test_defaults_to_zero_for_backward_compatibility(self):
+        """Omitting equity bridge params should work (default to 0)."""
+        # This should work without any equity bridge params
+        result = run_full_monte_carlo(
+            historical_revenue=[90e9, 95e9, 100e9],
+            historical_ebit=[18e9, 19e9, 20e9],
+            historical_da=[2e9, 2.1e9, 2.2e9],
+            historical_capex=[3e9, 3.2e9, 3.5e9],
+            historical_working_capital=[9e9, 9.5e9, 10e9],
+            shares_outstanding=1e9,
+            total_debt=20e9,
+            cash=10e9,
+            current_price=100,
+            base_margin=0.20,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.025,
+            iterations=10,
+            seed=42,
+        )
+        
+        assert result.mean > 0
+        assert result.iterations == 10
+
+
 # Helper function for correlation calculation
 def _pearson_correlation(x: list, y: list) -> float:
     """Calculate Pearson correlation coefficient."""
