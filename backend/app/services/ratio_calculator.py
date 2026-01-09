@@ -59,6 +59,8 @@ class RiskMetrics:
     """Risk and bankruptcy indicators."""
     altman_z_score: Optional[float] = None
     z_score_zone: Optional[str] = None  # "safe", "grey", or "distress"
+    accrual_ratio: Optional[float] = None  # Earnings quality metric
+    accrual_quality: Optional[str] = None  # "good", "elevated", or "warning"
 
 
 @dataclass
@@ -126,6 +128,7 @@ class RatioCalculator:
         retained_earnings = balance_sheet.get("retainedEarnings") or 0
         
         dividends_paid = abs(cash_flow.get("dividendsPaid") or 0)
+        operating_cash_flow = cash_flow.get("operatingCashFlow")
         
         # Calculate Enterprise Value
         ev = None
@@ -159,7 +162,7 @@ class RatioCalculator:
             risk=self._calc_risk(
                 current_assets, current_liabilities, total_assets,
                 retained_earnings, operating_income, market_cap,
-                total_liabilities, revenue
+                total_liabilities, revenue, net_income, operating_cash_flow
             ),
         )
     
@@ -353,9 +356,11 @@ class RatioCalculator:
         market_cap: Optional[float],
         total_liabilities: Optional[float],
         revenue: Optional[float],
+        net_income: Optional[float],
+        operating_cash_flow: Optional[float],
     ) -> RiskMetrics:
         """
-        Calculate risk metrics including Altman Z-Score.
+        Calculate risk metrics including Altman Z-Score and Accrual Ratio.
         
         Altman Z-Score formula (original for manufacturing):
         Z = 1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E
@@ -371,8 +376,25 @@ class RatioCalculator:
         - Z > 2.99: "Safe Zone" - low bankruptcy risk
         - 1.81 < Z < 2.99: "Grey Zone" - moderate risk
         - Z < 1.81: "Distress Zone" - high bankruptcy risk
+        
+        Accrual Ratio = (Net Income - Operating Cash Flow) / Total Assets
+        Measures earnings quality - high accruals suggest potential manipulation.
         """
         ratios = RiskMetrics()
+        
+        # Calculate Accrual Ratio (independent of Z-Score)
+        if (total_assets and total_assets > 0 and 
+            net_income is not None and operating_cash_flow is not None):
+            accrual = (net_income - operating_cash_flow) / total_assets
+            ratios.accrual_ratio = accrual
+            
+            # Determine quality level
+            if accrual > 0.10:
+                ratios.accrual_quality = "warning"
+            elif accrual >= 0.05:
+                ratios.accrual_quality = "elevated"
+            else:
+                ratios.accrual_quality = "good"
         
         # Check for critical data needed for Z-Score
         if not total_assets or total_assets <= 0:
