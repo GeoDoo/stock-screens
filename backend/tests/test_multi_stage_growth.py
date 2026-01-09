@@ -392,3 +392,65 @@ class TestEconomicsFade:
         assert len(model.margin_schedule) == 3
         assert model.capex_schedule is None
         assert model.wc_schedule is None
+
+
+class TestScheduleLengthConsistency:
+    """
+    P1 Bug: schedule length can mismatch projection_years after mutation.
+    
+    The model calculates schedules in __post_init__, but stages is mutable.
+    If stages is modified after init, total_projection_years would mismatch
+    the actual schedule lengths.
+    """
+    
+    def test_schedule_length_matches_total_years(self):
+        """All schedules should have length == total_projection_years."""
+        model = MultiStageGrowthModel(
+            stages=[
+                GrowthStage("High", years=3, growth_rate=0.20,
+                           operating_margin=0.25, capex_ratio=0.12, wc_ratio=0.15),
+                GrowthStage("Fade", years=4, growth_rate=0.15, end_growth_rate=0.05,
+                           operating_margin=0.25, end_operating_margin=0.18),
+            ],
+            terminal_growth_rate=0.03,
+        )
+        
+        # All should be consistent
+        assert len(model.growth_schedule) == model.total_projection_years
+        assert len(model.margin_schedule) == model.total_projection_years
+        # capex/wc only specified in first stage - still should match
+        # (with None placeholders for later years if needed)
+    
+    def test_stages_immutable_after_init(self):
+        """
+        Stages should be immutable (tuple) to prevent schedule desync.
+        """
+        model = MultiStageGrowthModel(
+            stages=[
+                GrowthStage("Growth", years=3, growth_rate=0.15),
+            ],
+            terminal_growth_rate=0.03,
+        )
+        
+        # Stages should be a tuple, not a list
+        assert isinstance(model.stages, tuple), (
+            "stages should be immutable (tuple) to prevent schedule desync. "
+            f"Got {type(model.stages).__name__}"
+        )
+    
+    def test_cannot_mutate_stages(self):
+        """
+        Attempting to mutate stages should fail or be prevented.
+        """
+        model = MultiStageGrowthModel(
+            stages=[
+                GrowthStage("Growth", years=3, growth_rate=0.15),
+            ],
+            terminal_growth_rate=0.03,
+        )
+        
+        original_years = model.total_projection_years
+        
+        # Tuple has no append method - raises AttributeError
+        with pytest.raises(AttributeError):
+            model.stages.append(GrowthStage("Extra", years=5, growth_rate=0.10))
