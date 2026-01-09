@@ -993,3 +993,180 @@ class TestAccrualRatio:
         assert ratios.risk.accrual_ratio is not None
         assert ratios.risk.accrual_ratio < 0  # Cash exceeds (negative) earnings
 
+
+class TestSBCAdjustment:
+    """
+    Tests for Stock-Based Compensation adjustment.
+    
+    SBC is a real expense that dilutes shareholders but is added back
+    in operating cash flow because it's "non-cash". This hides the
+    true cost of employee compensation.
+    
+    SBC-Adjusted FCF = FCF - SBC
+    SBC as % of Revenue shows how expensive the company's equity
+    compensation program is.
+    
+    From Gemini review: "SBC should be treated as a real expense or
+    you should project annual share dilution."
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_sbc_adjusted_fcf_calculated(self, calculator):
+        """
+        SBC-adjusted FCF should subtract SBC from reported FCF.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 30_000_000_000,
+                "stockBasedCompensation": 5_000_000_000,  # 5B SBC
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.sbc is not None
+        assert ratios.sbc.stock_based_compensation == 5_000_000_000
+        # SBC-adjusted FCF = 30B - 5B = 25B
+        assert ratios.sbc.fcf_adjusted == 25_000_000_000
+    
+    def test_sbc_as_percent_of_revenue(self, calculator):
+        """
+        SBC as % of revenue shows compensation expense burden.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 30_000_000_000,
+                "stockBasedCompensation": 10_000_000_000,  # 10% of revenue
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # SBC / Revenue = 10B / 100B = 10%
+        assert ratios.sbc.sbc_percent_revenue is not None
+        assert abs(ratios.sbc.sbc_percent_revenue - 0.10) < 0.001
+    
+    def test_sbc_impact_on_fcf_margin(self, calculator):
+        """
+        Compare reported vs SBC-adjusted FCF margin.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 25_000_000_000,  # 25% reported FCF margin
+                "stockBasedCompensation": 8_000_000_000,  # 8% of revenue
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Reported FCF margin = 25%
+        # SBC-adjusted FCF = 25B - 8B = 17B
+        # SBC-adjusted FCF margin = 17%
+        assert ratios.sbc.fcf_margin_reported is not None
+        assert ratios.sbc.fcf_margin_adjusted is not None
+        assert abs(ratios.sbc.fcf_margin_reported - 0.25) < 0.001
+        assert abs(ratios.sbc.fcf_margin_adjusted - 0.17) < 0.001
+    
+    def test_sbc_none_when_missing(self, calculator):
+        """
+        SBC metrics should be None when SBC data is missing.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 30_000_000_000,
+                # No stockBasedCompensation
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.sbc.stock_based_compensation is None
+        assert ratios.sbc.fcf_adjusted is None
+    
+    def test_high_sbc_warning(self, calculator):
+        """
+        High SBC (>10% of revenue) should be flagged.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 100_000_000_000},
+            "income_statement": [{
+                "revenue": 50_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 10_000_000_000,
+                "stockBasedCompensation": 8_000_000_000,  # 16% of revenue!
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # SBC / Revenue = 8B / 50B = 16%
+        assert ratios.sbc.sbc_percent_revenue > 0.10
+        assert ratios.sbc.sbc_level == "high"
+    
+    def test_moderate_sbc(self, calculator):
+        """
+        Moderate SBC (5-10% of revenue) should be flagged as 'elevated'.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 100_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 20_000_000_000,
+                "stockBasedCompensation": 7_000_000_000,  # 7% of revenue
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert 0.05 <= ratios.sbc.sbc_percent_revenue <= 0.10
+        assert ratios.sbc.sbc_level == "elevated"
+    
+    def test_low_sbc(self, calculator):
+        """
+        Low SBC (<5% of revenue) is normal.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 100_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 20_000_000_000,
+                "stockBasedCompensation": 3_000_000_000,  # 3% of revenue
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.sbc.sbc_percent_revenue < 0.05
+        assert ratios.sbc.sbc_level == "normal"
+

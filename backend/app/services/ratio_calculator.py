@@ -64,6 +64,17 @@ class RiskMetrics:
 
 
 @dataclass
+class SBCMetrics:
+    """Stock-Based Compensation metrics."""
+    stock_based_compensation: Optional[float] = None  # Raw SBC amount
+    fcf_adjusted: Optional[float] = None  # FCF - SBC
+    sbc_percent_revenue: Optional[float] = None  # SBC / Revenue
+    fcf_margin_reported: Optional[float] = None  # FCF / Revenue
+    fcf_margin_adjusted: Optional[float] = None  # (FCF - SBC) / Revenue
+    sbc_level: Optional[str] = None  # "normal", "elevated", or "high"
+
+
+@dataclass
 class FinancialRatios:
     """Complete set of financial ratios."""
     valuation: ValuationRatios
@@ -72,6 +83,7 @@ class FinancialRatios:
     liquidity: LiquidityRatios
     efficiency: EfficiencyRatios
     risk: RiskMetrics
+    sbc: SBCMetrics
 
 
 class RatioCalculator:
@@ -129,6 +141,8 @@ class RatioCalculator:
         
         dividends_paid = abs(cash_flow.get("dividendsPaid") or 0)
         operating_cash_flow = cash_flow.get("operatingCashFlow")
+        free_cash_flow = cash_flow.get("freeCashFlow")
+        stock_based_compensation = cash_flow.get("stockBasedCompensation")
         
         # Calculate Enterprise Value
         ev = None
@@ -163,6 +177,9 @@ class RatioCalculator:
                 current_assets, current_liabilities, total_assets,
                 retained_earnings, operating_income, market_cap,
                 total_liabilities, revenue, net_income, operating_cash_flow
+            ),
+            sbc=self._calc_sbc(
+                stock_based_compensation, free_cash_flow, revenue
             ),
         )
     
@@ -437,5 +454,50 @@ class RatioCalculator:
             ratios.z_score_zone = "grey"
         
         return ratios
+    
+    def _calc_sbc(
+        self,
+        stock_based_compensation: Optional[float],
+        free_cash_flow: Optional[float],
+        revenue: Optional[float],
+    ) -> SBCMetrics:
+        """
+        Calculate Stock-Based Compensation metrics.
+        
+        SBC is a real expense that dilutes shareholders but is added back
+        in CFO because it's "non-cash". This hides the true cost of
+        employee compensation.
+        
+        SBC-Adjusted FCF = FCF - SBC (treats SBC as real expense)
+        """
+        metrics = SBCMetrics()
+        
+        if stock_based_compensation is None:
+            return metrics
+        
+        metrics.stock_based_compensation = stock_based_compensation
+        
+        # SBC-adjusted FCF
+        if free_cash_flow is not None:
+            metrics.fcf_adjusted = free_cash_flow - stock_based_compensation
+        
+        # SBC as % of revenue
+        if revenue and revenue > 0:
+            metrics.sbc_percent_revenue = stock_based_compensation / revenue
+            
+            # Determine SBC level
+            if metrics.sbc_percent_revenue > 0.10:
+                metrics.sbc_level = "high"
+            elif metrics.sbc_percent_revenue >= 0.05:
+                metrics.sbc_level = "elevated"
+            else:
+                metrics.sbc_level = "normal"
+            
+            # FCF margins
+            if free_cash_flow is not None:
+                metrics.fcf_margin_reported = free_cash_flow / revenue
+                metrics.fcf_margin_adjusted = (free_cash_flow - stock_based_compensation) / revenue
+        
+        return metrics
 
 

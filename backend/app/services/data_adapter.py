@@ -77,6 +77,7 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
             "freeCashFlow": fin.free_cash_flow,
             "depreciationAndAmortization": fin.depreciation_amortization,
             "dividendsPaid": fin.dividends_paid,
+            "stockBasedCompensation": fin.stock_based_compensation,
         })
     
     return {
