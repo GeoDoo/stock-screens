@@ -282,3 +282,116 @@ class TestEdgeCases:
         assert result.dividend_cagr is not None
         assert result.dividend_cagr < 0  # Negative growth
 
+
+class TestFCFPayoutRatio:
+    """
+    Tests for FCF-based payout ratio.
+    
+    Bug: Original payout_ratio used Net Income only.
+    
+    Problem: Dividends are paid in cash, not accounting earnings.
+    A company can have high Net Income but negative FCF (due to heavy CapEx),
+    making the dividend unsustainable.
+    
+    Solution: Add fcf_payout_ratio = Dividends / Free Cash Flow
+    """
+    
+    @pytest.fixture
+    def analyzer(self):
+        return DividendAnalyzer()
+    
+    @pytest.fixture
+    def recent_dividends(self):
+        """Recent quarterly dividends totaling $1.00/share annually."""
+        return [
+            DividendPayment(date="2024-03-15", amount=0.25),
+            DividendPayment(date="2024-06-15", amount=0.25),
+            DividendPayment(date="2024-09-15", amount=0.25),
+            DividendPayment(date="2024-12-15", amount=0.25),
+        ]
+    
+    def test_fcf_payout_ratio_calculated(self, analyzer, recent_dividends):
+        """
+        Should calculate payout ratio based on FCF when provided.
+        """
+        result = analyzer.analyze(
+            payments=recent_dividends,
+            current_price=50.0,
+            shares_outstanding=1_000_000_000,  # 1B shares
+            net_income=5_000_000_000,  # $5B net income
+            free_cash_flow=4_000_000_000,  # $4B FCF (less than net income)
+        )
+        
+        # Total dividends = $1.00/share × 1B shares = $1B
+        # FCF payout = $1B / $4B = 25%
+        assert result.fcf_payout_ratio is not None
+        assert result.fcf_payout_ratio == pytest.approx(0.25, rel=0.01)
+    
+    def test_fcf_payout_vs_earnings_payout_differ(self, analyzer, recent_dividends):
+        """
+        FCF payout and earnings payout should differ when FCF != Net Income.
+        """
+        result = analyzer.analyze(
+            payments=recent_dividends,
+            current_price=50.0,
+            shares_outstanding=1_000_000_000,
+            net_income=5_000_000_000,  # $5B net income
+            free_cash_flow=2_000_000_000,  # $2B FCF (much less - heavy CapEx)
+        )
+        
+        # Earnings payout = $1B / $5B = 20%
+        # FCF payout = $1B / $2B = 50%
+        assert result.payout_ratio == pytest.approx(0.20, rel=0.01)
+        assert result.fcf_payout_ratio == pytest.approx(0.50, rel=0.01)
+        
+        # FCF payout is higher - dividend is less sustainable than earnings suggest
+        assert result.fcf_payout_ratio > result.payout_ratio
+    
+    def test_negative_fcf_returns_none(self, analyzer, recent_dividends):
+        """
+        Negative FCF means dividend is unsustainable - can't compute ratio.
+        """
+        result = analyzer.analyze(
+            payments=recent_dividends,
+            current_price=50.0,
+            shares_outstanding=1_000_000_000,
+            net_income=5_000_000_000,
+            free_cash_flow=-1_000_000_000,  # Negative FCF!
+        )
+        
+        # Can't pay dividends from negative cash flow
+        assert result.fcf_payout_ratio is None
+        # But earnings payout still works
+        assert result.payout_ratio is not None
+    
+    def test_fcf_payout_over_100_percent(self, analyzer, recent_dividends):
+        """
+        FCF payout > 100% means paying out more than generated cash.
+        """
+        result = analyzer.analyze(
+            payments=recent_dividends,
+            current_price=50.0,
+            shares_outstanding=1_000_000_000,
+            net_income=5_000_000_000,
+            free_cash_flow=500_000_000,  # Only $500M FCF, paying $1B
+        )
+        
+        # FCF payout = $1B / $0.5B = 200%
+        assert result.fcf_payout_ratio == pytest.approx(2.0, rel=0.01)
+        assert result.fcf_payout_ratio > 1.0  # Unsustainable!
+    
+    def test_no_fcf_provided(self, analyzer, recent_dividends):
+        """
+        When FCF not provided, fcf_payout_ratio should be None.
+        """
+        result = analyzer.analyze(
+            payments=recent_dividends,
+            current_price=50.0,
+            shares_outstanding=1_000_000_000,
+            net_income=5_000_000_000,
+            # No free_cash_flow parameter
+        )
+        
+        assert result.fcf_payout_ratio is None
+        assert result.payout_ratio is not None  # Earnings payout still works
+

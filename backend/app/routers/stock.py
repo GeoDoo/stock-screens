@@ -667,9 +667,13 @@ async def get_dividends(symbol: str, provider: str):
         current_price = info.get("regularMarketPrice") or info.get("currentPrice")
         shares = info.get("sharesOutstanding")
         net_income = info.get("netIncomeToCommon")
+        free_cash_flow = info.get("freeCashflow")
         
         analyzer = DividendAnalyzer()
-        result = analyzer.analyze(payments, current_price, shares, net_income)
+        result = analyzer.analyze(
+            payments, current_price, shares, net_income, 
+            free_cash_flow=free_cash_flow,
+        )
         
         return {
             "symbol": symbol.upper(),
@@ -677,6 +681,7 @@ async def get_dividends(symbol: str, provider: str):
             "current_annual_dividend": result.current_annual_dividend,
             "current_yield": result.current_yield,
             "payout_ratio": result.payout_ratio,
+            "fcf_payout_ratio": result.fcf_payout_ratio,
             "dividend_cagr": result.dividend_cagr,
             "consecutive_years": result.consecutive_years,
             "annual_dividends": result.annual_dividends,
@@ -1082,7 +1087,18 @@ async def batch_analyze(symbol: str, provider: str):
                 ))
     
     net_income = financials[0].net_income if financials else None
-    dividend_result = analyzer.analyze(payments, current_price, shares, net_income)
+    # Calculate FCF from financials: Operating Cash Flow - CapEx
+    free_cash_flow = None
+    if financials and financials[0].operating_cash_flow is not None:
+        ocf = financials[0].operating_cash_flow
+        capex = financials[0].capital_expenditure or 0
+        # CapEx is typically negative (outflow), so we add it
+        free_cash_flow = ocf + capex if capex <= 0 else ocf - abs(capex)
+    
+    dividend_result = analyzer.analyze(
+        payments, current_price, shares, net_income,
+        free_cash_flow=free_cash_flow,
+    )
     
     dividends_response = {
         "symbol": symbol.upper(),
@@ -1092,6 +1108,7 @@ async def batch_analyze(symbol: str, provider: str):
         "dividend_cagr": dividend_result.dividend_cagr,
         "consecutive_years": dividend_result.consecutive_years,
         "payout_ratio": dividend_result.payout_ratio,
+        "fcf_payout_ratio": dividend_result.fcf_payout_ratio,
         "annual_dividends": dividend_result.annual_dividends,
         "payments": [{"date": p.date, "amount": p.amount} for p in payments],
     }
