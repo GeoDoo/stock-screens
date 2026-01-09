@@ -206,6 +206,13 @@ class ValuationService:
             operating_margin=operating_margin or fcf_projector.operating_margin(),
         )
 
+        # 8. Terminal Value sanity check via Exit Multiple
+        # Professional valuation cross-checks Gordon Growth with implied EV/EBITDA
+        terminal_value_check = self._calculate_terminal_value_check(
+            terminal_value=terminal_value,
+            terminal_year_projection=projections[-1],
+        )
+
         return {
             "symbol": symbol,
             "data_provider": stock_data.provider,
@@ -236,6 +243,7 @@ class ValuationService:
             },
             "sensitivity": sensitivity,
             "value_drivers": value_drivers,
+            "terminal_value_check": terminal_value_check,
         }
     
     def _calculate_value_drivers(
@@ -312,4 +320,55 @@ class ValuationService:
         drivers.sort(key=lambda x: x["impact_percent"], reverse=True)
         
         return drivers
+    
+    def _calculate_terminal_value_check(
+        self,
+        terminal_value: float,
+        terminal_year_projection: Dict,
+    ) -> Dict:
+        """
+        Calculate implied exit multiple as sanity check for terminal value.
+        
+        Professional valuation cross-checks Gordon Growth Model terminal value
+        with an implied EV/EBITDA exit multiple. If the implied multiple is
+        unrealistically high (> 25x for mature companies), it suggests the
+        terminal growth assumption may be too aggressive.
+        
+        Returns dict with:
+        - terminal_ebitda: EBIT + D&A in terminal year
+        - implied_exit_multiple: Terminal Value / Terminal EBITDA
+        - warning: Optional warning if multiple seems unrealistic
+        """
+        # Terminal year EBITDA = EBIT + D&A
+        terminal_ebit = terminal_year_projection.get("ebit", 0)
+        terminal_da = terminal_year_projection.get("da", 0)
+        terminal_ebitda = terminal_ebit + terminal_da
+        
+        # Avoid division by zero
+        if terminal_ebitda <= 0:
+            return {
+                "terminal_ebitda": terminal_ebitda,
+                "implied_exit_multiple": None,
+                "warning": "Cannot calculate exit multiple - terminal EBITDA is zero or negative",
+            }
+        
+        # Implied EV/EBITDA = Terminal Value / Terminal Year EBITDA
+        implied_multiple = terminal_value / terminal_ebitda
+        
+        result = {
+            "terminal_ebitda": terminal_ebitda,
+            "implied_exit_multiple": implied_multiple,
+        }
+        
+        # Add warning if multiple is unrealistically high
+        # For mature companies, EV/EBITDA > 25x is aggressive
+        # For high-growth tech, up to 30-40x might be justified
+        if implied_multiple > 25:
+            result["warning"] = (
+                f"Implied exit multiple ({implied_multiple:.1f}x EV/EBITDA) is high. "
+                "Consider whether terminal growth assumption is too aggressive, "
+                "or if the company's growth profile justifies this premium."
+            )
+        
+        return result
 
