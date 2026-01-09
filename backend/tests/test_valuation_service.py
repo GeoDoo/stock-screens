@@ -316,6 +316,9 @@ class TestExitMultipleSanityCheck:
         assert "implied_exit_multiple" in check, (
             "terminal_value_check must include implied_exit_multiple (EV/EBITDA)"
         )
+        assert check["implied_exit_multiple"] is not None, (
+            "implied_exit_multiple should not be None for valid EBITDA"
+        )
         assert check["implied_exit_multiple"] > 0, (
             "Implied exit multiple must be positive"
         )
@@ -335,6 +338,7 @@ class TestExitMultipleSanityCheck:
         )
         
         multiple = result["terminal_value_check"]["implied_exit_multiple"]
+        assert multiple is not None, "Multiple should not be None for valid EBITDA"
         assert 5 < multiple < 30, (
             f"With 3% terminal growth, implied multiple ({multiple:.1f}x) "
             "should be in reasonable range for mature company"
@@ -355,12 +359,22 @@ class TestExitMultipleSanityCheck:
         )
         
         check = result["terminal_value_check"]
-        # With aggressive growth and low discount rate, multiple will be high
-        if check["implied_exit_multiple"] > 25:
+        multiple = check["implied_exit_multiple"]
+        
+        # Must have valid multiple with our mock data
+        assert multiple is not None, (
+            "implied_exit_multiple should not be None - mock data has valid EBITDA"
+        )
+        
+        # With aggressive growth and low discount rate, multiple should be high
+        # and trigger a warning
+        if multiple > 25:
             assert "warning" in check, (
-                f"High implied multiple ({check['implied_exit_multiple']:.1f}x) "
+                f"High implied multiple ({multiple:.1f}x) "
                 "should trigger a warning"
             )
+        # If multiple is reasonable despite aggressive params, no warning needed
+        # (test still validates the check ran correctly)
     
     @pytest.mark.asyncio
     async def test_terminal_value_check_includes_terminal_ebitda(self, mock_client):
