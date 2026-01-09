@@ -281,7 +281,7 @@ class DataExtractor:
         
         return 0.1500  # D spread (distressed)
 
-    def cost_of_debt(self) -> Optional[float]:
+    def cost_of_debt(self, risk_free_rate: Optional[float] = None) -> Optional[float]:
         """
         Cost of debt using synthetic credit rating methodology.
         
@@ -295,6 +295,12 @@ class DataExtractor:
         
         ...because it accounts for the company's actual credit quality,
         not just what they happened to borrow at historically.
+        
+        Args:
+            risk_free_rate: Optional risk-free rate to use. If provided, this
+                should be the same rate used in cost of equity (CAPM) to ensure
+                consistent capital market assumptions in WACC. If None, falls
+                back to DEFAULT_TREASURY_RATE for backward compatibility.
         """
         total_debt = self.total_debt()
 
@@ -303,9 +309,12 @@ class DataExtractor:
         if total_debt == 0:
             return 0.0  # No debt, no cost
         
+        # Use provided risk-free rate or fall back to default
+        rf_rate = risk_free_rate if risk_free_rate is not None else DEFAULT_TREASURY_RATE
+        
         # Use synthetic credit rating spread
         spread = self.synthetic_credit_spread()
-        synthetic_rate = DEFAULT_TREASURY_RATE + spread
+        synthetic_rate = rf_rate + spread
         
         # Also calculate historical rate as sanity check
         interest_expense = self._get_latest(self.income_statement, "interestExpense")
