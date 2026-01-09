@@ -1,5 +1,31 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 from app.constants import DEFAULT_MARKET_RISK_PREMIUM, DEFAULT_TREASURY_RATE, DEFAULT_CREDIT_SPREAD
+
+
+# Synthetic Credit Rating Spread Table
+# Based on Damodaran's synthetic rating methodology
+# ICR thresholds → Credit Rating → Spread over risk-free rate
+# Sources: Historical corporate bond spreads, updated for current market conditions
+SYNTHETIC_RATING_TABLE: List[Tuple[float, str, float]] = [
+    # (min_icr, rating, spread)
+    (12.5, "AAA", 0.0063),   # 0.63% spread
+    (9.5, "AA", 0.0078),     # 0.78% spread  
+    (7.5, "A+", 0.0098),     # 0.98% spread
+    (6.0, "A", 0.0108),      # 1.08% spread
+    (4.5, "A-", 0.0122),     # 1.22% spread
+    (4.0, "BBB+", 0.0156),   # 1.56% spread
+    (3.5, "BBB", 0.0175),    # 1.75% spread
+    (3.0, "BBB-", 0.0200),   # 2.00% spread
+    (2.5, "BB+", 0.0250),    # 2.50% spread
+    (2.0, "BB", 0.0325),     # 3.25% spread
+    (1.5, "BB-", 0.0400),    # 4.00% spread
+    (1.25, "B+", 0.0475),    # 4.75% spread
+    (1.0, "B", 0.0550),      # 5.50% spread
+    (0.8, "B-", 0.0650),     # 6.50% spread
+    (0.5, "CCC", 0.0850),    # 8.50% spread
+    (0.0, "CC", 0.1100),     # 11.00% spread
+    (-999, "D", 0.1500),     # 15.00% spread (distressed/default)
+]
 
 
 class DataExtractor:
@@ -122,33 +148,110 @@ class DataExtractor:
         
         return sum(valid_rates) / len(valid_rates)
 
+    def interest_coverage_ratio(self) -> Optional[float]:
+        """
+        Interest Coverage Ratio (ICR) = EBIT / Interest Expense.
+        
+        Key metric for credit analysis:
+        - ICR > 10x: Strong investment grade (AAA/AA)
+        - ICR 3-6x: Medium investment grade (BBB)  
+        - ICR < 1.5x: Below investment grade / distressed
+        
+        Returns None if either component is missing.
+        """
+        ebit = self._get_latest(self.income_statement, "operatingIncome")
+        interest_expense = self._get_latest(self.income_statement, "interestExpense")
+        
+        if ebit is None or interest_expense is None:
+            return None
+        if interest_expense <= 0:
+            # Can't calculate ratio with zero/negative interest
+            # This could mean net interest income or data issue
+            return None
+            
+        return ebit / interest_expense
+    
+    def synthetic_credit_rating(self) -> str:
+        """
+        Determine synthetic credit rating based on Interest Coverage Ratio.
+        
+        Uses Damodaran's synthetic rating methodology, mapping ICR to
+        credit ratings. This is professional practice when actual credit
+        ratings aren't available (which is most companies).
+        
+        Returns credit rating string (AAA, AA, A, BBB, BB, B, CCC, etc.)
+        """
+        icr = self.interest_coverage_ratio()
+        
+        # If ICR can't be calculated, assume conservative BBB-
+        if icr is None:
+            return "BBB-"
+        
+        # Walk through table to find matching rating
+        for min_icr, rating, _ in SYNTHETIC_RATING_TABLE:
+            if icr >= min_icr:
+                return rating
+        
+        # Should never reach here, but fallback to D
+        return "D"
+    
+    def synthetic_credit_spread(self) -> float:
+        """
+        Get credit spread (over risk-free rate) for synthetic rating.
+        
+        Returns spread as decimal (e.g., 0.0175 for 1.75%).
+        """
+        icr = self.interest_coverage_ratio()
+        
+        # If ICR can't be calculated, use conservative BBB- spread
+        if icr is None:
+            return 0.0200  # BBB- spread
+        
+        for min_icr, _, spread in SYNTHETIC_RATING_TABLE:
+            if icr >= min_icr:
+                return spread
+        
+        return 0.1500  # D spread (distressed)
+
     def cost_of_debt(self) -> Optional[float]:
         """
-        Cost of debt calculated from interest expense and total debt.
-        cost_of_debt = interest_expense / total_debt
+        Cost of debt using synthetic credit rating methodology.
         
-        When interest expense is missing but debt exists, applies a conservative
-        floor (risk-free rate + credit spread) to avoid understating WACC.
+        Cost of Debt = Risk-Free Rate + Credit Spread
+        
+        The credit spread is determined by the company's synthetic credit
+        rating, which is derived from Interest Coverage Ratio (ICR).
+        
+        This is more accurate than the naive approach of:
+            interest_expense / total_debt
+        
+        ...because it accounts for the company's actual credit quality,
+        not just what they happened to borrow at historically.
         """
-        interest_expense = self._get_latest(self.income_statement, "interestExpense")
         total_debt = self.total_debt()
 
         if total_debt is None:
             return None
         if total_debt == 0:
             return 0.0  # No debt, no cost
-        if interest_expense is None or interest_expense <= 0:
-            # Company has debt but no/negative interest expense reported
-            # (e.g., interest income exceeds expense, or data is missing)
-            # Apply conservative floor: risk-free rate + credit spread
-            # This prevents artificially low WACC that inflates valuations
-            return DEFAULT_TREASURY_RATE + DEFAULT_CREDIT_SPREAD
         
-        calculated_rate = interest_expense / total_debt
+        # Use synthetic credit rating spread
+        spread = self.synthetic_credit_spread()
+        synthetic_rate = DEFAULT_TREASURY_RATE + spread
         
-        # Apply floor to prevent unrealistically low cost of debt
-        floor_rate = DEFAULT_TREASURY_RATE + DEFAULT_CREDIT_SPREAD
-        return max(calculated_rate, floor_rate)
+        # Also calculate historical rate as sanity check
+        interest_expense = self._get_latest(self.income_statement, "interestExpense")
+        historical_rate = None
+        if interest_expense and interest_expense > 0:
+            historical_rate = interest_expense / total_debt
+        
+        # Use the HIGHER of synthetic or historical rate
+        # This prevents artificially low cost of debt if company
+        # borrowed at favorable rates that may not be repeatable
+        if historical_rate is not None:
+            return max(synthetic_rate, historical_rate)
+        
+        return synthetic_rate
 
     def free_cash_flow(self) -> Optional[float]:
         """Free cash flow from cash flow statement."""
