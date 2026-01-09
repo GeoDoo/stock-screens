@@ -528,3 +528,84 @@ class TestMemoAPI:
         
         assert response.status_code == 200
         assert response.json()["status"] == "closed_loss"
+
+
+class TestMemoRepositoryIndexes:
+    """Tests for database indexes on memo tables."""
+    
+    @pytest.fixture
+    def repo(self):
+        """Create a memo repository with temp database."""
+        from app.services.memo_repository import MemoRepository
+        
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+            db_path = f.name
+        
+        repo = MemoRepository(db_path=db_path)
+        yield repo, db_path
+        
+        if os.path.exists(db_path):
+            os.unlink(db_path)
+    
+    def test_indexes_exist_on_memos_table(self, repo):
+        """
+        High Priority: Database should have indexes on commonly queried columns.
+        
+        Without indexes, queries filtering by symbol or status will do full
+        table scans, which degrades performance as the table grows.
+        """
+        import sqlite3
+        repository, db_path = repo
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memos'"
+        )
+        indexes = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        
+        # Should have indexes on commonly queried columns
+        assert any("symbol" in idx.lower() for idx in indexes), (
+            "memos table should have an index on 'symbol' column"
+        )
+        assert any("status" in idx.lower() for idx in indexes), (
+            "memos table should have an index on 'status' column"
+        )
+    
+    def test_indexes_exist_on_child_tables(self, repo):
+        """Child tables should have indexes on memo_id foreign key."""
+        import sqlite3
+        repository, db_path = repo
+        
+        conn = sqlite3.connect(db_path)
+        
+        # Check memo_scenarios
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memo_scenarios'"
+        )
+        scenario_indexes = [row[0] for row in cursor.fetchall()]
+        
+        # Check memo_market_snapshots
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memo_market_snapshots'"
+        )
+        snapshot_indexes = [row[0] for row in cursor.fetchall()]
+        
+        # Check memo_post_mortems
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='memo_post_mortems'"
+        )
+        postmortem_indexes = [row[0] for row in cursor.fetchall()]
+        
+        conn.close()
+        
+        # Indexes may be named idx_*_memo or contain memo_id
+        assert any("memo" in idx.lower() for idx in scenario_indexes), (
+            f"memo_scenarios should have an index for memo lookups, got: {scenario_indexes}"
+        )
+        assert any("memo" in idx.lower() for idx in snapshot_indexes), (
+            f"memo_market_snapshots should have an index for memo lookups, got: {snapshot_indexes}"
+        )
+        assert any("memo" in idx.lower() for idx in postmortem_indexes), (
+            f"memo_post_mortems should have an index for memo lookups, got: {postmortem_indexes}"
+        )
