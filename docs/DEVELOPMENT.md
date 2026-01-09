@@ -2,7 +2,7 @@
 
 > **Auto-generated** from package files.
 > 
-> Last updated: 2026-01-09 15:04
+> Last updated: 2026-01-09 15:07
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -40,6 +40,7 @@ npm run dev
 | `uvicorn` | 0.27.0 |
 | `httpx` | 0.26.0 |
 | `python-dotenv` | 1.0.0 |
+| `pydantic` | latest |
 | `pytest` | 8.0.0 |
 | `pytest-asyncio` | 0.21.0 |
 | `yfinance` | latest |
