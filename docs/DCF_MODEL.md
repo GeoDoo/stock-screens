@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code docstrings.
 > 
-> Last updated: 2026-01-09 13:38
+> Last updated: 2026-01-09 13:45
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -56,8 +56,11 @@ Working Capital Modes:
 
 A single growth phase in a multi-stage model.
 
-If end_growth_rate is provided, the stage will fade linearly
-from growth_rate to end_growth_rate over the years.
+If end_* fields are provided, the stage will fade linearly
+from start to end values over the years.
+
+Economics fields (margin, capex, wc) allow modeling how a company's
+unit economics evolve as it matures - critical for accurate DCF.
 
 ## Monte Carlo Simulation
 
