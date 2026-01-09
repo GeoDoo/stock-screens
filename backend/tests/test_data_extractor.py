@@ -757,3 +757,203 @@ class TestTaxRateAveraging:
             "Should exclude loss years from tax rate average"
         )
 
+
+class TestSyntheticCreditRating:
+    """
+    Tests for synthetic credit rating based on Interest Coverage Ratio.
+    
+    Problem: Current cost of debt uses a fixed fallback spread (DEFAULT_CREDIT_SPREAD).
+    This treats Apple (AAA credit) the same as a distressed company (CCC credit).
+    
+    Solution: Calculate synthetic credit rating from Interest Coverage Ratio (ICR),
+    then map to appropriate credit spread. This is standard practice in professional DCF.
+    
+    ICR = EBIT / Interest Expense
+    
+    Higher ICR → Better credit → Lower spread
+    Lower ICR → Worse credit → Higher spread
+    """
+    
+    def test_interest_coverage_ratio_calculated(self):
+        """
+        DataExtractor should calculate Interest Coverage Ratio.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": 100_000_000_000,  # $100B EBIT
+                "interestExpense": 5_000_000_000,    # $5B interest
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        icr = extractor.interest_coverage_ratio()
+        # ICR = 100B / 5B = 20x
+        assert icr == pytest.approx(20.0, rel=0.01)
+    
+    def test_synthetic_rating_from_high_icr(self):
+        """
+        High ICR (>10x) should map to AAA/AA credit rating.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": 100_000_000_000,
+                "interestExpense": 5_000_000_000,  # ICR = 20x
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        rating = extractor.synthetic_credit_rating()
+        assert rating in ["AAA", "AA"], f"ICR of 20x should be AAA/AA, got {rating}"
+    
+    def test_synthetic_rating_from_medium_icr(self):
+        """
+        Medium ICR (3-6x) should map to investment grade (BBB range).
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": 100_000_000_000,
+                "interestExpense": 25_000_000_000,  # ICR = 4x
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        rating = extractor.synthetic_credit_rating()
+        # ICR of 4x should be in BBB range (investment grade)
+        assert rating.startswith("BBB") or rating.startswith("A"), (
+            f"ICR of 4x should be investment grade (BBB+/BBB/BBB-/A-), got {rating}"
+        )
+    
+    def test_synthetic_rating_from_low_icr(self):
+        """
+        Low ICR (<1x) should map to high yield / distressed.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": 4_000_000_000,
+                "interestExpense": 10_000_000_000,  # ICR = 0.4x (can't cover interest!)
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        rating = extractor.synthetic_credit_rating()
+        # ICR < 0.5x should be CCC or worse
+        assert rating in ["CCC", "CC", "C", "D"], f"ICR of 0.4x should be CCC or worse, got {rating}"
+    
+    def test_cost_of_debt_uses_synthetic_spread(self):
+        """
+        Cost of debt should use credit spread from synthetic rating.
+        
+        AAA spread (~0.5%) vs CCC spread (~10%+) makes a huge difference in WACC.
+        """
+        # High credit quality company (like Apple)
+        high_quality = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": 100_000_000_000,
+                "interestExpense": 5_000_000_000,  # ICR = 20x → AAA
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        
+        # Low credit quality company
+        low_quality = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": 10_000_000_000,
+                "interestExpense": 10_000_000_000,  # ICR = 1x → CCC
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        
+        high_extractor = DataExtractor(high_quality)
+        low_extractor = DataExtractor(low_quality)
+        
+        high_cod = high_extractor.cost_of_debt()
+        low_cod = low_extractor.cost_of_debt()
+        
+        # Low quality should have SIGNIFICANTLY higher cost of debt
+        assert low_cod > high_cod + 0.03, (
+            f"CCC cost of debt ({low_cod:.2%}) should be at least 3% higher "
+            f"than AAA ({high_cod:.2%})"
+        )
+    
+    def test_cost_of_debt_spread_reasonable_for_investment_grade(self):
+        """
+        Investment grade (A-) cost of debt should be reasonable (~5-7%).
+        
+        Note: cost_of_debt uses max(synthetic_rate, historical_rate) to be
+        conservative. So we need interest/debt to be low enough.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": 50_000_000_000,
+                "interestExpense": 5_000_000_000,  # ICR = 10x → AA, interest/debt = 5%
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        cod = extractor.cost_of_debt()
+        # Risk-free (~4%) + AA spread (~0.8%) = ~4.8% (but historical is 5%)
+        # Should use max(synthetic, historical) = ~5%
+        assert 0.04 < cod < 0.08, (
+            f"Investment grade cost of debt should be 4-8%, got {cod:.2%}"
+        )
+    
+    def test_negative_icr_returns_distressed_rating(self):
+        """
+        Negative EBIT (losing money) should return distressed rating.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": -10_000_000_000,  # Negative EBIT
+                "interestExpense": 5_000_000_000,
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        rating = extractor.synthetic_credit_rating()
+        assert rating in ["CCC", "CC", "C", "D"], f"Negative EBIT should be distressed, got {rating}"
+    
+    def test_missing_interest_expense_uses_fallback(self):
+        """
+        When interest expense missing, should use conservative fallback.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "operatingIncome": 100_000_000_000,
+                # No interestExpense!
+            }],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # ICR can't be calculated, should return None
+        icr = extractor.interest_coverage_ratio()
+        assert icr is None
+        
+        # But cost of debt should still work (using fallback)
+        cod = extractor.cost_of_debt()
+        assert cod is not None
+        assert cod > 0
