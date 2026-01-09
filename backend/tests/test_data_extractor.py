@@ -617,3 +617,143 @@ class TestDilutedShares:
             "Must correctly label data source for transparency."
         )
 
+
+class TestTaxRateAveraging:
+    """
+    Regression tests for tax rate averaging.
+    
+    Bug: DataExtractor.tax_rate() used only the latest year's effective tax rate.
+    
+    Problem: Effective tax rates are notoriously volatile due to one-time items
+    (e.g., R&D credits, foreign tax adjustments, deferred tax benefits).
+    Using a single year can badly distort FCF projections over 10 years.
+    
+    Solution: Use 3-year average tax rate for stability, with fallback to
+    latest year if less history is available.
+    """
+    
+    def test_tax_rate_uses_3_year_average(self):
+        """
+        tax_rate() should average multiple years to smooth out volatility.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [
+                # Most recent year
+                {"incomeTaxExpense": 22000000, "incomeBeforeTax": 100000000},  # 22%
+                # Prior year
+                {"incomeTaxExpense": 20000000, "incomeBeforeTax": 100000000},  # 20%
+                # Two years ago
+                {"incomeTaxExpense": 24000000, "incomeBeforeTax": 100000000},  # 24%
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Single year would give 22%
+        # 3-year average: (22% + 20% + 24%) / 3 = 22%
+        tax_rate = extractor.tax_rate()
+        
+        assert tax_rate is not None
+        assert abs(tax_rate - 0.22) < 0.01, (
+            f"Expected 3-year average ~22%, got {tax_rate:.2%}. "
+            "Tax rate should use multi-year average."
+        )
+    
+    def test_tax_rate_excludes_negative_rates(self):
+        """
+        Negative tax rates (tax benefits) should be excluded as outliers.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [
+                # Most recent: Tax benefit (negative) due to one-time R&D credit
+                {"incomeTaxExpense": -5000000, "incomeBeforeTax": 100000000},  # -5%
+                # Prior year: Normal
+                {"incomeTaxExpense": 20000000, "incomeBeforeTax": 100000000},  # 20%
+                # Two years ago: Normal
+                {"incomeTaxExpense": 25000000, "incomeBeforeTax": 100000000},  # 25%
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Negative rate should be excluded
+        # Average of valid years: (20% + 25%) / 2 = 22.5%
+        tax_rate = extractor.tax_rate()
+        
+        assert tax_rate is not None
+        assert abs(tax_rate - 0.225) < 0.01, (
+            f"Expected ~22.5% (excluding negative rate), got {tax_rate:.2%}. "
+            "Negative tax rates should be excluded from average."
+        )
+    
+    def test_tax_rate_excludes_extreme_outliers(self):
+        """
+        Should exclude years with extreme/negative tax rates from average.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [
+                # Extreme outlier: 80% due to one-time charge
+                {"incomeTaxExpense": 80000000, "incomeBeforeTax": 100000000},  # 80%
+                {"incomeTaxExpense": 22000000, "incomeBeforeTax": 100000000},  # 22%
+                {"incomeTaxExpense": 23000000, "incomeBeforeTax": 100000000},  # 23%
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Including outlier: (80% + 22% + 23%) / 3 = 41.67% (unrealistic)
+        # Excluding outlier: (22% + 23%) / 2 = 22.5% (realistic)
+        tax_rate = extractor.tax_rate()
+        
+        # Should be in reasonable range, not ~41%
+        assert tax_rate is not None
+        assert 0.15 < tax_rate < 0.35, (
+            f"Tax rate {tax_rate:.2%} seems unrealistic. "
+            "Should exclude extreme outliers from average."
+        )
+    
+    def test_tax_rate_falls_back_to_latest_if_only_one_year(self):
+        """
+        With only one year of data, use that year.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"incomeTaxExpense": 25000000, "incomeBeforeTax": 100000000},
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        tax_rate = extractor.tax_rate()
+        assert tax_rate == pytest.approx(0.25, rel=0.01)
+    
+    def test_tax_rate_handles_loss_years(self):
+        """
+        Years with negative income before tax should be excluded from average.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"incomeTaxExpense": 25000000, "incomeBeforeTax": 100000000},  # 25%
+                {"incomeTaxExpense": -10000000, "incomeBeforeTax": -50000000},  # Loss year
+                {"incomeTaxExpense": 20000000, "incomeBeforeTax": 100000000},  # 20%
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Should only average profitable years: (25% + 20%) / 2 = 22.5%
+        tax_rate = extractor.tax_rate()
+        assert tax_rate == pytest.approx(0.225, rel=0.01), (
+            "Should exclude loss years from tax rate average"
+        )
+
