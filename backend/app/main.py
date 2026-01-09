@@ -7,7 +7,11 @@ This is a thin wiring layer. Business logic lives in:
 - routers/audit.py - Assumption audit trail endpoints
 """
 import os
+import logging
+from typing import List, Dict, Any
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Load .env BEFORE any imports that read environment variables
 # (routers read API keys at module level)
@@ -41,6 +45,59 @@ app.add_middleware(
 # Get API keys from environment
 FMP_API_KEY = os.getenv("FMP_API_KEY", "")
 MASSIVE_API_KEY = os.getenv("POLYGON_API_KEY", "")  # Polygon is now Massive
+
+
+def validate_configuration() -> List[Dict[str, Any]]:
+    """
+    Validate startup configuration and log warnings for issues.
+    
+    Returns:
+        List of warning dictionaries describing configuration issues.
+        Each dict has 'type' or 'provider', 'message', and 'severity' keys.
+    
+    This function:
+    - Warns if FMP_API_KEY is missing (provider will be unavailable)
+    - Warns if CORS is set to wildcard (security risk in production)
+    - Does NOT crash the app - issues are warnings, not errors
+    """
+    warnings: List[Dict[str, Any]] = []
+    
+    # Check FMP API key
+    fmp_key = os.getenv("FMP_API_KEY", "")
+    if not fmp_key:
+        msg = "FMP_API_KEY not set - FMP provider will be unavailable"
+        logger.warning(msg)
+        warnings.append({
+            "provider": "fmp",
+            "message": msg,
+            "severity": "warning",
+        })
+    
+    # Check CORS configuration
+    cors_env = os.getenv("CORS_ORIGINS", "")
+    if not cors_env:
+        msg = (
+            "CORS_ORIGINS not set - defaulting to wildcard '*'. "
+            "This is acceptable for local development but should be "
+            "explicitly configured for production."
+        )
+        logger.warning(msg)
+        warnings.append({
+            "type": "cors_wildcard",
+            "message": msg,
+            "severity": "warning",
+        })
+    
+    # Check Polygon/Massive API key (optional, just info)
+    polygon_key = os.getenv("POLYGON_API_KEY", "")
+    if not polygon_key:
+        logger.info("POLYGON_API_KEY not set - Massive provider will be unavailable")
+    
+    return warnings
+
+
+# Run validation on module load (startup)
+_startup_warnings = validate_configuration()
 
 # Include routers
 app.include_router(stock.router)

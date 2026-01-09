@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-09 15:01
+> Last updated: 2026-01-09 15:04
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -149,7 +149,7 @@ Weighted Average Cost of Capital calculator.
 
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
-| Backend | 28 test files | pytest |
+| Backend | 29 test files | pytest |
 | Frontend | 13 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)
