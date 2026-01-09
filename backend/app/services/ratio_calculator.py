@@ -245,7 +245,8 @@ class RatioCalculator:
         # Note: We use EXCESS cash, not ALL cash, because businesses need
         # operating cash (typically 2% of revenue) to function. Subtracting
         # all cash artificially inflates ROIC for cash-rich companies.
-        if operating_income and equity and income_before_tax and net_income:
+        # Revenue is required to calculate operating cash needs.
+        if operating_income and equity and income_before_tax and net_income and revenue:
             # Estimate tax rate
             tax_expense = income_before_tax - net_income
             tax_rate = tax_expense / income_before_tax if income_before_tax > 0 else 0.21

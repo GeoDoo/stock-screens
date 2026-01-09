@@ -516,4 +516,35 @@ class TestROICExcessCash:
         # ROIC = ~22.5B / 150B = ~15%
         assert ratios.profitability.roic is not None
         assert 0.14 < ratios.profitability.roic < 0.16
+    
+    def test_roic_requires_revenue_for_excess_cash(self, calculator):
+        """
+        ROIC should NOT be calculated if revenue is missing.
+        
+        Bug: Without revenue, we can't calculate operating cash needs,
+        so we'd incorrectly fall back to subtracting all cash.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                # NO revenue!
+                "operatingIncome": 30_000_000_000,
+                "incomeBeforeTax": 28_000_000_000,
+                "netIncome": 21_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalStockholdersEquity": 100_000_000_000,
+                "totalDebt": 50_000_000_000,
+                "cashAndCashEquivalents": 50_000_000_000,
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Without revenue, ROIC should be None (can't calculate excess cash)
+        assert ratios.profitability.roic is None, (
+            "ROIC should be None when revenue is missing - "
+            "can't calculate operating cash needs without revenue"
+        )
 
