@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-09 16:16
+> Last updated: 2026-01-09 16:22
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 

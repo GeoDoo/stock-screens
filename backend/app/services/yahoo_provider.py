@@ -136,6 +136,7 @@ class YahooProvider(StockDataProvider):
                     free_cash_flow=get_val(cash_df, "Free Cash Flow"),
                     depreciation_amortization=get_val(cash_df, "Depreciation And Amortization"),
                     dividends_paid=get_val(cash_df, "Cash Dividends Paid", "Common Stock Dividend Paid"),
+                    stock_based_compensation=get_val(cash_df, "Stock Based Compensation"),
                 )
                 financials.append(stmt)
                 
