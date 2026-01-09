@@ -185,6 +185,63 @@ class TestEdgeCases:
         assert result.current_pe is not None
         assert result.avg_pe_5yr is None  # Can't calculate average with one year
 
+    def test_single_year_with_invalid_date_raises_error(self, analyzer, sample_profile):
+        """
+        P0 Bug: Single year with malformed date silently returns empty result.
+        Should raise ValueError so caller knows data is bad.
+        """
+        financials = [{
+            "date": "invalid-date",  # Malformed date
+            "revenue": 100000000000,
+            "net_income": 10000000000,
+            "total_equity": 50000000000,
+        }]
+        
+        with pytest.raises(ValueError, match="No valid financial years"):
+            analyzer.analyze(financials, sample_profile)
+    
+    def test_single_year_with_missing_date_raises_error(self, analyzer, sample_profile):
+        """
+        Single year with missing date should raise error.
+        """
+        financials = [{
+            "date": None,  # Missing date
+            "revenue": 100000000000,
+            "net_income": 10000000000,
+        }]
+        
+        with pytest.raises(ValueError, match="No valid financial years"):
+            analyzer.analyze(financials, sample_profile)
+    
+    def test_all_years_invalid_raises_error(self, analyzer, sample_profile):
+        """
+        If all years have invalid dates, should raise error.
+        """
+        financials = [
+            {"date": "bad1", "revenue": 100},
+            {"date": "bad2", "revenue": 200},
+            {"date": None, "revenue": 300},
+        ]
+        
+        with pytest.raises(ValueError, match="No valid financial years"):
+            analyzer.analyze(financials, sample_profile)
+    
+    def test_partial_valid_years_succeeds(self, analyzer, sample_profile):
+        """
+        If some years are valid, should succeed with valid data.
+        """
+        financials = [
+            {"date": "2024-12-31", "revenue": 100000000000, "net_income": 10000000000, "total_equity": 50000000000},
+            {"date": "invalid", "revenue": 200},  # Invalid year
+            {"date": "2023-12-31", "revenue": 90000000000, "net_income": 9000000000, "total_equity": 45000000000},
+        ]
+        
+        result = analyzer.analyze(financials, sample_profile)
+        
+        # Should have 2 valid years
+        assert len(result.yearly_metrics) == 2
+        assert result.avg_pe_5yr is not None  # Can calculate with 2 years
+
     def test_missing_net_income(self, analyzer, sample_profile):
         """Handle missing net income (loss-making company)."""
         financials = [{
