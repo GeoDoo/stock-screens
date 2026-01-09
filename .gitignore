@@ -7,24 +7,48 @@ __pycache__/
 venv/
 env/
 .env
+.env.local
+.env.*.local
 *.egg-info/
 dist/
 build/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+*.log
 
 # Project specific
 *.db
 *.sqlite
+*.db-journal
+*.db-wal
+*.db-shm
+backups/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.env
+frontend/.env.local
 
 # Local notes (not tracked)
 NOTES.md
 NOTES2.md
+NOTES3.md
+NOTES*.md
