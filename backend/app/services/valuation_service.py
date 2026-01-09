@@ -170,7 +170,7 @@ class ValuationService:
         # Intrinsic value per share (prefer diluted shares for DCF)
         shares = extractor.shares_outstanding() or 1
         # Determine which shares figure was used for transparency
-        shares_type = "diluted" if extractor.diluted_shares_outstanding() is not None else "basic"
+        shares_type = extractor.shares_outstanding_type()
         intrinsic_value_per_share = equity_value / shares
 
         # 6. Sensitivity Analysis

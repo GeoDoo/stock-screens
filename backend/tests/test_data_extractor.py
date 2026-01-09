@@ -556,4 +556,64 @@ class TestDilutedShares:
             f"Using basic shares overvalues by {overvaluation_pct:.1f}%. "
             "This demonstrates why diluted shares are required."
         )
+    
+    def test_shares_outstanding_type_returns_diluted(self):
+        """
+        shares_outstanding_type() should return 'diluted' when diluted shares available.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "weightedAverageShsOut": 15000000000,
+                "weightedAverageShsOutDil": 15500000000,
+            }],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        shares_type = extractor.shares_outstanding_type()
+        assert shares_type == "diluted", (
+            f"Expected 'diluted' when diluted shares available, got '{shares_type}'"
+        )
+    
+    def test_shares_outstanding_type_returns_basic(self):
+        """
+        shares_outstanding_type() should return 'basic' when only basic shares available.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [{
+                "weightedAverageShsOut": 15000000000,
+                # No diluted shares
+            }],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        shares_type = extractor.shares_outstanding_type()
+        assert shares_type == "basic", (
+            f"Expected 'basic' when only basic shares available, got '{shares_type}'"
+        )
+    
+    def test_shares_outstanding_type_returns_profile(self):
+        """
+        shares_outstanding_type() should return 'profile' when using profile fallback.
+        
+        This is the bug we're fixing: previously this was mislabeled as 'basic'.
+        """
+        data = {
+            "profile": {"sharesOutstanding": 14000000000},
+            "income_statement": [{}],  # No share data in income statement
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        shares_type = extractor.shares_outstanding_type()
+        assert shares_type == "profile", (
+            f"Expected 'profile' when using profile fallback, got '{shares_type}'. "
+            "Must correctly label data source for transparency."
+        )
 
