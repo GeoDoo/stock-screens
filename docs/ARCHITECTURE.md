@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-09 18:16
+> Last updated: 2026-01-09 18:27
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -60,8 +60,8 @@ Extracts financial metrics from FMP data for use in valuation models.
 - `is_using_ltm()` - Check if LTM/TTM data is available for flow items.
 - `beta()` - Stock beta from profile.
 - `market_cap()` - Market capitalization from profile.
-- `total_debt()` - Total debt from balance sheet.
-- `total_equity()` - Total stockholders equity from balance sheet.
+- `sector()` - Company sector from profile (e.g., 'Technology', 'Financial Services').
+- `industry()` - Company industry from profile (e.g., 'Software—Application', 'Banks—Regional').
 
 #### `dcf_calculator.py` - DCFCalculator
 

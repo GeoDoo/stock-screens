@@ -97,6 +97,14 @@ class DataExtractor:
         """Market capitalization from profile."""
         return self.profile.get("marketCap")
 
+    def sector(self) -> Optional[str]:
+        """Company sector from profile (e.g., 'Technology', 'Financial Services')."""
+        return self.profile.get("sector")
+
+    def industry(self) -> Optional[str]:
+        """Company industry from profile (e.g., 'Software—Application', 'Banks—Regional')."""
+        return self.profile.get("industry")
+
     def total_debt(self) -> Optional[float]:
         """Total debt from balance sheet."""
         return self._get_latest(self.balance_sheet, "totalDebt")

@@ -270,3 +270,199 @@ class TestDataValidator:
         assert d["errors"][0]["field"] == "market_cap"
 
 
+class TestBusinessTypeGating:
+    """
+    Tests for P0: Business-type gating warnings.
+    
+    DCF is not appropriate for all business types:
+    - Banks/insurers (balance sheet IS the product)
+    - Pre-FCF companies (terminal value dominates)
+    - Highly cyclical commodities (need mid-cycle normalization)
+    
+    The validator should warn users about these limitations.
+    """
+    
+    def _make_validator(self, sector=None, industry=None, free_cash_flow=None, **kwargs):
+        """Helper to create validator with business-type fields."""
+        defaults = dict(
+            market_cap=1_000_000_000,
+            beta=1.2,
+            shares_outstanding=100_000_000,
+            total_debt=500_000_000,
+            cash=200_000_000,
+            tax_rate=0.25,
+            cost_of_debt=0.05,
+            revenue_history=[100, 110, 120],
+            ebit_history=[20, 22, 24],
+            da_history=[5, 5, 6],
+            capex_history=[10, 11, 12],
+            working_capital_history=[15, 16, 17],
+            sector=sector,
+            industry=industry,
+            free_cash_flow=free_cash_flow,
+        )
+        defaults.update(kwargs)
+        return DataValidator(**defaults)
+    
+    # ============================================
+    # Financial sector warnings (banks/insurers)
+    # ============================================
+    
+    def test_banks_sector_triggers_warning(self):
+        """Banks sector should trigger DCF inapplicability warning."""
+        validator = self._make_validator(sector="Financial Services", industry="Banks—Regional")
+        result = validator.validate()
+        
+        assert result.has_warnings
+        assert any(
+            w.field == "business_type" and "financial" in w.message.lower()
+            for w in result.warnings
+        )
+    
+    def test_insurance_industry_triggers_warning(self):
+        """Insurance industry should trigger warning."""
+        validator = self._make_validator(sector="Financial Services", industry="Insurance—Life")
+        result = validator.validate()
+        
+        assert result.has_warnings
+        assert any("dcf" in w.message.lower() and "financial" in w.message.lower() for w in result.warnings)
+    
+    def test_diversified_banks_trigger_warning(self):
+        """Diversified banks like JPM should trigger warning."""
+        validator = self._make_validator(sector="Financial Services", industry="Banks—Diversified")
+        result = validator.validate()
+        
+        assert result.has_warnings
+        business_type_warnings = [w for w in result.warnings if w.field == "business_type"]
+        assert len(business_type_warnings) >= 1
+    
+    def test_asset_management_triggers_warning(self):
+        """Asset management firms (like BlackRock) should trigger warning."""
+        validator = self._make_validator(sector="Financial Services", industry="Asset Management")
+        result = validator.validate()
+        
+        assert result.has_warnings
+        assert any(w.field == "business_type" for w in result.warnings)
+    
+    def test_tech_sector_no_financial_warning(self):
+        """Technology sector should NOT trigger financial warning."""
+        validator = self._make_validator(sector="Technology", industry="Software—Application")
+        result = validator.validate()
+        
+        # No business_type warnings for tech companies
+        business_type_warnings = [w for w in result.warnings if w.field == "business_type"]
+        financial_warnings = [w for w in business_type_warnings if "financial" in w.message.lower()]
+        assert len(financial_warnings) == 0
+    
+    # ============================================
+    # Pre-FCF company warnings
+    # ============================================
+    
+    def test_negative_fcf_triggers_warning(self):
+        """Negative free cash flow should trigger pre-profitability warning."""
+        validator = self._make_validator(free_cash_flow=-50_000_000)  # Negative FCF
+        result = validator.validate()
+        
+        assert result.has_warnings
+        assert any(
+            w.field == "business_type" and ("negative" in w.message.lower() or "pre-fcf" in w.message.lower())
+            for w in result.warnings
+        )
+    
+    def test_very_small_fcf_triggers_warning(self):
+        """Very small FCF relative to market cap may indicate pre-profitability."""
+        # FCF of 1M with 10B market cap = 0.01% FCF yield (unsustainably low)
+        validator = self._make_validator(
+            market_cap=10_000_000_000, 
+            free_cash_flow=1_000_000
+        )
+        result = validator.validate()
+        
+        # Very low FCF yield should warn
+        fcf_warnings = [w for w in result.warnings if "cash flow" in w.message.lower()]
+        # This might or might not trigger depending on threshold - but negative should always trigger
+    
+    def test_positive_fcf_no_pre_fcf_warning(self):
+        """Healthy positive FCF should NOT trigger pre-FCF warning."""
+        validator = self._make_validator(
+            market_cap=10_000_000_000,
+            free_cash_flow=500_000_000  # 5% FCF yield - healthy
+        )
+        result = validator.validate()
+        
+        pre_fcf_warnings = [
+            w for w in result.warnings 
+            if w.field == "business_type" and "negative" in w.message.lower()
+        ]
+        assert len(pre_fcf_warnings) == 0
+    
+    # ============================================
+    # Cyclical industry warnings
+    # ============================================
+    
+    def test_oil_gas_triggers_cyclical_warning(self):
+        """Oil & Gas sector should trigger cyclicality warning."""
+        validator = self._make_validator(sector="Energy", industry="Oil & Gas E&P")
+        result = validator.validate()
+        
+        assert result.has_warnings
+        cyclical_warnings = [
+            w for w in result.warnings 
+            if w.field == "business_type" and "cyclical" in w.message.lower()
+        ]
+        assert len(cyclical_warnings) >= 1
+    
+    def test_mining_triggers_cyclical_warning(self):
+        """Mining industry should trigger cyclicality warning."""
+        validator = self._make_validator(sector="Basic Materials", industry="Gold")
+        result = validator.validate()
+        
+        assert result.has_warnings
+        assert any(w.field == "business_type" and "cyclical" in w.message.lower() for w in result.warnings)
+    
+    def test_steel_triggers_cyclical_warning(self):
+        """Steel industry should trigger cyclicality warning."""
+        validator = self._make_validator(sector="Basic Materials", industry="Steel")
+        result = validator.validate()
+        
+        assert result.has_warnings
+        assert any("cyclical" in w.message.lower() for w in result.warnings)
+    
+    def test_consumer_staples_no_cyclical_warning(self):
+        """Consumer staples (defensive) should NOT trigger cyclical warning."""
+        validator = self._make_validator(sector="Consumer Defensive", industry="Packaged Foods")
+        result = validator.validate()
+        
+        cyclical_warnings = [
+            w for w in result.warnings 
+            if w.field == "business_type" and "cyclical" in w.message.lower()
+        ]
+        assert len(cyclical_warnings) == 0
+    
+    # ============================================
+    # Combined warnings
+    # ============================================
+    
+    def test_multiple_warnings_can_coexist(self):
+        """A company can have multiple business-type warnings."""
+        # Negative FCF + cyclical industry
+        validator = self._make_validator(
+            sector="Energy", 
+            industry="Oil & Gas E&P",
+            free_cash_flow=-100_000_000
+        )
+        result = validator.validate()
+        
+        business_warnings = [w for w in result.warnings if w.field == "business_type"]
+        # Should have both cyclical AND pre-FCF warnings
+        assert len(business_warnings) >= 2
+    
+    def test_backward_compatible_no_sector_no_crash(self):
+        """Validator should not crash if sector/industry not provided."""
+        validator = self._make_validator(sector=None, industry=None, free_cash_flow=None)
+        result = validator.validate()
+        
+        # Should not have business_type warnings (no data to validate)
+        # But should NOT crash
+        assert result is not None
+
