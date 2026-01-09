@@ -260,6 +260,12 @@ def run_full_monte_carlo(
     
     # NEW: Mid-year discounting
     use_mid_year_discounting: bool = False,
+    
+    # NEW: Institutional equity bridge components
+    minority_interest: float = 0.0,
+    preferred_stock: float = 0.0,
+    deferred_tax_assets: float = 0.0,  # NOLs - adds to equity
+    pension_deficit: float = 0.0,
 ) -> FullMonteCarloResult:
     """
     Run Full-Model Monte Carlo using the complete DCF engine.
@@ -377,8 +383,15 @@ def run_full_monte_carlo(
     
     correlated_inputs = CorrelatedInputs(core_inputs, corr_matrix)
     
-    # Net debt for EV → Equity conversion
+    # Full institutional equity bridge for EV → Equity conversion
+    # Equity = EV - Net Debt - Minority Interest - Preferred + NOLs - Pension
     net_debt = total_debt - cash
+    equity_bridge_adjustment = (
+        - minority_interest
+        - preferred_stock
+        + deferred_tax_assets
+        - pension_deficit
+    )
     
     # Mid-year discounting offset
     discount_offset = 0.5 if use_mid_year_discounting else 0.0
@@ -516,8 +529,8 @@ def run_full_monte_carlo(
             
             enterprise_value = pv_fcf + pv_terminal
             
-            # EV → Equity → Per Share
-            equity_value = enterprise_value - net_debt
+            # EV → Equity → Per Share (full institutional equity bridge)
+            equity_value = enterprise_value - net_debt + equity_bridge_adjustment
             per_share = equity_value / shares_outstanding if shares_outstanding > 0 else 0
             
             per_share_values.append(per_share if per_share > 0 else None)
