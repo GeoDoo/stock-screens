@@ -388,3 +388,132 @@ class TestEdgeCases:
         assert ratios.valuation.pe_ratio is None
         assert ratios.dividend.dividend_yield is None
 
+
+class TestROICExcessCash:
+    """
+    Tests for ROIC using excess cash instead of all cash.
+    
+    Bug: ROIC calculation subtracted ALL cash from invested capital.
+    
+    Problem: Businesses need operating cash (typically 2% of revenue) to
+    function. Subtracting all cash artificially inflates ROIC for companies
+    with large cash piles.
+    
+    Solution: Only subtract EXCESS cash = Total Cash - Operating Cash (2% of revenue)
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_roic_uses_excess_cash_not_all_cash(self, calculator):
+        """
+        ROIC should subtract only excess cash, not all cash.
+        """
+        # Company with $100B revenue and $50B cash
+        # Operating cash = 2% × $100B = $2B
+        # Excess cash = $50B - $2B = $48B
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,  # $100B revenue
+                "operatingIncome": 30_000_000_000,  # $30B operating income
+                "incomeBeforeTax": 28_000_000_000,
+                "netIncome": 21_000_000_000,  # ~25% tax rate
+            }],
+            "balance_sheet": [{
+                "totalStockholdersEquity": 100_000_000_000,  # $100B equity
+                "totalDebt": 50_000_000_000,  # $50B debt
+                "cashAndCashEquivalents": 50_000_000_000,  # $50B cash (large pile!)
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Tax rate from data: (28-21)/28 = 25%
+        # NOPAT = 30B × 0.75 = 22.5B
+        #
+        # If subtracting ALL cash: IC = 100 + 50 - 50 = $100B
+        # ROIC = 22.5B / 100B = 22.5%
+        #
+        # If subtracting EXCESS cash: 
+        # Operating cash = 2% × 100B = $2B
+        # Excess cash = 50B - 2B = $48B
+        # IC = 100 + 50 - 48 = $102B  
+        # ROIC = 22.5B / 102B = ~22.06%
+        
+        assert ratios.profitability.roic is not None
+        
+        # The key test: ROIC should NOT be 22.5% (all cash method)
+        # It should be closer to 22.06% (excess cash method)
+        all_cash_roic = 0.225  # 22.5%
+        excess_cash_roic = 0.2206  # ~22.06%
+        
+        # ROIC should be closer to excess_cash_roic than all_cash_roic
+        diff_from_all_cash = abs(ratios.profitability.roic - all_cash_roic)
+        diff_from_excess = abs(ratios.profitability.roic - excess_cash_roic)
+        
+        assert diff_from_excess < diff_from_all_cash, (
+            f"ROIC ({ratios.profitability.roic:.4f}) should be closer to excess cash method "
+            f"({excess_cash_roic:.4f}) than all cash method ({all_cash_roic:.4f}). "
+            "Ensure only EXCESS cash is subtracted from invested capital."
+        )
+    
+    def test_roic_with_minimal_cash(self, calculator):
+        """
+        When cash < operating cash requirement, excess cash = 0 (no subtraction).
+        """
+        # Company with $100B revenue but only $1B cash (below 2% = $2B)
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+                "operatingIncome": 30_000_000_000,
+                "incomeBeforeTax": 28_000_000_000,
+                "netIncome": 21_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalStockholdersEquity": 100_000_000_000,
+                "totalDebt": 50_000_000_000,
+                "cashAndCashEquivalents": 1_000_000_000,  # Only $1B cash
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Cash ($1B) < Operating Cash ($2B), so excess cash = 0
+        # Invested Capital = Equity + Debt - 0 = $150B
+        assert ratios.profitability.roic is not None
+        
+        # ROIC should be ~15% (22.5B / 150B)
+        assert 0.14 < ratios.profitability.roic < 0.16
+    
+    def test_roic_zero_cash(self, calculator):
+        """
+        With zero cash, excess cash = 0, invested capital = equity + debt.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+                "operatingIncome": 30_000_000_000,
+                "incomeBeforeTax": 28_000_000_000,
+                "netIncome": 21_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalStockholdersEquity": 100_000_000_000,
+                "totalDebt": 50_000_000_000,
+                "cashAndCashEquivalents": 0,  # No cash
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # IC = $100B + $50B - 0 = $150B
+        # ROIC = ~22.5B / 150B = ~15%
+        assert ratios.profitability.roic is not None
+        assert 0.14 < ratios.profitability.roic < 0.16
+
