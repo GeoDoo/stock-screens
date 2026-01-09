@@ -132,6 +132,34 @@ class ComparableAnalyzer:
         # Utilities
         "Utilities—Regulated Electric": ["NEE", "DUK", "SO", "D", "AEP", "SRE", "XEL", "WEC"],
         "Utilities—Renewable": ["NEE", "AES", "BEP", "CWEN", "RUN"],
+        
+        # Basic Materials
+        "Specialty Chemicals": ["LIN", "APD", "SHW", "ECL", "PPG", "DD", "EMN", "ALB"],
+        "Agricultural Inputs": ["MOS", "NTR", "CF", "FMC", "CTVA", "SMG"],
+        "Steel": ["NUE", "STLD", "CLF", "X", "RS", "CMC"],
+        "Gold": ["NEM", "GOLD", "AEM", "FNV", "WPM", "RGLD"],
+        "Copper": ["FCX", "SCCO", "TECK", "HBM"],
+        "Aluminum": ["AA", "CENX", "ARNC"],
+        "Chemicals": ["DOW", "LYB", "CE", "MEOH", "WLK", "OLN"],
+        "Building Materials": ["VMC", "MLM", "SUM", "EXP", "USCR"],
+        "Paper & Paper Products": ["IP", "PKG", "WRK", "GPK", "SON"],
+        
+        # Insurance - Additional
+        "Insurance—Life": ["MET", "PRU", "AFL", "LNC", "PFG", "VOYA"],
+        "Insurance—Property & Casualty": ["TRV", "ALL", "PGR", "CB", "HIG", "CNA"],
+        "Insurance—Specialty": ["AON", "MMC", "WTW", "AJG", "BRO"],
+        
+        # Additional Consumer industries
+        "Packaged Foods": ["GIS", "K", "CAG", "CPB", "SJM", "HRL", "TSN", "HSY"],
+        "Beverages—Alcoholic": ["BUD", "STZ", "TAP", "SAM", "DEO"],
+        "Grocery Stores": ["KR", "ACI", "SFM", "GO", "WMK"],
+        "Home Improvement Retail": ["HD", "LOW", "TSCO", "FND", "WSM"],
+        "Luxury Goods": ["RMS", "LVMUY", "CFR", "TPR", "CPRI", "RL"],
+        
+        # Additional Tech
+        "Information Technology Services": ["IBM", "ACN", "CTSH", "EPAM", "GLOB", "DXC"],
+        "Electronic Components": ["APH", "TEL", "GLW", "JBL", "FLEX", "CLS"],
+        "Communication Equipment": ["CSCO", "ANET", "HPE", "JNPR", "NOK", "ERIC"],
     }
     
     # Fallback peer lists by sector (used when industry has no defined peers)

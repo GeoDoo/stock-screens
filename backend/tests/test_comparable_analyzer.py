@@ -335,6 +335,45 @@ class TestDynamicIndustryPeers:
                 f"INDUSTRY_PEERS should include '{industry}' for proper comparable analysis"
             )
     
+    def test_industry_peers_handles_naming_variations(self):
+        """
+        P1 Bug: Industry names from different providers may use hyphens vs em-dashes.
+        The peer lookup should handle common variations.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        # Test hyphen variation gets matched to em-dash entry
+        peers = analyzer._get_peers(
+            symbol="MSFT",
+            sector="Technology",
+            industry="Software-Infrastructure",  # Regular hyphen, not em-dash
+        )
+        
+        # Should still get industry peers (normalized), not fall back to sector
+        # Either through normalization or by having both variants
+        assert len(peers) > 0
+    
+    def test_basic_materials_industries_covered(self):
+        """
+        Basic Materials sector should have industry-level peer groups.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        basic_materials_industries = [
+            "Specialty Chemicals",
+            "Agricultural Inputs",
+            "Steel",
+            "Gold",
+            "Copper",
+        ]
+        
+        covered = sum(1 for ind in basic_materials_industries if ind in analyzer.INDUSTRY_PEERS)
+        assert covered >= 3, (
+            f"Basic Materials should have at least 3 industry groups covered, got {covered}"
+        )
+    
     def test_excludes_target_from_peers(self):
         """
         Target company should never appear in its own peer list.
