@@ -392,6 +392,127 @@ class TestExitMultipleSanityCheck:
         assert check["terminal_ebitda"] > 0
 
 
+class TestSBCShareDilution:
+    """
+    Tests for P0: SBC Share Dilution.
+    
+    When we subtract SBC from FCF, we're treating it as a real expense.
+    But SBC creates new shares (dilution). Over a 5-10 year projection,
+    this can be significant (1-3% per year).
+    
+    The intrinsic value per share should use terminal shares, not current shares:
+    terminal_shares = current_shares * (1 + dilution_rate)^years
+    """
+    
+    @pytest.fixture
+    def mock_client(self):
+        """Create mock client with realistic data."""
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=create_mock_stock_data())
+        client.get_treasury_rate = AsyncMock(return_value=0.045)
+        return client
+    
+    @pytest.mark.asyncio
+    async def test_accepts_annual_dilution_rate(self, mock_client):
+        """Should accept annual_dilution_rate parameter."""
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock(
+            "AAPL",
+            annual_dilution_rate=0.02,  # 2% annual dilution
+        )
+        
+        assert result["intrinsic_value_per_share"] > 0
+    
+    @pytest.mark.asyncio
+    async def test_dilution_reduces_per_share_value(self, mock_client):
+        """Higher dilution should reduce per-share intrinsic value."""
+        service = ValuationService(client=mock_client)
+        
+        # No dilution
+        result_no_dilution = await service.value_stock(
+            "AAPL",
+            annual_dilution_rate=0.0,
+        )
+        
+        # Reset mock for fresh call
+        mock_client.get_stock_data = AsyncMock(return_value=create_mock_stock_data())
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+        
+        # 3% annual dilution
+        result_with_dilution = await service.value_stock(
+            "AAPL",
+            annual_dilution_rate=0.03,  # 3% per year
+        )
+        
+        # With dilution, per-share value should be lower
+        assert result_with_dilution["intrinsic_value_per_share"] < result_no_dilution["intrinsic_value_per_share"], (
+            f"With 3% dilution, per-share value ({result_with_dilution['intrinsic_value_per_share']:.2f}) "
+            f"should be less than without ({result_no_dilution['intrinsic_value_per_share']:.2f})"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_dilution_shows_terminal_shares(self, mock_client):
+        """Should expose terminal shares for transparency."""
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock(
+            "AAPL",
+            projection_years=5,
+            annual_dilution_rate=0.02,  # 2% annual dilution
+        )
+        
+        # Should expose dilution info in inputs
+        inputs = result["inputs"]
+        assert "annual_dilution_rate" in inputs
+        assert "terminal_shares" in inputs
+        
+        # Terminal shares = current * (1.02)^5 ≈ current * 1.104
+        current_shares = inputs["shares_outstanding"]
+        expected_terminal = current_shares * (1.02 ** 5)
+        assert abs(inputs["terminal_shares"] - expected_terminal) < 1e6
+    
+    @pytest.mark.asyncio
+    async def test_dilution_magnitude_is_correct(self, mock_client):
+        """Dilution impact should match expected magnitude."""
+        service = ValuationService(client=mock_client)
+        
+        # 5 years at 2% = 10.4% more shares
+        result_no_dilution = await service.value_stock(
+            "AAPL",
+            projection_years=5,
+            annual_dilution_rate=0.0,
+        )
+        
+        mock_client.get_stock_data = AsyncMock(return_value=create_mock_stock_data())
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+        
+        result_with_dilution = await service.value_stock(
+            "AAPL",
+            projection_years=5,
+            annual_dilution_rate=0.02,
+        )
+        
+        # Per-share value should decrease by ~9.4% (1 / 1.104 ≈ 0.906)
+        ratio = result_with_dilution["intrinsic_value_per_share"] / result_no_dilution["intrinsic_value_per_share"]
+        expected_ratio = 1 / (1.02 ** 5)  # ~0.906
+        
+        assert abs(ratio - expected_ratio) < 0.01, (
+            f"Value ratio ({ratio:.3f}) should be close to {expected_ratio:.3f}"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_default_dilution_is_zero(self, mock_client):
+        """Default behavior should be no dilution (backward compatible)."""
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock("AAPL")
+        
+        # No dilution by default
+        inputs = result["inputs"]
+        assert inputs.get("annual_dilution_rate", 0) == 0
+
+
 class TestTerminalValueDominance:
     """
     Tests for P0: Terminal value dominance warning.
