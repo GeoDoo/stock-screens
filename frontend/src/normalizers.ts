@@ -146,7 +146,7 @@ export function normalizeTechnicalResult(data: TechnicalAnalysisResult | null): 
       ema_26: data.indicators.ema_26 ?? [],
       rsi_14: data.indicators.rsi_14 ?? [],
       macd: data.indicators.macd ?? [],
-      vwap: data.indicators.vwap ?? anyData.vwap ?? [],
+      vwap: data.indicators?.vwap ?? [],
     } : {
       sma_20: [],
       sma_50: [],
@@ -157,12 +157,12 @@ export function normalizeTechnicalResult(data: TechnicalAnalysisResult | null): 
       vwap: [],
     },
     volume: {
-      average_volume: anyData.average_volume ?? null,
-      relative_volume: anyData.relative_volume ?? null,
+      average_volume: anyData.volume?.average_volume ?? null,
+      relative_volume: anyData.volume?.relative_volume ?? null,
     },
     signals: {
       ...data.signals,
-      volume_confirmation: anyData.volume_confirmation ?? 'neutral',
+      volume_confirmation: data.signals?.volume_confirmation ?? anyData.signals?.volume_confirmation ?? 'neutral',
     },
   };
 }
