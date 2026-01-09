@@ -48,8 +48,11 @@ class TechnicalService:
         if not bars:
             raise ValueError(f"No price data for {symbol}")
         
-        # Extract close prices for indicators
+        # Extract price and volume data
         closes = [bar.close for bar in bars]
+        highs = [bar.high for bar in bars]
+        lows = [bar.low for bar in bars]
+        volumes = [bar.volume for bar in bars]
         
         # Calculate indicators
         sma_20_values = TechnicalIndicators.sma(closes, 20)
@@ -103,10 +106,16 @@ class TechnicalService:
         else:
             price_change_pct = 0.0
         
+        # Calculate volume-weighted indicators (institutional-grade)
+        vwap_values = TechnicalIndicators.vwap(closes, highs, lows, volumes)
+        avg_volume = TechnicalIndicators.average_volume(volumes, period=20)
+        rel_volume = TechnicalIndicators.relative_volume(volumes, period=20)
+        
         # Analyze signals
         trend = TechnicalIndicators.analyze_trend(sma_20_values, sma_50_values, closes)
         rsi_signal = TechnicalIndicators.analyze_rsi(rsi_14_values)
         macd_signal = TechnicalIndicators.analyze_macd(macd_line, signal_line)
+        volume_confirmation = TechnicalIndicators.volume_confirms_trend(volumes, trend, period=20)
         
         return TechnicalAnalysisResult(
             symbol=symbol.upper(),
@@ -120,7 +129,11 @@ class TechnicalService:
             ema_26=to_indicator_values(ema_26_values, bars),
             rsi_14=to_indicator_values(rsi_14_values, bars),
             macd=macd_values,
+            vwap=to_indicator_values(vwap_values, bars),
+            average_volume=round(avg_volume, 0) if avg_volume else None,
+            relative_volume=round(rel_volume, 2) if rel_volume else None,
             trend=trend,
             rsi_signal=rsi_signal,
             macd_signal=macd_signal,
+            volume_confirmation=volume_confirmation,
         )

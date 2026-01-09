@@ -339,3 +339,123 @@ class TestTechnicalServiceEdgeCases:
         
         # Price went from 100 to 110 = 10% gain
         assert result.price_change_pct == pytest.approx(10.0, rel=0.01)
+
+
+class TestVWAP:
+    """
+    Tests for VWAP (Volume Weighted Average Price).
+    
+    From Gemini review: Professional technical analysis requires volume confirmation.
+    VWAP = Σ(Typical Price × Volume) / Σ(Volume)
+    Where Typical Price = (High + Low + Close) / 3
+    """
+    
+    def test_vwap_basic_calculation(self):
+        """VWAP should weight prices by volume."""
+        closes = [100.0, 110.0, 90.0, 100.0]
+        highs = [105.0, 115.0, 95.0, 105.0]
+        lows = [95.0, 105.0, 85.0, 95.0]
+        volumes = [1000, 2000, 500, 1500]  # High volume at $110
+        
+        vwap = TechnicalIndicators.vwap(closes, highs, lows, volumes)
+        
+        # High volume at $110 should pull VWAP higher than simple average
+        simple_avg = sum(closes) / len(closes)  # = 100
+        assert vwap[-1] > simple_avg, "VWAP should be higher due to high volume at $110"
+    
+    def test_vwap_equal_volume(self):
+        """With equal volume, VWAP should equal simple average of typical price."""
+        closes = [100.0, 110.0, 90.0, 100.0]
+        highs = [105.0, 115.0, 95.0, 105.0]
+        lows = [95.0, 105.0, 85.0, 95.0]
+        volumes = [1000, 1000, 1000, 1000]  # Equal volume
+        
+        vwap = TechnicalIndicators.vwap(closes, highs, lows, volumes)
+        
+        # Typical prices
+        typical_prices = [(h + l + c) / 3 for h, l, c in zip(highs, lows, closes)]
+        avg_typical = sum(typical_prices) / len(typical_prices)
+        
+        assert vwap[-1] == pytest.approx(avg_typical, rel=0.01)
+    
+    def test_vwap_returns_series(self):
+        """VWAP should return cumulative values for each bar."""
+        closes = [100.0, 110.0, 105.0]
+        highs = [105.0, 115.0, 110.0]
+        lows = [95.0, 105.0, 100.0]
+        volumes = [1000, 2000, 1500]
+        
+        vwap = TechnicalIndicators.vwap(closes, highs, lows, volumes)
+        
+        assert len(vwap) == 3
+        # All values should be non-None
+        assert all(v is not None for v in vwap)
+    
+    def test_vwap_empty_data(self):
+        """VWAP should handle empty data."""
+        vwap = TechnicalIndicators.vwap([], [], [], [])
+        assert vwap == []
+
+
+class TestVolumeMetrics:
+    """Tests for volume analysis metrics."""
+    
+    def test_average_volume_calculation(self):
+        """Average volume should be calculated correctly."""
+        volumes = [1000, 2000, 1500, 2500, 1000]
+        
+        avg = TechnicalIndicators.average_volume(volumes, period=5)
+        
+        assert avg == pytest.approx(1600.0, rel=0.01)  # (1000+2000+1500+2500+1000)/5
+    
+    def test_relative_volume(self):
+        """Relative volume compares current to average."""
+        volumes = [1000, 1000, 1000, 1000, 3000]  # Last bar has 3x volume
+        
+        rel_vol = TechnicalIndicators.relative_volume(volumes, period=4)
+        
+        # Current (3000) vs avg of first 4 (1000) = 3.0x
+        assert rel_vol == pytest.approx(3.0, rel=0.01)
+    
+    def test_relative_volume_below_average(self):
+        """Relative volume < 1.0 indicates below average."""
+        volumes = [2000, 2000, 2000, 2000, 500]  # Last bar is 1/4 of average
+        
+        rel_vol = TechnicalIndicators.relative_volume(volumes, period=4)
+        
+        assert rel_vol == pytest.approx(0.25, rel=0.01)
+
+
+class TestVolumeConfirmation:
+    """
+    Tests for volume confirmation of signals.
+    
+    A breakout on high volume is more reliable than one on low volume.
+    """
+    
+    def test_volume_confirms_bullish_signal(self):
+        """High volume should confirm bullish trend."""
+        volumes = [1000, 1000, 1000, 3000]  # Surge in volume
+        trend = "bullish"
+        
+        confirmation = TechnicalIndicators.volume_confirms_trend(volumes, trend, period=3)
+        
+        assert confirmation == "confirmed", "High relative volume should confirm bullish"
+    
+    def test_volume_weak_signal(self):
+        """Low volume should mark signal as weak."""
+        volumes = [2000, 2000, 2000, 500]  # Volume drops
+        trend = "bullish"
+        
+        confirmation = TechnicalIndicators.volume_confirms_trend(volumes, trend, period=3)
+        
+        assert confirmation == "weak", "Low relative volume should mark as weak"
+    
+    def test_neutral_trend_no_confirmation(self):
+        """Neutral trend doesn't need volume confirmation."""
+        volumes = [1000, 1000, 1000, 1000]
+        trend = "neutral"
+        
+        confirmation = TechnicalIndicators.volume_confirms_trend(volumes, trend, period=3)
+        
+        assert confirmation == "neutral"
