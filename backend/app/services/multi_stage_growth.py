@@ -171,6 +171,9 @@ class MultiStageGrowthModel:
         )
         
         projections = model.project_economics(base_revenue=1000)
+    
+    Note: stages is converted to tuple in __post_init__ to prevent mutation
+    that would cause schedule length mismatches.
     """
     stages: List[GrowthStage]
     terminal_growth_rate: float
@@ -182,6 +185,11 @@ class MultiStageGrowthModel:
     def __post_init__(self):
         if not self.stages:
             raise ValueError("Multi-stage growth model requires at least one growth stage")
+        
+        # Convert stages to tuple to prevent mutation after schedule calculation
+        # This ensures total_projection_years always matches schedule lengths
+        object.__setattr__(self, 'stages', tuple(self.stages))
+        
         self._growth_schedule = calculate_growth_schedule(self.stages)
         self._margin_schedule = calculate_economics_schedule(
             self.stages, 'operating_margin', 'end_operating_margin'
