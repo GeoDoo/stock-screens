@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code configuration.
 > 
-> Last updated: 2026-01-09 15:41
+> Last updated: 2026-01-09 15:43
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -18,9 +18,10 @@ Environment variables read from `backend/app/main.py`:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `FMP_API_KEY` | Yes | Financial Modeling Prep API key |
 | `CORS_ORIGINS` | Prod | Comma-separated allowed origins (default: `*`) |
+| `FMP_API_KEY` | Yes | Financial Modeling Prep API key |
 | `POLYGON_API_KEY` | No | Polygon.io API key for Massive provider |
+
 
 ## Database
 

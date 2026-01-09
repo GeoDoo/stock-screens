@@ -355,9 +355,17 @@ Discount Factor = 1 / (1 + WACC)^(t - 0.5)
 
 def generate_deployment_docs():
     """Generate DEPLOYMENT.md from code configuration."""
+    import re
     
     main_py = BACKEND_DIR / "app" / "main.py"
     database_py = BACKEND_DIR / "app" / "services" / "database.py"
+    
+    # Known env var metadata (description and required status)
+    ENV_VAR_METADATA = {
+        "FMP_API_KEY": ("Yes", "Financial Modeling Prep API key"),
+        "CORS_ORIGINS": ("Prod", "Comma-separated allowed origins (default: `*`)"),
+        "POLYGON_API_KEY": ("No", "Polygon.io API key for Massive provider"),
+    }
     
     # Extract environment variables from main.py
     env_vars = []
@@ -366,20 +374,31 @@ def generate_deployment_docs():
             content = f.read()
         
         # Find os.getenv calls
-        import re
         for match in re.finditer(r'os\.getenv\(["\'](\w+)["\']', content):
             env_vars.append(match.group(1))
         env_vars = sorted(set(env_vars))
     except:
-        env_vars = ["FMP_API_KEY", "CORS_ORIGINS", "POLYGON_API_KEY"]
+        env_vars = list(ENV_VAR_METADATA.keys())
+    
+    # Build env vars table dynamically
+    env_vars_table = "| Variable | Required | Description |\n|----------|----------|-------------|\n"
+    for var in env_vars:
+        if var in ENV_VAR_METADATA:
+            required, desc = ENV_VAR_METADATA[var]
+        else:
+            # Unknown variable found in code - flag it
+            required, desc = "?", f"Found in code (add to ENV_VAR_METADATA)"
+        env_vars_table += f"| `{var}` | {required} | {desc} |\n"
     
     # Extract database path from database.py
     db_path = "stock_screens.db"
     try:
         with open(database_py) as f:
-            content = f.read()
-        if "stock_screens.db" in content:
-            db_path = "stock_screens.db"
+            db_content = f.read()
+        # Extract actual path from DEFAULT_DB_PATH line
+        match = re.search(r'["\']([^"\']+\.db)["\']', db_content)
+        if match:
+            db_path = match.group(1)
     except:
         pass
     
@@ -405,11 +424,7 @@ def generate_deployment_docs():
 
 Environment variables read from `backend/app/main.py`:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `FMP_API_KEY` | Yes | Financial Modeling Prep API key |
-| `CORS_ORIGINS` | Prod | Comma-separated allowed origins (default: `*`) |
-| `POLYGON_API_KEY` | No | Polygon.io API key for Massive provider |
+{env_vars_table}
 
 ## Database
 
