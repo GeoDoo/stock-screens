@@ -735,9 +735,10 @@ async def batch_analyze(symbol: str, provider: str):
     
     This reduces API calls by fetching stock data once and computing all
     derived metrics (ratios, dividends, historical valuation) from that data.
-    """
-    import yfinance as yf
     
+    Note: All blocking I/O (yfinance calls) is run via run_in_executor()
+    to avoid blocking the event loop.
+    """
     client = get_client_for_provider(provider)
     
     rate_limiter.record_call(provider)
@@ -874,7 +875,7 @@ async def batch_analyze(symbol: str, provider: str):
     
     if provider == "yahoo":
         yahoo = YahooProvider()
-        ttm_financials = yahoo.get_ttm_financials_sync(symbol)
+        ttm_financials = await yahoo.get_ttm_financials(symbol)
         
         if ttm_financials:
             ttm_data = {
@@ -954,17 +955,17 @@ async def batch_analyze(symbol: str, provider: str):
     analyzer = DividendAnalyzer()
     payments = []
     
+    # Use async-safe dividend fetcher to avoid blocking event loop
+    yahoo_dividends = YahooProvider()
     try:
-        ticker_yf = yf.Ticker(symbol.upper())
-        dividends_series = ticker_yf.dividends
-        
-        if dividends_series is not None and not dividends_series.empty:
-            for date, amount in dividends_series.items():
-                payments.append(DividendPayment(
-                    date=date.strftime("%Y-%m-%d"),
-                    amount=float(amount),
-                ))
+        dividend_data = await yahoo_dividends.get_dividends(symbol)
+        for div in dividend_data:
+            payments.append(DividendPayment(
+                date=div["date"],
+                amount=div["amount"],
+            ))
     except Exception:
+        # Fallback to financials-based dividend calculation
         for fin in financials:
             if fin.dividends_paid is not None and fin.dividends_paid != 0 and shares and shares > 0:
                 per_share_dividend = abs(fin.dividends_paid) / shares

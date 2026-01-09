@@ -865,6 +865,9 @@ Batch analyze endpoint - returns all fundamental data in a single call.
 This reduces API calls by fetching stock data once and computing all
 derived metrics (ratios, dividends, historical valuation) from that data.
 
+Note: All blocking I/O (yfinance calls) is run via run_in_executor()
+to avoid blocking the event loop.
+
 ```
 GET /api/stock/{symbol}/analyze
 ```

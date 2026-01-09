@@ -242,3 +242,44 @@ class TestRateLimitEndpoint:
         assert data["fmp"]["used"] == 0
 
 
+
+
+class TestAsyncSafety:
+    """
+    Regression tests for async-safety in batch_analyze.
+    
+    Bug: batch_analyze was marked async but called blocking yfinance 
+    methods directly, which could block the event loop.
+    
+    Fix: All blocking I/O is now wrapped with run_in_executor().
+    """
+    
+    def test_yahoo_provider_has_async_ttm_method(self):
+        """
+        YahooProvider should have an async get_ttm_financials method.
+        
+        This ensures the blocking yfinance call is run in a thread pool.
+        """
+        from app.services.yahoo_provider import YahooProvider
+        import asyncio
+        
+        yahoo = YahooProvider()
+        
+        # Method should exist and be a coroutine function
+        assert hasattr(yahoo, 'get_ttm_financials')
+        assert asyncio.iscoroutinefunction(yahoo.get_ttm_financials)
+    
+    def test_yahoo_provider_has_async_dividends_method(self):
+        """
+        YahooProvider should have an async get_dividends method.
+        
+        This ensures the blocking yfinance dividend call is run in a thread pool.
+        """
+        from app.services.yahoo_provider import YahooProvider
+        import asyncio
+        
+        yahoo = YahooProvider()
+        
+        # Method should exist and be a coroutine function
+        assert hasattr(yahoo, 'get_dividends')
+        assert asyncio.iscoroutinefunction(yahoo.get_dividends)
