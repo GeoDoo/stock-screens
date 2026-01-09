@@ -49,6 +49,7 @@ export function normalizeStockData(data: StockDataResponse | null): StockDataRes
       wc_ratio: null,
     },
     hints_ttm: hintsTtm,
+    is_using_ltm: anyData.is_using_ltm ?? false,
     validation: {
       ...data.validation,
       has_errors: data.validation?.has_errors ?? false,
@@ -63,9 +64,20 @@ export function normalizeValuationResult(data: ValuationResult | null): Valuatio
   if (!data) return null;
   // If critical values are missing, don't render partial data
   if (data.intrinsic_value_per_share == null) return null;
+  
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyData = data as any;
+  
   return {
     ...data,
     projections: data.projections ?? [],
+    equity_bridge: anyData.equity_bridge ? {
+      net_debt: anyData.equity_bridge.net_debt ?? 0,
+      minority_interest: anyData.equity_bridge.minority_interest ?? 0,
+      preferred_stock: anyData.equity_bridge.preferred_stock ?? 0,
+      deferred_tax_assets: anyData.equity_bridge.deferred_tax_assets ?? 0,
+      pension_deficit: anyData.equity_bridge.pension_deficit ?? 0,
+    } : undefined,
     sensitivity: data.sensitivity ? {
       ...data.sensitivity,
       terminal_growth_rates: data.sensitivity.terminal_growth_rates ?? [],
@@ -119,6 +131,10 @@ export function normalizeComparableResult(data: ComparableResult | null): Compar
 
 export function normalizeTechnicalResult(data: TechnicalAnalysisResult | null): TechnicalAnalysisResult | null {
   if (!data) return null;
+  
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyData = data as any;
+  
   return {
     ...data,
     prices: data.prices ?? [],
@@ -130,6 +146,7 @@ export function normalizeTechnicalResult(data: TechnicalAnalysisResult | null): 
       ema_26: data.indicators.ema_26 ?? [],
       rsi_14: data.indicators.rsi_14 ?? [],
       macd: data.indicators.macd ?? [],
+      vwap: data.indicators.vwap ?? anyData.vwap ?? [],
     } : {
       sma_20: [],
       sma_50: [],
@@ -137,6 +154,15 @@ export function normalizeTechnicalResult(data: TechnicalAnalysisResult | null): 
       ema_26: [],
       rsi_14: [],
       macd: [],
+      vwap: [],
+    },
+    volume: {
+      average_volume: anyData.average_volume ?? null,
+      relative_volume: anyData.relative_volume ?? null,
+    },
+    signals: {
+      ...data.signals,
+      volume_confirmation: anyData.volume_confirmation ?? 'neutral',
     },
   };
 }

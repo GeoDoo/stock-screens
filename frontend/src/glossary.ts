@@ -452,6 +452,60 @@ export const glossaryTerms: GlossaryTerm[] = [
     definition: "The gradual reduction of a company's growth rate over time as it matures. High-growth companies eventually face competition and market saturation, causing growth to fade toward the economy's growth rate.",
     investopediaUrl: "https://www.investopedia.com/terms/g/growthrates.asp",
   },
+
+  // Institutional Risk Metrics
+  {
+    id: "rotic",
+    term: "ROTIC",
+    fullName: "Return on Tangible Invested Capital",
+    definition: "ROIC excluding goodwill and intangible assets from the capital base. Shows the true return on core operating assets, particularly useful for companies with large acquisition-related intangibles.",
+    investopediaUrl: "https://www.investopedia.com/terms/r/returnoninvestmentcapital.asp",
+  },
+  {
+    id: "altman-z-score",
+    term: "Altman Z-Score",
+    definition: "A bankruptcy prediction model using five financial ratios. Scores above 2.99 suggest financial safety ('safe zone'), below 1.81 indicate distress risk, and between is the 'grey zone' of uncertainty.",
+    investopediaUrl: "https://www.investopedia.com/terms/a/altman.asp",
+  },
+  {
+    id: "beneish-m-score",
+    term: "Beneish M-Score",
+    definition: "A statistical model to detect earnings manipulation. Scores above -1.78 suggest higher probability of earnings being manipulated. Uses 8 financial ratios comparing year-over-year changes.",
+    investopediaUrl: "https://www.investopedia.com/terms/b/beneishmodel.asp",
+  },
+  {
+    id: "accrual-ratio",
+    term: "Accrual Ratio",
+    definition: "Measures earnings quality by comparing net income to operating cash flow relative to total assets. High accruals (>10%) may indicate aggressive accounting; companies with cash earnings are more reliable.",
+    investopediaUrl: "https://www.investopedia.com/terms/a/accruals.asp",
+  },
+  {
+    id: "sbc-percent-revenue",
+    term: "SBC % Revenue",
+    fullName: "Stock-Based Compensation as % of Revenue",
+    definition: "Stock-based compensation expressed as a percentage of revenue. High SBC (>10%) significantly dilutes existing shareholders. Adjusting FCF for SBC gives a truer picture of cash generation.",
+    investopediaUrl: "https://www.investopedia.com/terms/s/stockcompensation.asp",
+  },
+  {
+    id: "fcf-adjusted",
+    term: "FCF (SBC-adjusted)",
+    fullName: "Free Cash Flow Adjusted for Stock-Based Compensation",
+    definition: "Free cash flow minus stock-based compensation. Since SBC is a real cost (dilution) but doesn't affect cash flow, subtracting it gives a more conservative and realistic FCF figure.",
+    investopediaUrl: "https://www.investopedia.com/terms/s/stockcompensation.asp",
+  },
+  {
+    id: "vwap",
+    term: "VWAP",
+    fullName: "Volume Weighted Average Price",
+    definition: "The average price weighted by volume throughout the trading period. Institutional traders use VWAP to assess execution quality—buying below VWAP is considered favorable.",
+    investopediaUrl: "https://www.investopedia.com/terms/v/vwap.asp",
+  },
+  {
+    id: "relative-volume",
+    term: "Relative Volume",
+    definition: "Current volume compared to average volume, expressed as a multiplier. Values above 1.2x indicate unusually high volume, confirming price moves. Below 0.8x suggests weak conviction.",
+    investopediaUrl: "https://www.investopedia.com/terms/r/relativevolume.asp",
+  },
 ];
 
 // Create a lookup map for quick access by ID

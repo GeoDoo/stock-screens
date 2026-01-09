@@ -72,6 +72,7 @@ export interface StockDataResponse {
   data: CompanyData;
   hints_annual: HistoricalHints;
   hints_ttm: HistoricalHints | null;  // Null if TTM data not available
+  is_using_ltm?: boolean;  // True if using Last Twelve Months (more current) data
   validation: ValidationResult;
 }
 
@@ -108,6 +109,15 @@ export interface SensitivityMatrix {
   base_terminal_growth: number;
 }
 
+// Institutional-grade Equity Bridge
+export interface EquityBridge {
+  net_debt: number;
+  minority_interest: number;
+  preferred_stock: number;
+  deferred_tax_assets: number;  // NOLs/tax shields (adds value)
+  pension_deficit: number;
+}
+
 export interface ValuationResult {
   symbol: string;
   intrinsic_value_per_share: number;
@@ -115,6 +125,7 @@ export interface ValuationResult {
   equity_value: number;
   market_cap: number | null;
   net_debt: number;
+  equity_bridge?: EquityBridge;  // Full institutional bridge
   wacc: number;
   discount_rate: number;
   using_custom_discount_rate: boolean;
@@ -180,6 +191,7 @@ export interface ScenarioAnalysisResult {
   projection_years: number;
   scenarios: ScenarioResultItem[];
   probability_weighted_value: number | null;
+  probabilities_normalized?: boolean;  // True if probabilities were auto-adjusted to sum to 1
   upside_range: {
     min_percent: number;
     max_percent: number;
@@ -267,11 +279,18 @@ export interface TechnicalAnalysisResult {
     ema_26: IndicatorValue[];
     rsi_14: IndicatorValue[];
     macd: MACDValue[];
+    vwap?: IndicatorValue[];  // Volume Weighted Average Price
+  };
+  // Volume metrics (institutional-grade)
+  volume?: {
+    average_volume: number | null;  // 20-day average
+    relative_volume: number | null;  // Current vs average (multiplier)
   };
   signals: {
     trend: 'bullish' | 'bearish' | 'neutral';
     rsi: 'overbought' | 'oversold' | 'neutral';
     macd: 'bullish' | 'bearish' | 'neutral';
+    volume_confirmation?: 'confirmed' | 'weak' | 'neutral';  // Volume validates signal
   };
 }
 
@@ -298,6 +317,7 @@ export interface FinancialRatiosPeriod {
     roe: number | null;
     roa: number | null;
     roic: number | null;
+    rotic: number | null;  // Return on Tangible Invested Capital
   };
   liquidity: {
     current_ratio: number | null;
@@ -308,6 +328,21 @@ export interface FinancialRatiosPeriod {
   efficiency: {
     asset_turnover: number | null;
     inventory_turnover: number | null;
+  };
+  // Institutional-grade risk metrics
+  risk?: {
+    altman_z_score: number | null;
+    z_score_zone: 'safe' | 'grey' | 'distress' | null;
+    accrual_ratio: number | null;
+    accrual_quality: 'good' | 'elevated' | 'warning' | null;
+    beneish_m_score: number | null;
+    m_score_zone: 'low_risk' | 'high_risk' | null;
+  };
+  // Stock-based compensation analysis
+  sbc?: {
+    fcf_adjusted: number | null;
+    sbc_percent_revenue: number | null;
+    sbc_level: 'normal' | 'elevated' | 'high' | null;
   };
 }
 
@@ -329,6 +364,7 @@ export interface DividendHistoryResult {
   current_annual_dividend: number | null;
   current_yield: number | null;
   payout_ratio: number | null;
+  fcf_payout_ratio: number | null;  // Dividends / Free Cash Flow (more accurate)
   dividend_cagr: number | null;
   consecutive_years: number;
   annual_dividends: Record<string, number>;
