@@ -61,6 +61,8 @@ class RiskMetrics:
     z_score_zone: Optional[str] = None  # "safe", "grey", or "distress"
     accrual_ratio: Optional[float] = None  # Earnings quality metric
     accrual_quality: Optional[str] = None  # "good", "elevated", or "warning"
+    beneish_m_score: Optional[float] = None  # Fraud detection
+    manipulation_risk: Optional[str] = None  # "low" or "high"
 
 
 @dataclass
@@ -106,9 +108,18 @@ class RatioCalculator:
             FinancialRatios with all calculated metrics
         """
         profile = data.get("profile", {})
-        income_stmt = data.get("income_statement", [{}])[0] if data.get("income_statement") else {}
-        balance_sheet = data.get("balance_sheet", [{}])[0] if data.get("balance_sheet") else {}
-        cash_flow = data.get("cash_flow", [{}])[0] if data.get("cash_flow") else {}
+        income_stmts = data.get("income_statement", [{}])
+        balance_sheets = data.get("balance_sheet", [{}])
+        cash_flows = data.get("cash_flow", [{}])
+        
+        income_stmt = income_stmts[0] if income_stmts else {}
+        balance_sheet = balance_sheets[0] if balance_sheets else {}
+        cash_flow = cash_flows[0] if cash_flows else {}
+        
+        # Prior year data for M-Score calculations
+        prior_income = income_stmts[1] if len(income_stmts) > 1 else None
+        prior_balance = balance_sheets[1] if len(balance_sheets) > 1 else None
+        prior_cash_flow = cash_flows[1] if len(cash_flows) > 1 else None
         
         # Extract key values
         price = profile.get("price")
@@ -176,7 +187,9 @@ class RatioCalculator:
             risk=self._calc_risk(
                 current_assets, current_liabilities, total_assets,
                 retained_earnings, operating_income, market_cap,
-                total_liabilities, revenue, net_income, operating_cash_flow
+                total_liabilities, revenue, net_income, operating_cash_flow,
+                income_stmt, balance_sheet, cash_flow,
+                prior_income, prior_balance, prior_cash_flow
             ),
             sbc=self._calc_sbc(
                 stock_based_compensation, free_cash_flow, revenue
@@ -375,27 +388,15 @@ class RatioCalculator:
         revenue: Optional[float],
         net_income: Optional[float],
         operating_cash_flow: Optional[float],
+        income_stmt: dict,
+        balance_sheet: dict,
+        cash_flow: dict,
+        prior_income: Optional[dict],
+        prior_balance: Optional[dict],
+        prior_cash_flow: Optional[dict],
     ) -> RiskMetrics:
         """
-        Calculate risk metrics including Altman Z-Score and Accrual Ratio.
-        
-        Altman Z-Score formula (original for manufacturing):
-        Z = 1.2*A + 1.4*B + 3.3*C + 0.6*D + 1.0*E
-        
-        Where:
-        - A = Working Capital / Total Assets
-        - B = Retained Earnings / Total Assets
-        - C = EBIT / Total Assets
-        - D = Market Value of Equity / Total Liabilities
-        - E = Sales / Total Assets
-        
-        Interpretation:
-        - Z > 2.99: "Safe Zone" - low bankruptcy risk
-        - 1.81 < Z < 2.99: "Grey Zone" - moderate risk
-        - Z < 1.81: "Distress Zone" - high bankruptcy risk
-        
-        Accrual Ratio = (Net Income - Operating Cash Flow) / Total Assets
-        Measures earnings quality - high accruals suggest potential manipulation.
+        Calculate risk metrics including Altman Z-Score, Accrual Ratio, and Beneish M-Score.
         """
         ratios = RiskMetrics()
         
@@ -412,6 +413,15 @@ class RatioCalculator:
                 ratios.accrual_quality = "elevated"
             else:
                 ratios.accrual_quality = "good"
+        
+        # Calculate Beneish M-Score (requires prior year data)
+        m_score = self._calc_beneish_m_score(
+            income_stmt, balance_sheet, cash_flow,
+            prior_income, prior_balance, prior_cash_flow
+        )
+        if m_score is not None:
+            ratios.beneish_m_score = m_score
+            ratios.manipulation_risk = "high" if m_score > -1.78 else "low"
         
         # Check for critical data needed for Z-Score
         if not total_assets or total_assets <= 0:
@@ -454,6 +464,133 @@ class RatioCalculator:
             ratios.z_score_zone = "grey"
         
         return ratios
+    
+    def _calc_beneish_m_score(
+        self,
+        income_stmt: dict,
+        balance_sheet: dict,
+        cash_flow: dict,
+        prior_income: Optional[dict],
+        prior_balance: Optional[dict],
+        prior_cash_flow: Optional[dict],
+    ) -> Optional[float]:
+        """
+        Calculate Beneish M-Score for earnings manipulation detection.
+        
+        M = -4.84 + 0.920*DSRI + 0.528*GMI + 0.404*AQI + 0.892*SGI 
+            + 0.115*DEPI - 0.172*SGAI + 4.679*TATA - 0.327*LVGI
+        
+        Requires prior year data for comparison indices.
+        Returns None if insufficient data.
+        
+        Interpretation:
+        - M > -1.78: High probability of manipulation
+        - M < -1.78: Low probability of manipulation
+        """
+        if not prior_income or not prior_balance:
+            return None
+        
+        # Current year values
+        rev_t = income_stmt.get("revenue")
+        gp_t = income_stmt.get("grossProfit")
+        ni_t = income_stmt.get("netIncome")
+        sga_t = income_stmt.get("sellingGeneralAndAdministrative")
+        ta_t = balance_sheet.get("totalAssets")
+        ca_t = balance_sheet.get("totalCurrentAssets")
+        rec_t = balance_sheet.get("netReceivables")
+        ppe_t = balance_sheet.get("propertyPlantEquipmentNet")
+        debt_t = balance_sheet.get("totalDebt") or 0
+        cfo_t = cash_flow.get("operatingCashFlow") if cash_flow else None
+        dep_t = cash_flow.get("depreciationAndAmortization") if cash_flow else None
+        
+        # Prior year values
+        rev_t1 = prior_income.get("revenue")
+        gp_t1 = prior_income.get("grossProfit")
+        sga_t1 = prior_income.get("sellingGeneralAndAdministrative")
+        ta_t1 = prior_balance.get("totalAssets")
+        ca_t1 = prior_balance.get("totalCurrentAssets")
+        rec_t1 = prior_balance.get("netReceivables")
+        ppe_t1 = prior_balance.get("propertyPlantEquipmentNet")
+        debt_t1 = prior_balance.get("totalDebt") or 0
+        dep_t1 = prior_cash_flow.get("depreciationAndAmortization") if prior_cash_flow else None
+        
+        # Check for minimum required data
+        if not all([rev_t, rev_t1, ta_t, ta_t1]):
+            return None
+        if rev_t1 == 0 or ta_t1 == 0 or ta_t == 0:
+            return None
+        
+        # Calculate indices (use 1.0 as default if can't calculate)
+        
+        # DSRI: Days Sales Receivable Index
+        dsri = 1.0
+        if rec_t and rec_t1 and rev_t1 > 0:
+            dsr_t = rec_t / rev_t
+            dsr_t1 = rec_t1 / rev_t1
+            if dsr_t1 > 0:
+                dsri = dsr_t / dsr_t1
+        
+        # GMI: Gross Margin Index (prior / current, so deterioration > 1)
+        gmi = 1.0
+        if gp_t and gp_t1:
+            gm_t = gp_t / rev_t
+            gm_t1 = gp_t1 / rev_t1
+            if gm_t > 0:
+                gmi = gm_t1 / gm_t
+        
+        # AQI: Asset Quality Index
+        aqi = 1.0
+        if ca_t and ppe_t and ca_t1 and ppe_t1:
+            aq_t = 1 - (ca_t + ppe_t) / ta_t
+            aq_t1 = 1 - (ca_t1 + ppe_t1) / ta_t1
+            if aq_t1 != 0:
+                aqi = aq_t / aq_t1
+        
+        # SGI: Sales Growth Index
+        sgi = rev_t / rev_t1
+        
+        # DEPI: Depreciation Index
+        depi = 1.0
+        if dep_t and dep_t1 and ppe_t and ppe_t1:
+            dep_rate_t = dep_t / (ppe_t + dep_t) if (ppe_t + dep_t) > 0 else 0
+            dep_rate_t1 = dep_t1 / (ppe_t1 + dep_t1) if (ppe_t1 + dep_t1) > 0 else 0
+            if dep_rate_t > 0:
+                depi = dep_rate_t1 / dep_rate_t
+        
+        # SGAI: SG&A Index
+        sgai = 1.0
+        if sga_t and sga_t1:
+            sga_ratio_t = sga_t / rev_t
+            sga_ratio_t1 = sga_t1 / rev_t1
+            if sga_ratio_t1 > 0:
+                sgai = sga_ratio_t / sga_ratio_t1
+        
+        # TATA: Total Accruals to Total Assets
+        tata = 0.0
+        if ni_t is not None and cfo_t is not None:
+            tata = (ni_t - cfo_t) / ta_t
+        
+        # LVGI: Leverage Index
+        lvgi = 1.0
+        leverage_t = debt_t / ta_t if ta_t > 0 else 0
+        leverage_t1 = debt_t1 / ta_t1 if ta_t1 > 0 else 0
+        if leverage_t1 > 0:
+            lvgi = leverage_t / leverage_t1
+        
+        # Calculate M-Score
+        m_score = (
+            -4.84
+            + 0.920 * dsri
+            + 0.528 * gmi
+            + 0.404 * aqi
+            + 0.892 * sgi
+            + 0.115 * depi
+            - 0.172 * sgai
+            + 4.679 * tata
+            - 0.327 * lvgi
+        )
+        
+        return m_score
     
     def _calc_sbc(
         self,

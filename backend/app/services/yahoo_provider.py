@@ -115,6 +115,7 @@ class YahooProvider(StockDataProvider):
                     net_income=get_val(income_df, "Net Income", "Net Income Common Stockholders"),
                     interest_expense=get_val(income_df, "Interest Expense"),
                     income_tax_expense=get_val(income_df, "Tax Provision", "Income Tax Expense"),
+                    selling_general_admin=get_val(income_df, "Selling General And Administration", "Selling And Marketing Expense"),
                     # Share counts
                     weighted_avg_shares=get_val(income_df, "Basic Average Shares", "Ordinary Shares Number"),
                     weighted_avg_shares_diluted=get_val(income_df, "Diluted Average Shares"),
@@ -130,6 +131,8 @@ class YahooProvider(StockDataProvider):
                     goodwill=get_val(balance_df, "Goodwill"),
                     intangible_assets=get_val(balance_df, "Other Intangible Assets", "Intangible Assets"),
                     retained_earnings=get_val(balance_df, "Retained Earnings"),
+                    net_receivables=get_val(balance_df, "Receivables", "Accounts Receivable", "Net Receivables"),
+                    property_plant_equipment=get_val(balance_df, "Net PPE", "Property Plant And Equipment Net"),
                     # Cash Flow
                     operating_cash_flow=get_val(cash_df, "Operating Cash Flow", "Cash Flow From Continuing Operating Activities"),
                     capital_expenditure=get_val(cash_df, "Capital Expenditure"),

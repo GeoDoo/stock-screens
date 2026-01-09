@@ -32,6 +32,7 @@ class FinancialStatement:
     net_income: Optional[float] = None
     interest_expense: Optional[float] = None
     income_tax_expense: Optional[float] = None
+    selling_general_admin: Optional[float] = None  # SG&A for Beneish M-Score
     
     # Share counts (from income statement)
     weighted_avg_shares: Optional[float] = None  # Basic shares
@@ -49,6 +50,8 @@ class FinancialStatement:
     goodwill: Optional[float] = None  # For ROTIC calculation
     intangible_assets: Optional[float] = None  # For ROTIC calculation
     retained_earnings: Optional[float] = None  # For Altman Z-Score
+    net_receivables: Optional[float] = None  # For Beneish M-Score
+    property_plant_equipment: Optional[float] = None  # For Beneish M-Score
     
     # Cash Flow
     operating_cash_flow: Optional[float] = None
