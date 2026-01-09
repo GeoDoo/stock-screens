@@ -35,6 +35,7 @@ class ProfitabilityRatios:
     roe: Optional[float] = None
     roa: Optional[float] = None
     roic: Optional[float] = None
+    rotic: Optional[float] = None  # Return on Tangible Invested Capital
 
 
 @dataclass
@@ -111,6 +112,8 @@ class RatioCalculator:
         total_debt = balance_sheet.get("totalDebt") or 0
         equity = balance_sheet.get("totalStockholdersEquity")
         cash = balance_sheet.get("cashAndCashEquivalents") or 0
+        goodwill = balance_sheet.get("goodwill") or 0
+        intangibles = balance_sheet.get("intangibleAssets") or 0
         
         dividends_paid = abs(cash_flow.get("dividendsPaid") or 0)
         
@@ -133,7 +136,8 @@ class RatioCalculator:
             ),
             profitability=self._calc_profitability(
                 revenue, gross_profit, operating_income, net_income,
-                equity, total_assets, total_debt, cash, income_before_tax
+                equity, total_assets, total_debt, cash, income_before_tax,
+                goodwill, intangibles
             ),
             liquidity=self._calc_liquidity(
                 current_assets, current_liabilities, inventory,
@@ -220,6 +224,8 @@ class RatioCalculator:
         total_debt: float,
         cash: float,
         income_before_tax: Optional[float],
+        goodwill: float = 0,
+        intangibles: float = 0,
     ) -> ProfitabilityRatios:
         """Calculate profitability ratios."""
         ratios = ProfitabilityRatios()
@@ -261,6 +267,13 @@ class RatioCalculator:
             
             if invested_capital > 0:
                 ratios.roic = nopat / invested_capital
+            
+            # ROTIC = NOPAT / Tangible Invested Capital
+            # Tangible IC excludes Goodwill and Intangible Assets from acquisitions.
+            # This reveals true operating efficiency of the core business.
+            tangible_invested_capital = invested_capital - goodwill - intangibles
+            if tangible_invested_capital > 0:
+                ratios.rotic = nopat / tangible_invested_capital
         
         return ratios
     

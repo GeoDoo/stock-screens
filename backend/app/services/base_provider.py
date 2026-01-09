@@ -46,6 +46,8 @@ class FinancialStatement:
     current_assets: Optional[float] = None
     current_liabilities: Optional[float] = None
     short_term_debt: Optional[float] = None  # For Non-Cash Working Capital
+    goodwill: Optional[float] = None  # For ROTIC calculation
+    intangible_assets: Optional[float] = None  # For ROTIC calculation
     
     # Cash Flow
     operating_cash_flow: Optional[float] = None
