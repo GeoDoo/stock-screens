@@ -54,9 +54,87 @@ class ComparableAnalyzer:
     Analyzes a stock against its peer group using valuation multiples.
     
     Uses the same provider as all other analyses for consistency.
+    Prefers industry-level peers for more accurate comparisons.
     """
     
-    # Fallback peer lists by sector (used when provider doesn't have peer data)
+    # Sub-industry peer groups for precise comparable analysis
+    # These match FMP/Yahoo industry classifications
+    INDUSTRY_PEERS = {
+        # Technology - Hardware
+        "Consumer Electronics": ["AAPL", "SNE", "HPQ", "DELL", "LOGI", "SONO", "GPRO"],
+        "Computer Hardware": ["AAPL", "HPQ", "DELL", "LOGI", "NTAP", "WDC", "STX"],
+        
+        # Technology - Software  
+        "Software—Infrastructure": ["MSFT", "ORCL", "CRM", "NOW", "SNOW", "MDB", "DDOG", "NET"],
+        "Software—Application": ["ADBE", "INTU", "WDAY", "TEAM", "ZM", "DOCU", "HUBS", "PANW"],
+        
+        # Technology - Internet
+        "Internet Content & Information": ["GOOGL", "META", "SNAP", "PINS", "TWTR", "MTCH", "YELP"],
+        "Internet Retail": ["AMZN", "EBAY", "ETSY", "W", "CHWY", "BABA", "JD", "PDD"],
+        
+        # Technology - Semiconductors
+        "Semiconductors": ["NVDA", "AMD", "INTC", "AVGO", "QCOM", "TXN", "MU", "LRCX", "AMAT"],
+        "Semiconductor Equipment & Materials": ["ASML", "LRCX", "AMAT", "KLAC", "TER", "MKSI"],
+        
+        # Financial Services
+        "Banks—Diversified": ["JPM", "BAC", "WFC", "C", "USB", "PNC", "TFC", "COF"],
+        "Banks—Regional": ["USB", "PNC", "TFC", "FITB", "RF", "KEY", "CFG", "MTB"],
+        "Capital Markets": ["GS", "MS", "SCHW", "BLK", "BX", "KKR", "APO", "IBKR"],
+        "Credit Services": ["V", "MA", "AXP", "DFS", "COF", "SYF", "PYPL"],
+        "Insurance—Diversified": ["BRK.B", "AIG", "MET", "PRU", "AFL", "PGR", "TRV"],
+        "Asset Management": ["BLK", "BX", "KKR", "APO", "TROW", "IVZ", "BEN"],
+        
+        # Healthcare
+        "Drug Manufacturers—General": ["JNJ", "PFE", "MRK", "ABBV", "LLY", "BMY", "GSK", "AZN"],
+        "Biotechnology": ["AMGN", "GILD", "REGN", "VRTX", "BIIB", "MRNA", "BNTX", "ILMN"],
+        "Medical Devices": ["MDT", "ABT", "SYK", "BSX", "ISRG", "EW", "ZBH", "DXCM"],
+        "Healthcare Plans": ["UNH", "ELV", "CI", "HUM", "CNC", "MOH"],
+        "Medical Instruments & Supplies": ["TMO", "DHR", "BDX", "BAX", "A", "MTD", "IQV"],
+        
+        # Consumer Cyclical
+        "Auto Manufacturers": ["TSLA", "GM", "F", "TM", "HMC", "RIVN", "LCID", "NIO"],
+        "Restaurants": ["MCD", "SBUX", "YUM", "CMG", "DRI", "DARDEN", "QSR", "DPZ"],
+        "Specialty Retail": ["HD", "LOW", "TJX", "ROST", "ULTA", "BBY", "FIVE", "OLLI"],
+        "Apparel Retail": ["TJX", "ROST", "GPS", "ANF", "AEO", "URBN", "LULU"],
+        "Footwear & Accessories": ["NKE", "ADDYY", "UAA", "SKX", "CROX", "DECK", "VFC"],
+        "Travel & Leisure": ["BKNG", "EXPE", "ABNB", "MAR", "HLT", "H", "LVS", "WYNN"],
+        
+        # Communication Services
+        "Entertainment": ["DIS", "NFLX", "WBD", "PARA", "LGF.A", "CMCSA", "FOXA"],
+        "Telecom Services": ["VZ", "T", "TMUS", "CHTR", "LBRDK"],
+        "Electronic Gaming & Multimedia": ["EA", "TTWO", "ATVI", "RBLX", "U", "SE"],
+        
+        # Consumer Defensive
+        "Beverages—Non-Alcoholic": ["KO", "PEP", "MNST", "KDP", "CELH"],
+        "Household & Personal Products": ["PG", "CL", "KMB", "CLX", "CHD", "EL"],
+        "Discount Stores": ["WMT", "COST", "TGT", "DG", "DLTR", "BJ"],
+        "Tobacco": ["PM", "MO", "BTI", "IMBBY"],
+        
+        # Energy
+        "Oil & Gas Integrated": ["XOM", "CVX", "SHEL", "TTE", "BP", "COP"],
+        "Oil & Gas E&P": ["EOG", "PXD", "DVN", "FANG", "OXY", "MRO", "APA"],
+        "Oil & Gas Equipment & Services": ["SLB", "HAL", "BKR", "NOV", "FTI"],
+        "Oil & Gas Refining & Marketing": ["MPC", "PSX", "VLO", "PBF", "DK"],
+        
+        # Industrials
+        "Aerospace & Defense": ["BA", "RTX", "LMT", "NOC", "GD", "HII", "TDG", "HEI"],
+        "Farm & Heavy Construction Machinery": ["DE", "CAT", "AGCO", "CNHI", "PCAR"],
+        "Railroads": ["UNP", "CSX", "NSC", "CP", "CNI"],
+        "Airlines": ["DAL", "UAL", "LUV", "AAL", "ALK", "JBLU"],
+        "Air Freight & Logistics": ["UPS", "FDX", "EXPD", "XPO", "CHRW"],
+        
+        # Real Estate
+        "REIT—Data Center": ["EQIX", "DLR", "AMT", "CCI"],
+        "REIT—Industrial": ["PLD", "PSA", "EXR", "CUBE"],
+        "REIT—Residential": ["AVB", "EQR", "MAA", "UDR", "INVH"],
+        "REIT—Retail": ["SPG", "O", "KIM", "REG", "FRT"],
+        
+        # Utilities
+        "Utilities—Regulated Electric": ["NEE", "DUK", "SO", "D", "AEP", "SRE", "XEL", "WEC"],
+        "Utilities—Renewable": ["NEE", "AES", "BEP", "CWEN", "RUN"],
+    }
+    
+    # Fallback peer lists by sector (used when industry has no defined peers)
     SECTOR_PEERS = {
         "Technology": ["MSFT", "GOOGL", "META", "NVDA", "AAPL", "ORCL", "CRM", "ADBE", "INTC", "AMD"],
         "Financial Services": ["JPM", "BAC", "WFC", "GS", "MS", "C", "BLK", "SCHW", "AXP", "V"],
@@ -102,8 +180,8 @@ class ComparableAnalyzer:
         sector = data.get("profile", {}).get("sector", "Unknown")
         industry = data.get("profile", {}).get("industry", "Unknown")
         
-        # Get peer companies based on sector
-        peer_symbols = self._get_sector_peers(symbol, sector)[:max_peers]
+        # Get peer companies - prefer industry-level, fall back to sector
+        peer_symbols = self._get_peers(symbol, sector, industry)[:max_peers]
         
         # Fetch metrics for all peers using the SAME provider
         peers = []
@@ -143,8 +221,45 @@ class ComparableAnalyzer:
             average_upside=average_upside,
         )
     
+    def _get_peers(self, symbol: str, sector: str, industry: str) -> List[str]:
+        """
+        Get peer companies, preferring industry-level over sector-level.
+        
+        Args:
+            symbol: Target stock ticker
+            sector: Company sector (fallback)
+            industry: Company industry (preferred)
+            
+        Returns:
+            List of peer symbols, excluding the target
+        """
+        symbol_upper = symbol.upper()
+        
+        # Try industry-level peers first (more precise)
+        industry_peers = self.INDUSTRY_PEERS.get(industry, [])
+        if industry_peers:
+            return [p for p in industry_peers if p != symbol_upper]
+        
+        # Fall back to sector-level peers
+        sector_peers = self.SECTOR_PEERS.get(sector, [])
+        return [p for p in sector_peers if p != symbol_upper]
+    
+    def _get_peer_source(self, sector: str, industry: str) -> str:
+        """
+        Determine whether peers will come from industry or sector mapping.
+        
+        Returns:
+            "industry" or "sector"
+        """
+        if industry in self.INDUSTRY_PEERS:
+            return "industry"
+        return "sector"
+    
     def _get_sector_peers(self, symbol: str, sector: str) -> List[str]:
-        """Get peer companies for a given sector, excluding the target."""
+        """Get peer companies for a given sector, excluding the target.
+        
+        DEPRECATED: Use _get_peers() instead for industry-aware selection.
+        """
         sector_peers = self.SECTOR_PEERS.get(sector, [])
         return [p for p in sector_peers if p != symbol.upper()]
     

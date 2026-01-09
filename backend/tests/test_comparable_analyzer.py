@@ -255,3 +255,118 @@ class TestEVEBITDAImpliedValuation:
         # Implied Equity = $1.5T - (-$200B) = $1.7T
         # Implied Price = $1.7T / 12B = $141.67
         assert ev_ebitda_val.implied_price == pytest.approx(141.67, rel=0.01)
+
+
+class TestDynamicIndustryPeers:
+    """
+    Tests for dynamic sub-industry peer selection.
+    
+    Problem: Static SECTOR_PEERS groups all Technology companies together,
+    but Apple (Consumer Electronics) shouldn't be compared to Salesforce (CRM).
+    
+    Solution: Use industry-level peers when available, fall back to sector.
+    """
+    
+    def test_get_peers_prefers_industry_over_sector(self):
+        """
+        When industry peers are available, use them instead of sector peers.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        # Apple's industry is "Consumer Electronics" (not just "Technology")
+        peers = analyzer._get_peers(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        
+        # Should get Consumer Electronics peers, NOT broad Technology
+        # (Microsoft, Google, etc. are NOT Consumer Electronics)
+        assert "MSFT" not in peers, "MSFT is Software, not Consumer Electronics"
+        assert "GOOGL" not in peers, "GOOGL is Internet Services, not Consumer Electronics"
+        
+        # Should include actual Consumer Electronics peers
+        # SNE (Sony), HPQ (HP), DELL, LGI.F (LG) are Consumer Electronics
+        # Note: At minimum we expect SOME peers from the industry mapping
+        assert len(peers) >= 1, "Should find at least one industry peer"
+    
+    def test_falls_back_to_sector_when_no_industry_peers(self):
+        """
+        When industry has no defined peers, fall back to sector peers.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        # Use an obscure industry that won't have specific peers
+        peers = analyzer._get_peers(
+            symbol="TEST",
+            sector="Technology",
+            industry="Obscure Niche Tech",  # Not in INDUSTRY_PEERS
+        )
+        
+        # Should fall back to Technology sector peers
+        assert len(peers) > 0, "Should fall back to sector peers"
+        # Verify we get sector-level peers
+        tech_peers = analyzer.SECTOR_PEERS.get("Technology", [])
+        assert any(p in tech_peers for p in peers), "Should include sector peers"
+    
+    def test_industry_peers_exist_for_common_industries(self):
+        """
+        INDUSTRY_PEERS should cover common industries for better granularity.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        # These industries should have specific peer groups
+        expected_industries = [
+            "Consumer Electronics",
+            "Software—Infrastructure",
+            "Software—Application",
+            "Internet Content & Information",
+            "Semiconductors",
+            "Banks—Diversified",
+            "Drug Manufacturers—General",
+            "Auto Manufacturers",
+        ]
+        
+        for industry in expected_industries:
+            assert industry in analyzer.INDUSTRY_PEERS, (
+                f"INDUSTRY_PEERS should include '{industry}' for proper comparable analysis"
+            )
+    
+    def test_excludes_target_from_peers(self):
+        """
+        Target company should never appear in its own peer list.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        peers = analyzer._get_peers(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        
+        assert "AAPL" not in peers, "Target should not be in its own peer list"
+    
+    def test_result_indicates_peer_source(self):
+        """
+        ComparableResult should indicate if industry or sector peers were used.
+        """
+        # This helps users understand the quality of the comparison
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        # Method to check peer source
+        source = analyzer._get_peer_source(
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        assert source == "industry", "Should use industry peers when available"
+        
+        source = analyzer._get_peer_source(
+            sector="Technology",
+            industry="Unknown Niche",
+        )
+        assert source == "sector", "Should fall back to sector"
