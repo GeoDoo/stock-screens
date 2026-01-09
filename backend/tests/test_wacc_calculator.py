@@ -146,4 +146,199 @@ class TestWACCInputValidation:
         assert any("debt" in w.lower() for w in warnings)
 
 
+class TestBetaUnleverRelever:
+    """
+    Tests for beta unlever/relever functions.
+    
+    Problem: Raw beta from providers reflects both business risk AND financial
+    leverage. When comparing companies or using industry betas, you need to:
+    1. Unlever raw beta to get "pure" business risk
+    2. Relever for the target company's capital structure
+    
+    Hamada Equation:
+    - Unlevered Beta = Levered Beta / (1 + (1 - Tax Rate) × (D/E))
+    - Relevered Beta = Unlevered Beta × (1 + (1 - Tax Rate) × (D/E))
+    """
+    
+    def test_unlever_beta_removes_leverage_effect(self):
+        """
+        Unlevered beta should be LOWER than levered beta for companies with debt.
+        """
+        from app.services.wacc_calculator import unlever_beta
+        
+        levered_beta = 1.5
+        debt = 500
+        equity = 1000  # D/E = 0.5
+        tax_rate = 0.25
+        
+        unlevered = unlever_beta(levered_beta, debt, equity, tax_rate)
+        
+        # Unlevered should be lower (debt amplifies beta)
+        assert unlevered < levered_beta, (
+            f"Unlevered beta ({unlevered:.2f}) should be lower than "
+            f"levered beta ({levered_beta:.2f}) for company with debt"
+        )
+        
+        # Expected: 1.5 / (1 + 0.75 * 0.5) = 1.5 / 1.375 = 1.09
+        assert unlevered == pytest.approx(1.09, rel=0.01)
+    
+    def test_unlever_beta_no_debt(self):
+        """
+        For company with no debt, unlevered = levered beta.
+        """
+        from app.services.wacc_calculator import unlever_beta
+        
+        levered_beta = 1.2
+        unlevered = unlever_beta(levered_beta, debt=0, equity=1000, tax_rate=0.25)
+        
+        assert unlevered == pytest.approx(levered_beta, rel=0.01)
+    
+    def test_relever_beta_adds_leverage_effect(self):
+        """
+        Relevered beta should be HIGHER than unlevered for companies with debt.
+        """
+        from app.services.wacc_calculator import relever_beta
+        
+        unlevered_beta = 1.0  # Pure business risk
+        debt = 500
+        equity = 1000  # D/E = 0.5
+        tax_rate = 0.25
+        
+        relevered = relever_beta(unlevered_beta, debt, equity, tax_rate)
+        
+        # Relevered should be higher (debt amplifies beta)
+        assert relevered > unlevered_beta, (
+            f"Relevered beta ({relevered:.2f}) should be higher than "
+            f"unlevered beta ({unlevered_beta:.2f}) for company with debt"
+        )
+        
+        # Expected: 1.0 * (1 + 0.75 * 0.5) = 1.0 * 1.375 = 1.375
+        assert relevered == pytest.approx(1.375, rel=0.01)
+    
+    def test_unlever_relever_roundtrip(self):
+        """
+        Unlever then relever with same leverage should return original beta.
+        """
+        from app.services.wacc_calculator import unlever_beta, relever_beta
+        
+        original_beta = 1.5
+        debt = 500
+        equity = 1000
+        tax_rate = 0.25
+        
+        unlevered = unlever_beta(original_beta, debt, equity, tax_rate)
+        relevered = relever_beta(unlevered, debt, equity, tax_rate)
+        
+        assert relevered == pytest.approx(original_beta, rel=0.01)
+    
+    def test_calculate_adjusted_beta(self):
+        """
+        WACCCalculator should provide method to adjust beta for different leverage.
+        
+        Use case: Apply industry beta to company with different capital structure.
+        """
+        from app.services.wacc_calculator import calculate_adjusted_beta
+        
+        # Industry average: beta=1.2 with D/E=0.3
+        industry_beta = 1.2
+        industry_debt = 300
+        industry_equity = 1000
+        
+        # Target company: D/E=0.8 (more leveraged)
+        target_debt = 800
+        target_equity = 1000
+        
+        tax_rate = 0.25
+        
+        adjusted = calculate_adjusted_beta(
+            peer_beta=industry_beta,
+            peer_debt=industry_debt,
+            peer_equity=industry_equity,
+            target_debt=target_debt,
+            target_equity=target_equity,
+            tax_rate=tax_rate,
+        )
+        
+        # More leveraged company should have HIGHER beta
+        assert adjusted > industry_beta, (
+            f"More leveraged company should have higher beta. "
+            f"Got {adjusted:.2f}, expected > {industry_beta:.2f}"
+        )
+    
+    def test_high_leverage_significantly_increases_beta(self):
+        """
+        High leverage (D/E > 1) should significantly increase beta.
+        """
+        from app.services.wacc_calculator import relever_beta
+        
+        unlevered_beta = 1.0
+        tax_rate = 0.25
+        
+        # D/E = 2 (very high leverage)
+        high_leverage_beta = relever_beta(unlevered_beta, debt=2000, equity=1000, tax_rate=tax_rate)
+        
+        # Beta should roughly double with D/E=2
+        # 1.0 * (1 + 0.75 * 2) = 1.0 * 2.5 = 2.5
+        assert high_leverage_beta == pytest.approx(2.5, rel=0.01)
+    
+    def test_negative_equity_handled_safely(self):
+        """
+        Negative equity (technically insolvent) should return high/capped beta.
+        """
+        from app.services.wacc_calculator import relever_beta
+        
+        unlevered_beta = 1.0
+        # Negative equity - company is insolvent
+        relevered = relever_beta(unlevered_beta, debt=1000, equity=-100, tax_rate=0.25)
+        
+        # Should return a high capped value, not crash
+        assert relevered is not None
+        assert relevered >= 3.0, "Insolvent company should have very high beta"
+    
+    def test_wacc_calculator_with_adjusted_beta(self):
+        """
+        WACCCalculator should accept adjusted_beta parameter.
+        """
+        # Standard calculation with raw beta
+        standard_calc = WACCCalculator(
+            risk_free_rate=0.04,
+            beta=1.5,  # Raw levered beta
+            market_risk_premium=0.06,
+            cost_of_debt=0.06,
+            tax_rate=0.25,
+            market_cap=1000,
+            total_debt=500,
+        )
+        
+        # Calculation with properly adjusted beta
+        # First unlever the peer's beta, then relever for our capital structure
+        from app.services.wacc_calculator import calculate_adjusted_beta
+        
+        adjusted = calculate_adjusted_beta(
+            peer_beta=1.2,
+            peer_debt=200,  # Peer has lower leverage
+            peer_equity=1000,
+            target_debt=500,  # Our company has higher leverage
+            target_equity=1000,
+            tax_rate=0.25,
+        )
+        
+        adjusted_calc = WACCCalculator(
+            risk_free_rate=0.04,
+            beta=adjusted,
+            market_risk_premium=0.06,
+            cost_of_debt=0.06,
+            tax_rate=0.25,
+            market_cap=1000,
+            total_debt=500,
+        )
+        
+        # Both should compute WACC, but with different cost of equity
+        standard_wacc = standard_calc.calculate()
+        adjusted_wacc = adjusted_calc.calculate()
+        
+        assert standard_wacc > 0
+        assert adjusted_wacc > 0
+        # The adjusted beta should give different result
+        assert standard_wacc != adjusted_wacc
 
