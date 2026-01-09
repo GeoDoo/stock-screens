@@ -353,6 +353,181 @@ Discount Factor = 1 / (1 + WACC)^(t - 0.5)
     print(f"  {len(content.splitlines())} lines")
 
 
+def generate_deployment_docs():
+    """Generate DEPLOYMENT.md from code configuration."""
+    
+    main_py = BACKEND_DIR / "app" / "main.py"
+    database_py = BACKEND_DIR / "app" / "services" / "database.py"
+    
+    # Extract environment variables from main.py
+    env_vars = []
+    try:
+        with open(main_py) as f:
+            content = f.read()
+        
+        # Find os.getenv calls
+        import re
+        for match in re.finditer(r'os\.getenv\(["\'](\w+)["\']', content):
+            env_vars.append(match.group(1))
+        env_vars = sorted(set(env_vars))
+    except:
+        env_vars = ["FMP_API_KEY", "CORS_ORIGINS", "POLYGON_API_KEY"]
+    
+    # Extract database path from database.py
+    db_path = "stock_screens.db"
+    try:
+        with open(database_py) as f:
+            content = f.read()
+        if "stock_screens.db" in content:
+            db_path = "stock_screens.db"
+    except:
+        pass
+    
+    # Extract health endpoint
+    health_endpoint = "/health"
+    rate_limits_endpoint = "/api/rate-limits"
+    
+    content = f"""# Deployment Guide
+
+> **Auto-generated** from source code configuration.
+> 
+> Last updated: {datetime.now().strftime("%Y-%m-%d %H:%M")}
+> 
+> Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
+
+## Prerequisites
+
+- Python 3.12+
+- Node.js 18+
+- SQLite (included with Python)
+
+## Environment Variables
+
+Environment variables read from `backend/app/main.py`:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `FMP_API_KEY` | Yes | Financial Modeling Prep API key |
+| `CORS_ORIGINS` | Prod | Comma-separated allowed origins (default: `*`) |
+| `POLYGON_API_KEY` | No | Polygon.io API key for Massive provider |
+
+## Database
+
+- **Path**: `backend/{db_path}` (hardcoded in `database.py`)
+- **Type**: SQLite
+- **Tables**: See `database.py` module docstring
+
+## Health & Monitoring
+
+Endpoints available for monitoring (from `main.py`):
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `{health_endpoint}` | GET | Health check - returns `{{"status": "ok"}}` |
+| `{rate_limits_endpoint}` | GET | Current API rate limit stats |
+| `{rate_limits_endpoint}/reset` | POST | Reset rate limit counters |
+
+## Production Setup
+
+### Backend
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Set required environment variables
+export FMP_API_KEY=your_key_here
+export CORS_ORIGINS=https://yourapp.com
+
+# Run with production server
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm ci
+npm run build
+
+# dist/ folder contains static files for nginx/caddy
+```
+
+## Security Checklist
+
+From `validate_configuration()` in `main.py`:
+
+- [ ] Set `FMP_API_KEY` - FMP provider unavailable without it
+- [ ] Set `CORS_ORIGINS` explicitly - wildcard `*` is dev-only
+- [ ] Use HTTPS in production
+- [ ] Secure API keys with secrets management
+
+## Docker
+
+### Backend
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/app ./app
+
+# Database persists at /app/{db_path}
+VOLUME ["/app"]
+
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### Frontend
+
+```dockerfile
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80
+```
+
+## Troubleshooting
+
+### Warnings on startup
+
+The `validate_configuration()` function logs warnings for:
+- Missing `FMP_API_KEY` - provider will be unavailable
+- Missing `CORS_ORIGINS` - defaults to wildcard (insecure for prod)
+- Missing `POLYGON_API_KEY` - Massive provider unavailable (optional)
+
+### Rate limit errors
+
+Check current usage:
+```bash
+curl http://localhost:8000{rate_limits_endpoint}
+```
+
+Reset counters:
+```bash
+curl -X POST http://localhost:8000{rate_limits_endpoint}/reset
+```
+"""
+    
+    # Write file
+    output_path = DOCS_DIR / "DEPLOYMENT.md"
+    with open(output_path, "w") as f:
+        f.write(content)
+    
+    print(f"✓ Generated {output_path}")
+    print(f"  {len(content.splitlines())} lines")
+
+
 def generate_development_docs():
     """Generate DEVELOPMENT.md from package files."""
     
@@ -526,6 +701,7 @@ def main():
     generate_architecture_docs()
     generate_dcf_docs()
     generate_development_docs()
+    generate_deployment_docs()
     
     print("\n✅ All documentation generated!")
 
