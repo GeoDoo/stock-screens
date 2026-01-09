@@ -295,6 +295,53 @@ class TestBetaUnleverRelever:
         assert relevered is not None
         assert relevered >= 3.0, "Insolvent company should have very high beta"
     
+    def test_unlever_beta_with_negative_equity_clamps_minimum(self):
+        """
+        P1 Bug: unlever_beta with negative equity returns min(levered_beta, MAX_BETA)
+        but doesn't clamp minimum. Negative beta should be clamped to minimum.
+        
+        Edge case: Defensive stock with beta < 0 and negative equity.
+        """
+        from app.services.wacc_calculator import unlever_beta, MAX_BETA
+        
+        # Very low/negative beta (extremely defensive)
+        levered_beta = -0.5
+        
+        unlevered = unlever_beta(levered_beta, debt=1000, equity=-100, tax_rate=0.25)
+        
+        # Should clamp to reasonable range, not return negative
+        assert unlevered >= 0, f"Beta should not be negative, got {unlevered}"
+        assert unlevered <= MAX_BETA, f"Beta should be capped at MAX_BETA"
+    
+    def test_unlever_beta_clamps_result(self):
+        """
+        Unlevered beta should be clamped to [0, MAX_BETA] range.
+        """
+        from app.services.wacc_calculator import unlever_beta, MAX_BETA
+        
+        # Extremely high beta
+        unlevered = unlever_beta(levered_beta=10.0, debt=100, equity=1000, tax_rate=0.25)
+        assert unlevered <= MAX_BETA, f"Unlevered beta {unlevered} exceeds MAX_BETA"
+        
+        # Very low beta (defensive stock)
+        unlevered = unlever_beta(levered_beta=0.1, debt=100, equity=1000, tax_rate=0.25)
+        assert unlevered >= 0, f"Unlevered beta {unlevered} should not be negative"
+    
+    def test_relever_beta_no_debt_still_clamps(self):
+        """
+        P1 Bug: relever_beta with debt <= 0 returns unlevered_beta without clamping.
+        Should still enforce bounds.
+        """
+        from app.services.wacc_calculator import relever_beta, MAX_BETA
+        
+        # Extremely high unlevered beta passed directly through
+        relevered = relever_beta(unlevered_beta=10.0, debt=0, equity=1000, tax_rate=0.25)
+        
+        # Should be capped even with no debt
+        assert relevered <= MAX_BETA, (
+            f"Beta {relevered} should be capped at MAX_BETA={MAX_BETA} even with no debt"
+        )
+    
     def test_wacc_calculator_with_adjusted_beta(self):
         """
         WACCCalculator should accept adjusted_beta parameter.
