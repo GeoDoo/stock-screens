@@ -205,6 +205,11 @@ class ValuationService:
             shares_outstanding=shares,
             total_debt=total_debt,
             cash=cash,
+            # Pass equity bridge components for consistency
+            minority_interest=minority_interest,
+            preferred_stock=preferred_stock,
+            deferred_tax_assets=deferred_tax_assets,
+            pension_deficit=pension_deficit,
         )
         
         # Generate matrix with discount rate vs terminal growth

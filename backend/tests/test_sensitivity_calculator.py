@@ -299,3 +299,117 @@ class TestMarginGrowthMatrix:
         # First margin value (0.05 - 0.10 = -0.05) should still produce a result
         # (company loses money but still has a valuation, likely negative or low)
         assert result["matrix"][0][0] is not None
+
+
+class TestEquityBridgeConsistency:
+    """
+    Tests for equity bridge consistency between SensitivityCalculator
+    and the main valuation service.
+    
+    Bug: SensitivityCalculator only uses net debt, not the full
+    institutional equity bridge (minority interest, preferred, NOLs, pension).
+    """
+    
+    def test_sensitivity_uses_full_equity_bridge(self):
+        """
+        Sensitivity calculator should apply full equity bridge,
+        not just net debt.
+        """
+        # Calculator without equity bridge adjustments
+        calc_simple = SensitivityCalculator(
+            projected_fcfs=[100, 110, 121, 133, 146],
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+        )
+        
+        # Calculator with minority interest (should reduce value)
+        calc_with_mi = SensitivityCalculator(
+            projected_fcfs=[100, 110, 121, 133, 146],
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+            minority_interest=100,
+        )
+        
+        value_simple = calc_simple.calculate_intrinsic_value(0.10, 0.03)
+        value_with_mi = calc_with_mi.calculate_intrinsic_value(0.10, 0.03)
+        
+        # Minority interest should reduce intrinsic value
+        assert value_with_mi < value_simple
+        diff = value_simple - value_with_mi
+        # $100 minority interest / 10 shares = $10/share difference
+        assert abs(diff - 10) < 0.01
+    
+    def test_sensitivity_with_nols_adds_value(self):
+        """Deferred tax assets (NOLs) should increase value."""
+        calc_base = SensitivityCalculator(
+            projected_fcfs=[100, 110, 121, 133, 146],
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+        )
+        
+        calc_with_nol = SensitivityCalculator(
+            projected_fcfs=[100, 110, 121, 133, 146],
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+            deferred_tax_assets=50,
+        )
+        
+        value_base = calc_base.calculate_intrinsic_value(0.10, 0.03)
+        value_with_nol = calc_with_nol.calculate_intrinsic_value(0.10, 0.03)
+        
+        # NOLs should increase value
+        assert value_with_nol > value_base
+        diff = value_with_nol - value_base
+        # $50 NOL / 10 shares = $5/share increase
+        assert abs(diff - 5) < 0.01
+    
+    def test_margin_growth_matrix_uses_equity_bridge(self):
+        """
+        Margin vs Growth matrix should also use full equity bridge.
+        """
+        calc = SensitivityCalculator(
+            projected_fcfs=[100, 110, 121, 133, 146],
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+            minority_interest=100,
+            preferred_stock=50,
+        )
+        
+        result = calc.generate_margin_growth_matrix(
+            base_revenue=1000,
+            base_margin=0.20,
+            base_growth=0.10,
+            discount_rate=0.10,
+            terminal_growth=0.03,
+            margin_steps=[0],
+            growth_steps=[0],
+        )
+        
+        # The single cell should reflect equity bridge adjustments
+        # (We can't verify exact value, but it should not be None)
+        assert result["matrix"][0][0] is not None
+    
+    def test_equity_bridge_defaults_to_zero(self):
+        """New equity bridge fields should default to 0."""
+        calc = SensitivityCalculator(
+            projected_fcfs=[100, 110, 121, 133, 146],
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+        )
+        
+        # Should work without explicitly setting equity bridge fields
+        value = calc.calculate_intrinsic_value(0.10, 0.03)
+        assert value is not None
+        assert value > 0

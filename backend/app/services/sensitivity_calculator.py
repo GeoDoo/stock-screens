@@ -9,12 +9,20 @@ class SensitivityCalculator:
     
     Varies two inputs (discount rate, terminal growth) and shows
     how intrinsic value changes across combinations.
+    
+    Uses the full institutional equity bridge for consistency with
+    the main valuation service.
     """
     projected_fcfs: List[float]
     projection_years: int
     shares_outstanding: float
     total_debt: float
     cash: float
+    # Institutional equity bridge components (for consistency with main valuation)
+    minority_interest: float = 0.0
+    preferred_stock: float = 0.0
+    deferred_tax_assets: float = 0.0
+    pension_deficit: float = 0.0
     
     def calculate_intrinsic_value(
         self, 
@@ -42,9 +50,16 @@ class SensitivityCalculator:
         
         enterprise_value = pv_fcf + pv_terminal
         
-        # Net debt adjustment
+        # Full institutional equity bridge (consistent with main valuation)
         net_debt = self.total_debt - self.cash
-        equity_value = enterprise_value - net_debt
+        equity_value = (
+            enterprise_value
+            - net_debt
+            - self.minority_interest
+            - self.preferred_stock
+            + self.deferred_tax_assets
+            - self.pension_deficit
+        )
         
         # Per share
         if self.shares_outstanding <= 0:
@@ -200,9 +215,16 @@ class SensitivityCalculator:
         
         enterprise_value = pv_fcf + pv_terminal
         
-        # Net debt adjustment
+        # Full institutional equity bridge (consistent with main valuation)
         net_debt = self.total_debt - self.cash
-        equity_value = enterprise_value - net_debt
+        equity_value = (
+            enterprise_value
+            - net_debt
+            - self.minority_interest
+            - self.preferred_stock
+            + self.deferred_tax_assets
+            - self.pension_deficit
+        )
         
         if self.shares_outstanding <= 0:
             return None
