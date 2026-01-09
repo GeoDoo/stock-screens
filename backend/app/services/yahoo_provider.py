@@ -115,6 +115,9 @@ class YahooProvider(StockDataProvider):
                     net_income=get_val(income_df, "Net Income", "Net Income Common Stockholders"),
                     interest_expense=get_val(income_df, "Interest Expense"),
                     income_tax_expense=get_val(income_df, "Tax Provision", "Income Tax Expense"),
+                    # Share counts
+                    weighted_avg_shares=get_val(income_df, "Basic Average Shares", "Ordinary Shares Number"),
+                    weighted_avg_shares_diluted=get_val(income_df, "Diluted Average Shares"),
                     # Balance Sheet
                     total_assets=get_val(balance_df, "Total Assets"),
                     total_liabilities=get_val(balance_df, "Total Liabilities Net Minority Interest", "Total Liabilities"),

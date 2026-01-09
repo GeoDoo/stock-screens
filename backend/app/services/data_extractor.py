@@ -125,9 +125,44 @@ class DataExtractor:
         """Free cash flow from cash flow statement."""
         return self._get_latest(self.cash_flow, "freeCashFlow")
 
+    def diluted_shares_outstanding(self) -> Optional[float]:
+        """
+        Fully Diluted Shares Outstanding (FDSO) from income statement.
+        
+        FDSO includes the dilutive effect of:
+        - Stock options
+        - RSUs (Restricted Stock Units)
+        - Convertible securities
+        
+        Returns None if diluted shares not available.
+        """
+        return self._get_latest(self.income_statement, "weightedAverageShsOutDil")
+    
     def shares_outstanding(self) -> Optional[float]:
-        """Weighted average shares outstanding from income statement."""
-        return self._get_latest(self.income_statement, "weightedAverageShsOut")
+        """
+        Shares outstanding for valuation - prefers diluted over basic.
+        
+        Priority:
+        1. Diluted shares from income statement (FDSO)
+        2. Basic shares from income statement
+        3. Shares from company profile (last resort)
+        
+        Professional DCF always uses diluted shares to account for
+        future dilution from options, RSUs, and convertibles.
+        Using basic shares OVERVALUES the company.
+        """
+        # First try: diluted shares (preferred for DCF)
+        diluted = self._get_latest(self.income_statement, "weightedAverageShsOutDil")
+        if diluted is not None:
+            return diluted
+        
+        # Fallback: basic shares from income statement
+        basic = self._get_latest(self.income_statement, "weightedAverageShsOut")
+        if basic is not None:
+            return basic
+        
+        # Last resort: profile shares (less accurate, but better than nothing)
+        return self.profile.get("sharesOutstanding")
 
     def market_risk_premium(self) -> float:
         """
