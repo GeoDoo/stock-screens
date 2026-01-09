@@ -123,6 +123,7 @@ class YahooProvider(StockDataProvider):
                     cash_and_equivalents=get_val(balance_df, "Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"),
                     current_assets=get_val(balance_df, "Current Assets"),
                     current_liabilities=get_val(balance_df, "Current Liabilities"),
+                    short_term_debt=get_val(balance_df, "Current Debt", "Short Long Term Debt", "Current Debt And Capital Lease Obligation"),
                     # Cash Flow
                     operating_cash_flow=get_val(cash_df, "Operating Cash Flow", "Cash Flow From Continuing Operating Activities"),
                     capital_expenditure=get_val(cash_df, "Capital Expenditure"),

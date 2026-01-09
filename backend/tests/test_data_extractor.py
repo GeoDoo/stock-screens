@@ -247,3 +247,181 @@ class TestDataExtractor:
         extractor = DataExtractor(data)
         assert extractor.latest_working_capital() is None
 
+
+class TestNonCashWorkingCapital:
+    """
+    Regression tests for Non-Cash Working Capital calculation.
+    
+    Bug: DataExtractor used standard accounting Working Capital:
+        WC = Current Assets - Current Liabilities
+    
+    Professional DCF requires Non-Cash Working Capital:
+        NCWC = (Current Assets - Cash) - (Current Liabilities - Short-term Debt)
+    
+    Why: Cash is already added back at end of DCF (EV → Equity Value).
+         Short-term debt is financing, not operating.
+         Including them double-counts and distorts FCF projections.
+    """
+    
+    def test_non_cash_working_capital_excludes_cash(self):
+        """
+        NCWC should exclude cash from current assets.
+        
+        Cash is added back separately when converting EV to Equity Value.
+        Including it in WC double-counts it.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{
+                "totalCurrentAssets": 150000000000,  # 150B
+                "totalCurrentLiabilities": 100000000000,  # 100B
+                "cashAndCashEquivalents": 50000000000,  # 50B cash
+                "shortTermDebt": 0,  # No short-term debt
+            }],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # OLD (wrong): 150B - 100B = 50B
+        # NEW (correct): (150B - 50B) - (100B - 0) = 100B - 100B = 0B
+        
+        ncwc = extractor.latest_working_capital()
+        assert ncwc == 0, (
+            f"NCWC should be 0 (cash excluded), got {ncwc}. "
+            "Cash must be excluded from working capital in DCF."
+        )
+    
+    def test_non_cash_working_capital_excludes_short_term_debt(self):
+        """
+        NCWC should exclude short-term debt from current liabilities.
+        
+        Short-term debt is a financing activity, not operating.
+        It's already in total debt which affects EV calculation.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{
+                "totalCurrentAssets": 100000000000,  # 100B
+                "totalCurrentLiabilities": 80000000000,  # 80B
+                "cashAndCashEquivalents": 0,  # No cash
+                "shortTermDebt": 30000000000,  # 30B short-term debt
+            }],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # OLD (wrong): 100B - 80B = 20B
+        # NEW (correct): (100B - 0) - (80B - 30B) = 100B - 50B = 50B
+        
+        ncwc = extractor.latest_working_capital()
+        assert ncwc == 50000000000, (
+            f"NCWC should be 50B (short-term debt excluded), got {ncwc}. "
+            "Short-term debt must be excluded from working capital in DCF."
+        )
+    
+    def test_non_cash_working_capital_full_calculation(self):
+        """
+        Full NCWC calculation with both cash and short-term debt.
+        
+        Formula: (Current Assets - Cash) - (Current Liabilities - Short-term Debt)
+        """
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{
+                "totalCurrentAssets": 200000000000,  # 200B
+                "totalCurrentLiabilities": 150000000000,  # 150B
+                "cashAndCashEquivalents": 60000000000,  # 60B cash
+                "shortTermDebt": 40000000000,  # 40B short-term debt
+            }],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # OLD (wrong): 200B - 150B = 50B
+        # NEW (correct): (200B - 60B) - (150B - 40B) = 140B - 110B = 30B
+        
+        ncwc = extractor.latest_working_capital()
+        assert ncwc == 30000000000, (
+            f"NCWC should be 30B, got {ncwc}. "
+            "NCWC = (Current Assets - Cash) - (Current Liabilities - Short-term Debt)"
+        )
+    
+    def test_non_cash_working_capital_handles_missing_cash(self):
+        """
+        When cash data is missing, treat as 0 (conservative).
+        """
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{
+                "totalCurrentAssets": 100000000000,
+                "totalCurrentLiabilities": 80000000000,
+                # No cashAndCashEquivalents field
+                "shortTermDebt": 10000000000,
+            }],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # (100B - 0) - (80B - 10B) = 100B - 70B = 30B
+        ncwc = extractor.latest_working_capital()
+        assert ncwc == 30000000000
+    
+    def test_non_cash_working_capital_handles_missing_short_term_debt(self):
+        """
+        When short-term debt data is missing, treat as 0 (conservative).
+        """
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{
+                "totalCurrentAssets": 100000000000,
+                "totalCurrentLiabilities": 80000000000,
+                "cashAndCashEquivalents": 20000000000,
+                # No shortTermDebt field
+            }],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # (100B - 20B) - (80B - 0) = 80B - 80B = 0B
+        ncwc = extractor.latest_working_capital()
+        assert ncwc == 0
+    
+    def test_working_capital_history_uses_non_cash(self):
+        """
+        Historical working capital should also use NCWC formula.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [
+                {  # Year 2 (most recent)
+                    "totalCurrentAssets": 200000000000,
+                    "totalCurrentLiabilities": 150000000000,
+                    "cashAndCashEquivalents": 50000000000,
+                    "shortTermDebt": 20000000000,
+                },
+                {  # Year 1 (older)
+                    "totalCurrentAssets": 180000000000,
+                    "totalCurrentLiabilities": 140000000000,
+                    "cashAndCashEquivalents": 40000000000,
+                    "shortTermDebt": 15000000000,
+                },
+            ],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # History is oldest first
+        # Year 1: (180B - 40B) - (140B - 15B) = 140B - 125B = 15B
+        # Year 2: (200B - 50B) - (150B - 20B) = 150B - 130B = 20B
+        
+        history = extractor.working_capital_history()
+        assert len(history) == 2
+        assert history[0] == 15000000000, "Year 1 NCWC should be 15B"
+        assert history[1] == 20000000000, "Year 2 NCWC should be 20B"
+

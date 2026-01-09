@@ -52,12 +52,31 @@ class DataExtractor:
         return self._get_latest(self.income_statement, "revenue")
     
     def latest_working_capital(self) -> Optional[float]:
-        """Latest working capital (current assets - current liabilities)."""
+        """
+        Latest Non-Cash Working Capital for DCF analysis.
+        
+        Formula: (Current Assets - Cash) - (Current Liabilities - Short-term Debt)
+        
+        Why Non-Cash:
+        - Cash is added back separately (EV → Equity Value)
+        - Short-term debt is financing, not operating
+        - Including them double-counts and distorts FCF projections
+        """
         current_assets = self._get_latest(self.balance_sheet, "totalCurrentAssets")
         current_liabilities = self._get_latest(self.balance_sheet, "totalCurrentLiabilities")
         if current_assets is None or current_liabilities is None:
             return None
-        return current_assets - current_liabilities
+        
+        # Exclude cash from current assets (treat missing as 0)
+        cash = self._get_latest(self.balance_sheet, "cashAndCashEquivalents") or 0
+        
+        # Exclude short-term debt from current liabilities (treat missing as 0)
+        short_term_debt = self._get_latest(self.balance_sheet, "shortTermDebt") or 0
+        
+        non_cash_current_assets = current_assets - cash
+        operating_current_liabilities = current_liabilities - short_term_debt
+        
+        return non_cash_current_assets - operating_current_liabilities
 
     def tax_rate(self) -> Optional[float]:
         """
@@ -142,8 +161,11 @@ class DataExtractor:
 
     def working_capital_history(self) -> List[float]:
         """
-        Historical working capital (oldest first).
-        WC = Current Assets - Current Liabilities
+        Historical Non-Cash Working Capital (oldest first).
+        
+        NCWC = (Current Assets - Cash) - (Current Liabilities - Short-term Debt)
+        
+        Uses same Non-Cash formula as latest_working_capital() for consistency.
         """
         if not self.balance_sheet:
             return []
@@ -152,6 +174,14 @@ class DataExtractor:
         for bs in reversed(self.balance_sheet):
             current_assets = bs.get("totalCurrentAssets", 0) or 0
             current_liabilities = bs.get("totalCurrentLiabilities", 0) or 0
-            wc_values.append(current_assets - current_liabilities)
+            cash = bs.get("cashAndCashEquivalents", 0) or 0
+            short_term_debt = bs.get("shortTermDebt", 0) or 0
+            
+            # Non-Cash Working Capital
+            non_cash_current_assets = current_assets - cash
+            operating_current_liabilities = current_liabilities - short_term_debt
+            ncwc = non_cash_current_assets - operating_current_liabilities
+            
+            wc_values.append(ncwc)
         return wc_values
 

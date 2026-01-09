@@ -41,6 +41,7 @@ class FinancialStatement:
     cash_and_equivalents: Optional[float] = None
     current_assets: Optional[float] = None
     current_liabilities: Optional[float] = None
+    short_term_debt: Optional[float] = None  # For Non-Cash Working Capital
     
     # Cash Flow
     operating_cash_flow: Optional[float] = None
