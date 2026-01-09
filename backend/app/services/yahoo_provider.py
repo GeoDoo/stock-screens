@@ -213,6 +213,16 @@ class YahooProvider(StockDataProvider):
         ticker = yf.Ticker(symbol.upper())
         return self._get_ttm_financials(ticker)
     
+    async def get_ttm_financials(self, symbol: str) -> Optional[FinancialStatement]:
+        """
+        Async-safe method to get TTM financials for a symbol.
+        
+        Runs the blocking yfinance call in a thread pool executor
+        to avoid blocking the event loop.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_ttm_financials_sync, symbol)
+    
     async def get_treasury_rate(self) -> float:
         """
         Fetch current 10-year treasury rate.
@@ -232,6 +242,28 @@ class YahooProvider(StockDataProvider):
         # ^TNX price is the yield in percentage points (e.g., 4.5 for 4.5%)
         rate = info.get("regularMarketPrice") or info.get("previousClose") or 4.5
         return rate / 100  # Convert to decimal
+    
+    async def get_dividends(self, symbol: str) -> List[dict]:
+        """
+        Async-safe method to get dividend history for a symbol.
+        
+        Returns list of {"date": str, "amount": float} dicts.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._get_dividends_sync, symbol)
+    
+    def _get_dividends_sync(self, symbol: str) -> List[dict]:
+        """Synchronous dividend fetch."""
+        ticker = yf.Ticker(symbol.upper())
+        dividends_series = ticker.dividends
+        
+        if dividends_series is None or dividends_series.empty:
+            return []
+        
+        return [
+            {"date": date.strftime("%Y-%m-%d"), "amount": float(amount)}
+            for date, amount in dividends_series.items()
+        ]
     
     @property
     def supports_fundamentals(self) -> bool:
