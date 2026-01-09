@@ -276,3 +276,103 @@ class TestValuationService:
         assert len(drivers) > 0
         assert "input" in drivers[0]
         assert "impact_percent" in drivers[0]
+
+
+class TestExitMultipleSanityCheck:
+    """
+    Regression tests for Exit Multiple sanity check.
+    
+    Bug: The DCF only uses Gordon Growth Model for terminal value.
+    Professional valuation cross-checks with Exit Multiples.
+    
+    If implied EV/EBITDA > 25-30x for a mature company, the terminal
+    growth assumption is likely too aggressive.
+    """
+    
+    @pytest.fixture
+    def mock_client(self):
+        """Create a mock StockDataClient."""
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=create_mock_stock_data())
+        client.get_treasury_rate = AsyncMock(return_value=0.045)
+        return client
+    
+    @pytest.mark.asyncio
+    async def test_valuation_includes_implied_exit_multiple(self, mock_client):
+        """
+        Valuation should include implied EV/EBITDA exit multiple.
+        
+        This is the terminal value divided by terminal year EBITDA,
+        allowing comparison with market multiples as a sanity check.
+        """
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock("AAPL")
+        
+        assert "terminal_value_check" in result, (
+            "Valuation must include terminal_value_check for exit multiple sanity"
+        )
+        check = result["terminal_value_check"]
+        assert "implied_exit_multiple" in check, (
+            "terminal_value_check must include implied_exit_multiple (EV/EBITDA)"
+        )
+        assert check["implied_exit_multiple"] > 0, (
+            "Implied exit multiple must be positive"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_implied_exit_multiple_is_reasonable(self, mock_client):
+        """
+        With reasonable assumptions, implied exit multiple should be realistic.
+        
+        For mature companies, EV/EBITDA typically ranges 8-20x.
+        """
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock(
+            "AAPL",
+            terminal_growth_rate=0.03,  # Reasonable 3% terminal growth
+        )
+        
+        multiple = result["terminal_value_check"]["implied_exit_multiple"]
+        assert 5 < multiple < 30, (
+            f"With 3% terminal growth, implied multiple ({multiple:.1f}x) "
+            "should be in reasonable range for mature company"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_high_terminal_growth_triggers_warning(self, mock_client):
+        """
+        Aggressive terminal growth should trigger a warning about high implied multiple.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Use aggressive terminal growth to inflate multiple
+        result = await service.value_stock(
+            "AAPL",
+            terminal_growth_rate=0.045,  # 4.5% - aggressive for mature company
+            discount_rate_override=0.08,  # Low WACC to amplify effect
+        )
+        
+        check = result["terminal_value_check"]
+        # With aggressive growth and low discount rate, multiple will be high
+        if check["implied_exit_multiple"] > 25:
+            assert "warning" in check, (
+                f"High implied multiple ({check['implied_exit_multiple']:.1f}x) "
+                "should trigger a warning"
+            )
+    
+    @pytest.mark.asyncio
+    async def test_terminal_value_check_includes_terminal_ebitda(self, mock_client):
+        """
+        Should expose terminal year EBITDA for transparency.
+        """
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock("AAPL")
+        
+        check = result["terminal_value_check"]
+        assert "terminal_ebitda" in check, (
+            "terminal_value_check must include terminal_ebitda"
+        )
+        assert check["terminal_ebitda"] > 0
