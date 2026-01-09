@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code docstrings.
 > 
-> Last updated: 2026-01-09 15:01
+> Last updated: 2026-01-09 15:04
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
