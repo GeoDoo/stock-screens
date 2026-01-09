@@ -2,6 +2,131 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 
+# Maximum beta cap for edge cases (insolvent companies, etc.)
+MAX_BETA = 5.0
+
+
+def unlever_beta(
+    levered_beta: float,
+    debt: float,
+    equity: float,
+    tax_rate: float,
+) -> float:
+    """
+    Unlever beta to remove the effect of financial leverage.
+    
+    Uses the Hamada equation:
+        Unlevered Beta = Levered Beta / (1 + (1 - T) × (D/E))
+    
+    This gives the "pure" business risk beta without leverage amplification.
+    
+    Args:
+        levered_beta: Raw beta from market data (includes leverage effect)
+        debt: Total debt
+        equity: Market cap (equity value)
+        tax_rate: Effective tax rate (0-1)
+    
+    Returns:
+        Unlevered (asset) beta
+    """
+    if equity <= 0:
+        # Edge case: zero or negative equity means company is insolvent
+        # Return a high beta but cap it for safety
+        return min(levered_beta, MAX_BETA)
+    
+    if debt <= 0:
+        # No debt means no leverage effect
+        return levered_beta
+    
+    tax_rate = _clamp(tax_rate, 0.0, 1.0)
+    debt_equity_ratio = debt / equity
+    leverage_factor = 1 + (1 - tax_rate) * debt_equity_ratio
+    
+    return levered_beta / leverage_factor
+
+
+def relever_beta(
+    unlevered_beta: float,
+    debt: float,
+    equity: float,
+    tax_rate: float,
+) -> float:
+    """
+    Relever beta to add the effect of financial leverage.
+    
+    Uses the Hamada equation:
+        Relevered Beta = Unlevered Beta × (1 + (1 - T) × (D/E))
+    
+    This adjusts the pure business risk beta for a specific capital structure.
+    
+    Args:
+        unlevered_beta: Asset beta (pure business risk)
+        debt: Total debt of target company
+        equity: Market cap of target company
+        tax_rate: Effective tax rate (0-1)
+    
+    Returns:
+        Relevered (equity) beta, capped at MAX_BETA
+    """
+    if equity <= 0:
+        # Edge case: zero or negative equity means company is insolvent
+        # Return maximum beta
+        return MAX_BETA
+    
+    if debt <= 0:
+        # No debt means no leverage effect
+        return unlevered_beta
+    
+    tax_rate = _clamp(tax_rate, 0.0, 1.0)
+    debt_equity_ratio = debt / equity
+    leverage_factor = 1 + (1 - tax_rate) * debt_equity_ratio
+    
+    relevered = unlevered_beta * leverage_factor
+    
+    # Cap at MAX_BETA for sanity
+    return min(relevered, MAX_BETA)
+
+
+def calculate_adjusted_beta(
+    peer_beta: float,
+    peer_debt: float,
+    peer_equity: float,
+    target_debt: float,
+    target_equity: float,
+    tax_rate: float,
+) -> float:
+    """
+    Adjust peer/industry beta for target company's capital structure.
+    
+    This is the professional approach when:
+    1. Company's own beta is unreliable or unavailable
+    2. Using industry average beta
+    3. Analyzing a private company using public comparables
+    
+    Process:
+    1. Unlever peer beta to get pure business risk
+    2. Relever for target's capital structure
+    
+    Args:
+        peer_beta: Beta from peer/industry (levered)
+        peer_debt: Peer's total debt
+        peer_equity: Peer's market cap
+        target_debt: Target company's total debt
+        target_equity: Target company's market cap
+        tax_rate: Effective tax rate (assumes same for both)
+    
+    Returns:
+        Beta adjusted for target's leverage
+    """
+    # Step 1: Unlever peer beta
+    unlevered = unlever_beta(peer_beta, peer_debt, peer_equity, tax_rate)
+    
+    # Step 2: Relever for target's capital structure
+    adjusted = relever_beta(unlevered, target_debt, target_equity, tax_rate)
+    
+    return adjusted
+
+
 def validate_wacc_inputs(
     tax_rate: float,
     total_debt: float,
