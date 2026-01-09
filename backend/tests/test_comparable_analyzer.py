@@ -343,6 +343,10 @@ class TestDynamicIndustryPeers:
         mock_client = MagicMock()
         analyzer = ComparableAnalyzer(mock_client, provider="fmp")
         
+        # Get the expected industry peers using the canonical name
+        expected_peers = analyzer.INDUSTRY_PEERS.get("Software—Infrastructure", [])
+        assert len(expected_peers) > 0, "Test setup: Software—Infrastructure should have peers"
+        
         # Test hyphen variation gets matched to em-dash entry
         peers = analyzer._get_peers(
             symbol="MSFT",
@@ -350,9 +354,15 @@ class TestDynamicIndustryPeers:
             industry="Software-Infrastructure",  # Regular hyphen, not em-dash
         )
         
-        # Should still get industry peers (normalized), not fall back to sector
-        # Either through normalization or by having both variants
-        assert len(peers) > 0
+        # Should get the SAME industry peers as the canonical name, not sector fallback
+        # Verify by checking that we got industry-specific peers, not generic sector peers
+        sector_peers = analyzer.SECTOR_PEERS.get("Technology", [])
+        
+        # The returned peers should match industry peers (minus MSFT), not sector peers
+        assert set(peers) == set(p for p in expected_peers if p != "MSFT"), (
+            f"Hyphen variant 'Software-Infrastructure' should return same peers as "
+            f"em-dash variant 'Software—Infrastructure'. Got {peers}, expected {expected_peers}"
+        )
     
     def test_basic_materials_industries_covered(self):
         """

@@ -263,8 +263,16 @@ class ComparableAnalyzer:
         """
         symbol_upper = symbol.upper()
         
+        # Normalize industry name: convert regular hyphens to em-dashes
+        # Different providers use different dash characters
+        normalized_industry = industry.replace("-", "—") if industry else ""
+        
         # Try industry-level peers first (more precise)
-        industry_peers = self.INDUSTRY_PEERS.get(industry, [])
+        # Check both original and normalized names
+        industry_peers = (
+            self.INDUSTRY_PEERS.get(industry, []) or
+            self.INDUSTRY_PEERS.get(normalized_industry, [])
+        )
         if industry_peers:
             return [p for p in industry_peers if p != symbol_upper]
         
@@ -279,7 +287,10 @@ class ComparableAnalyzer:
         Returns:
             "industry" or "sector"
         """
-        if industry in self.INDUSTRY_PEERS:
+        # Normalize industry name: convert regular hyphens to em-dashes
+        normalized_industry = industry.replace("-", "—") if industry else ""
+        
+        if industry in self.INDUSTRY_PEERS or normalized_industry in self.INDUSTRY_PEERS:
             return "industry"
         return "sector"
     
