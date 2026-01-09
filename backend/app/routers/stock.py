@@ -488,6 +488,7 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
             for s in result.scenarios
         ],
         "probability_weighted_value": result.probability_weighted_value,
+        "probabilities_normalized": result.probabilities_normalized,
         "upside_range": {
             "min_percent": result.upside_range[0],
             "max_percent": result.upside_range[1],

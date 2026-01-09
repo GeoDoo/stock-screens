@@ -113,17 +113,22 @@ class TestScenarioCalculator:
         expected = sum(s.intrinsic_value * s.probability for s in result.scenarios)
         assert abs(result.probability_weighted_value - expected) < 0.01
 
-    def test_no_weighted_value_when_probabilities_dont_sum_to_one(self, calculator):
-        """Should not calculate weighted value when probabilities don't sum to 1."""
+    def test_normalizes_when_probabilities_dont_sum_to_one(self, calculator):
+        """Should normalize probabilities and still compute weighted value."""
         scenarios = [
             Scenario(name="A", revenue_growth=0.05, operating_margin=0.20, terminal_growth=0.03, probability=0.3),
             Scenario(name="B", revenue_growth=0.10, operating_margin=0.20, terminal_growth=0.03, probability=0.3),
-            # Missing 40%
+            # Sum = 0.6, not 1.0 - should normalize
         ]
         
         result = calculator.run_analysis(scenarios)
         
-        assert result.probability_weighted_value is None
+        # Now normalizes instead of returning None
+        assert result.probability_weighted_value is not None
+        assert result.probabilities_normalized is True
+        # Each should be normalized to 0.5
+        assert result.scenarios[0].probability == pytest.approx(0.5, rel=0.01)
+        assert result.scenarios[1].probability == pytest.approx(0.5, rel=0.01)
 
     def test_upside_range_calculated(self, calculator):
         """Should calculate upside range vs current price."""
@@ -387,3 +392,125 @@ class TestDiscountRateTerminalGrowthGuard:
         # Should reject because custom discount_rate == terminal_growth
         with pytest.raises(ValueError, match="discount rate.*greater than.*terminal growth"):
             calculator.run_scenario(scenario)
+
+
+class TestProbabilityNormalization:
+    """
+    Tests for automatic probability normalization.
+    
+    Bug: If user enters Bear(0.2), Base(0.5), Bull(0.2) = 0.9 total,
+    the weighted value silently becomes None instead of normalizing.
+    
+    Solution: Automatically normalize probabilities to sum to 1.0 and
+    indicate when normalization was applied.
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return ScenarioCalculator(
+            historical_revenue=[100, 110, 121],
+            historical_ebit=[20, 22, 24.2],
+            historical_da=[5, 5.5, 6],
+            historical_capex=[-8, -8.8, -9.6],
+            historical_working_capital=[10, 11, 12.1],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=50,
+            cash=100,
+            base_wacc=0.10,
+            projection_years=5,
+            current_price=50,
+        )
+    
+    def test_normalizes_probabilities_when_sum_not_one(self, calculator):
+        """
+        When probabilities don't sum to 1.0, normalize them automatically.
+        """
+        scenarios = [
+            Scenario(name="Bear", revenue_growth=0.02, operating_margin=0.15, 
+                     terminal_growth=0.02, probability=0.2),
+            Scenario(name="Base", revenue_growth=0.06, operating_margin=0.20, 
+                     terminal_growth=0.025, probability=0.5),
+            Scenario(name="Bull", revenue_growth=0.10, operating_margin=0.25, 
+                     terminal_growth=0.03, probability=0.2),
+        ]
+        # Sum = 0.9, not 1.0
+        
+        result = calculator.run_analysis(scenarios)
+        
+        # Should still compute weighted value (not None)
+        assert result.probability_weighted_value is not None, (
+            "Weighted value should be computed after normalizing probabilities"
+        )
+    
+    def test_indicates_normalization_was_applied(self, calculator):
+        """
+        When probabilities are normalized, flag should indicate this.
+        """
+        scenarios = [
+            Scenario(name="Bear", revenue_growth=0.02, operating_margin=0.15, 
+                     terminal_growth=0.02, probability=0.2),
+            Scenario(name="Base", revenue_growth=0.06, operating_margin=0.20, 
+                     terminal_growth=0.025, probability=0.5),
+            Scenario(name="Bull", revenue_growth=0.10, operating_margin=0.25, 
+                     terminal_growth=0.03, probability=0.2),
+        ]
+        
+        result = calculator.run_analysis(scenarios)
+        
+        assert result.probabilities_normalized is True, (
+            "Should indicate that probabilities were normalized"
+        )
+    
+    def test_no_normalization_when_sum_is_one(self, calculator):
+        """
+        When probabilities already sum to 1.0, don't flag as normalized.
+        """
+        scenarios = [
+            Scenario(name="Bear", revenue_growth=0.02, operating_margin=0.15, 
+                     terminal_growth=0.02, probability=0.25),
+            Scenario(name="Base", revenue_growth=0.06, operating_margin=0.20, 
+                     terminal_growth=0.025, probability=0.50),
+            Scenario(name="Bull", revenue_growth=0.10, operating_margin=0.25, 
+                     terminal_growth=0.03, probability=0.25),
+        ]
+        # Sum = 1.0 exactly
+        
+        result = calculator.run_analysis(scenarios)
+        
+        assert result.probabilities_normalized is False
+        assert result.probability_weighted_value is not None
+    
+    def test_normalized_probabilities_in_results(self, calculator):
+        """
+        ScenarioResult should contain the normalized probability values.
+        """
+        scenarios = [
+            Scenario(name="Bear", revenue_growth=0.02, operating_margin=0.15, 
+                     terminal_growth=0.02, probability=0.1),  # 10%
+            Scenario(name="Bull", revenue_growth=0.10, operating_margin=0.25, 
+                     terminal_growth=0.03, probability=0.1),  # 10%
+        ]
+        # Sum = 0.2, should normalize to 0.5 each
+        
+        result = calculator.run_analysis(scenarios)
+        
+        # After normalization, each should be 0.5
+        assert result.scenarios[0].probability == pytest.approx(0.5, rel=0.01)
+        assert result.scenarios[1].probability == pytest.approx(0.5, rel=0.01)
+    
+    def test_zero_total_probability_returns_none(self, calculator):
+        """
+        If all probabilities are 0, can't normalize - return None for weighted value.
+        """
+        scenarios = [
+            Scenario(name="Bear", revenue_growth=0.02, operating_margin=0.15, 
+                     terminal_growth=0.02, probability=0.0),
+            Scenario(name="Bull", revenue_growth=0.10, operating_margin=0.25, 
+                     terminal_growth=0.03, probability=0.0),
+        ]
+        
+        result = calculator.run_analysis(scenarios)
+        
+        assert result.probability_weighted_value is None
+        assert result.probabilities_normalized is False
