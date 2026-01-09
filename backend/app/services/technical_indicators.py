@@ -43,10 +43,18 @@ class TechnicalAnalysisResult:
     rsi_14: List[IndicatorValue]
     macd: List[MACDValue]
     
+    # Volume-weighted indicators (institutional-grade)
+    vwap: List[IndicatorValue]  # Volume Weighted Average Price
+    
     # Summary signals
     trend: str  # "bullish", "bearish", "neutral"
     rsi_signal: str  # "overbought", "oversold", "neutral"
     macd_signal: str  # "bullish", "bearish", "neutral"
+    
+    # Fields with defaults must come last
+    average_volume: Optional[float] = None  # 20-day average
+    relative_volume: Optional[float] = None  # Current vs average (multiplier)
+    volume_confirmation: str = "neutral"  # "confirmed", "weak", "neutral"
 
 
 class TechnicalIndicators:
@@ -251,6 +259,120 @@ class TechnicalIndicators:
             return "bullish"
         elif curr_macd < curr_signal:
             return "bearish"
+        else:
+            return "neutral"
+    
+    @staticmethod
+    def vwap(
+        closes: List[float],
+        highs: List[float],
+        lows: List[float],
+        volumes: List[float],
+    ) -> List[Optional[float]]:
+        """
+        Volume Weighted Average Price (VWAP).
+        
+        VWAP = Σ(Typical Price × Volume) / Σ(Volume)
+        Where Typical Price = (High + Low + Close) / 3
+        
+        Returns cumulative VWAP for each bar.
+        Professional traders use VWAP to assess execution quality
+        and identify support/resistance levels.
+        """
+        if not closes or not highs or not lows or not volumes:
+            return []
+        
+        if len(closes) != len(highs) or len(closes) != len(lows) or len(closes) != len(volumes):
+            return []
+        
+        result = []
+        cumulative_tp_vol = 0.0
+        cumulative_vol = 0.0
+        
+        for close, high, low, volume in zip(closes, highs, lows, volumes):
+            # Typical price = (High + Low + Close) / 3
+            typical_price = (high + low + close) / 3
+            
+            cumulative_tp_vol += typical_price * volume
+            cumulative_vol += volume
+            
+            if cumulative_vol > 0:
+                result.append(cumulative_tp_vol / cumulative_vol)
+            else:
+                result.append(None)
+        
+        return result
+    
+    @staticmethod
+    def average_volume(volumes: List[float], period: int = 20) -> Optional[float]:
+        """
+        Calculate average volume over a period.
+        
+        Defaults to 20-day average (roughly 1 month of trading).
+        """
+        if not volumes or period <= 0:
+            return None
+        
+        if len(volumes) < period:
+            return sum(volumes) / len(volumes) if volumes else None
+        
+        return sum(volumes[-period:]) / period
+    
+    @staticmethod
+    def relative_volume(volumes: List[float], period: int = 20) -> Optional[float]:
+        """
+        Calculate relative volume (current vs average).
+        
+        Returns a multiplier:
+        - 1.0 = average volume
+        - 2.0 = 2x average volume
+        - 0.5 = half average volume
+        
+        High relative volume confirms price movements.
+        Low relative volume suggests "fake-outs".
+        """
+        if not volumes or len(volumes) < 2:
+            return None
+        
+        current_volume = volumes[-1]
+        
+        # Use all but the last bar for average
+        avg = TechnicalIndicators.average_volume(volumes[:-1], period)
+        
+        if avg is None or avg <= 0:
+            return None
+        
+        return current_volume / avg
+    
+    @staticmethod
+    def volume_confirms_trend(
+        volumes: List[float],
+        trend: str,
+        period: int = 20,
+    ) -> str:
+        """
+        Check if volume confirms the trend signal.
+        
+        Returns:
+        - "confirmed": High volume (>1.2x average) supports the signal
+        - "weak": Low volume (<0.8x average) suggests unreliable signal
+        - "neutral": Average volume or neutral trend
+        
+        Professional insight: A breakout on high volume is more likely
+        to continue. A breakout on low volume is often a "fake-out".
+        """
+        if trend == "neutral":
+            return "neutral"
+        
+        rel_vol = TechnicalIndicators.relative_volume(volumes, period)
+        
+        if rel_vol is None:
+            return "neutral"
+        
+        if rel_vol >= 1.2:
+            return "confirmed"
+        elif rel_vol <= 0.8:
+            return "weak"
         else:
             return "neutral"
 
