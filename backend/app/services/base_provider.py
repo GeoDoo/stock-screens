@@ -52,6 +52,11 @@ class FinancialStatement:
     retained_earnings: Optional[float] = None  # For Altman Z-Score
     net_receivables: Optional[float] = None  # For Beneish M-Score
     property_plant_equipment: Optional[float] = None  # For Beneish M-Score
+    # Equity Bridge components
+    minority_interest: Optional[float] = None  # Non-controlling interest
+    preferred_stock: Optional[float] = None  # Preferred equity
+    deferred_tax_assets: Optional[float] = None  # NOLs/tax shields
+    pension_liability: Optional[float] = None  # Underfunded pension obligations
     
     # Cash Flow
     operating_cash_flow: Optional[float] = None

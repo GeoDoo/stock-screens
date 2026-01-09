@@ -253,3 +253,221 @@ class TestDCFCalculator:
         # PV = 100 / (1.10)^0.5 ≈ 95.35 (vs 90.91 with end-of-year)
         # This is reflected in higher enterprise value
         assert result["enterprise_value"] > 0
+
+
+class TestEquityBridgeImprovements:
+    """
+    Tests for institutional-grade Equity Bridge.
+    
+    From Gemini review: The equity bridge must account for:
+    - Non-Controlling Interests (Minority Interest): Subtract
+    - Preferred Stock: Subtract
+    - Net Operating Losses (NOLs/Tax Shields): Add
+    - Underfunded Pension Obligations: Subtract
+    """
+    
+    def test_minority_interest_reduces_equity(self):
+        """
+        Non-controlling interest (minority interest) should be subtracted.
+        
+        If a company consolidates a subsidiary it doesn't 100% own,
+        the Enterprise Value includes the whole sub, but Equity Value
+        must subtract the portion owned by others.
+        """
+        # Without minority interest
+        calc_base = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+        )
+        
+        # With minority interest
+        calc_with_mi = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+            minority_interest=100,  # $100 owed to minority shareholders
+        )
+        
+        result_base = calc_base.calculate()
+        result_with_mi = calc_with_mi.calculate()
+        
+        # Minority interest should reduce equity value by $100
+        diff = result_base["equity_value"] - result_with_mi["equity_value"]
+        assert abs(diff - 100) < 0.01, f"Expected $100 reduction, got {diff}"
+        
+        # Per-share impact
+        per_share_diff = result_base["intrinsic_value_per_share"] - result_with_mi["intrinsic_value_per_share"]
+        assert abs(per_share_diff - 10) < 0.01, f"Expected $10/share reduction, got {per_share_diff}"
+    
+    def test_preferred_stock_reduces_equity(self):
+        """
+        Preferred stock sits above common equity and must be subtracted.
+        """
+        calc_base = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+        )
+        
+        calc_with_pfd = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+            preferred_stock=50,  # $50 preferred equity
+        )
+        
+        result_base = calc_base.calculate()
+        result_with_pfd = calc_with_pfd.calculate()
+        
+        diff = result_base["equity_value"] - result_with_pfd["equity_value"]
+        assert abs(diff - 50) < 0.01
+    
+    def test_nols_add_to_equity(self):
+        """
+        Net Operating Losses (tax shields) represent future cash savings
+        and should be ADDED to equity value.
+        """
+        calc_base = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+        )
+        
+        calc_with_nol = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+            deferred_tax_assets=75,  # $75 in NOLs/tax shields
+        )
+        
+        result_base = calc_base.calculate()
+        result_with_nol = calc_with_nol.calculate()
+        
+        diff = result_with_nol["equity_value"] - result_base["equity_value"]
+        assert abs(diff - 75) < 0.01
+    
+    def test_pension_deficit_reduces_equity(self):
+        """
+        Underfunded pension obligations are debt-like and should be subtracted.
+        """
+        calc_base = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+        )
+        
+        calc_with_pension = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+            pension_deficit=200,  # $200 underfunded
+        )
+        
+        result_base = calc_base.calculate()
+        result_with_pension = calc_with_pension.calculate()
+        
+        diff = result_base["equity_value"] - result_with_pension["equity_value"]
+        assert abs(diff - 200) < 0.01
+    
+    def test_full_equity_bridge_combined(self):
+        """
+        Test all equity bridge components combined.
+        
+        Equity = EV - Net Debt - Minority Interest - Preferred + NOLs - Pension
+        """
+        calc = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+            total_debt=500,
+            cash=200,
+            minority_interest=100,
+            preferred_stock=50,
+            deferred_tax_assets=75,
+            pension_deficit=25,
+        )
+        
+        result = calc.calculate()
+        
+        # Verify the bridge is in the result
+        assert "equity_bridge" in result
+        bridge = result["equity_bridge"]
+        
+        assert bridge["net_debt"] == 300  # 500 - 200
+        assert bridge["minority_interest"] == 100
+        assert bridge["preferred_stock"] == 50
+        assert bridge["deferred_tax_assets"] == 75
+        assert bridge["pension_deficit"] == 25
+        
+        # Total adjustment: -300 (net debt) - 100 (MI) - 50 (pfd) + 75 (NOL) - 25 (pension) = -400
+        expected_equity = result["enterprise_value"] - 400
+        assert abs(result["equity_value"] - expected_equity) < 0.01
+    
+    def test_equity_bridge_defaults_to_zero(self):
+        """
+        New equity bridge fields should default to 0 if not provided.
+        """
+        calc = DCFCalculator(
+            current_fcf=100,
+            growth_rate=0.10,
+            discount_rate=0.10,
+            terminal_growth_rate=0.03,
+            projection_years=5,
+            shares_outstanding=10,
+        )
+        
+        result = calc.calculate()
+        
+        # Should still work with legacy usage
+        assert result["intrinsic_value_per_share"] > 0
+        
+        # Bridge should show zeros for new fields
+        bridge = result["equity_bridge"]
+        assert bridge["minority_interest"] == 0
+        assert bridge["preferred_stock"] == 0
+        assert bridge["deferred_tax_assets"] == 0
+        assert bridge["pension_deficit"] == 0

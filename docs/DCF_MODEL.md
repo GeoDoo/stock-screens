@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code docstrings.
 > 
-> Last updated: 2026-01-09 16:37
+> Last updated: 2026-01-09 16:56
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -17,6 +17,14 @@ Discounted Cash Flow calculator with optional mid-year discounting.
 Mid-year convention assumes cash flows are received at the middle of each year
 rather than at the end. This is more realistic for most businesses and produces
 slightly higher valuations (since cash is received sooner on average).
+
+Equity Bridge (institutional-grade):
+    Equity Value = Enterprise Value
+                 - Net Debt (Total Debt - Cash)
+                 - Minority Interest (Non-Controlling Interest)
+                 - Preferred Stock
+                 + Deferred Tax Assets (NOLs/Tax Shields)
+                 - Pension Deficit (Underfunded Pension Obligations)
 
 ## WACC Calculator
 

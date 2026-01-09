@@ -165,7 +165,32 @@ class ValuationService:
         total_debt = extractor.total_debt() or 0
         cash = extractor.cash() or 0
         net_debt = total_debt - cash
-        equity_value = enterprise_value - net_debt
+        
+        # Institutional-grade Equity Bridge components
+        minority_interest = extractor.minority_interest() or 0
+        preferred_stock = extractor.preferred_stock() or 0
+        deferred_tax_assets = extractor.deferred_tax_assets() or 0
+        pension_deficit = extractor.pension_liability() or 0
+        
+        # Full Equity Bridge:
+        # Equity = EV - Net Debt - Minority Interest - Preferred + NOLs - Pension
+        equity_value = (
+            enterprise_value
+            - net_debt
+            - minority_interest
+            - preferred_stock
+            + deferred_tax_assets
+            - pension_deficit
+        )
+        
+        # Store equity bridge for transparency
+        equity_bridge = {
+            "net_debt": net_debt,
+            "minority_interest": minority_interest,
+            "preferred_stock": preferred_stock,
+            "deferred_tax_assets": deferred_tax_assets,
+            "pension_deficit": pension_deficit,
+        }
 
         # Intrinsic value per share (prefer diluted shares for DCF)
         shares = extractor.shares_outstanding() or 1
@@ -222,6 +247,7 @@ class ValuationService:
             "equity_value": equity_value,
             "market_cap": extractor.market_cap(),
             "net_debt": net_debt,
+            "equity_bridge": equity_bridge,
             "wacc": calculated_wacc,
             "discount_rate": discount_rate,
             "using_custom_discount_rate": discount_rate_override is not None,
