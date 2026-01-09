@@ -242,6 +242,9 @@ class RatioCalculator:
             ratios.roa = net_income / total_assets
         
         # ROIC = NOPAT / Invested Capital
+        # Note: We use EXCESS cash, not ALL cash, because businesses need
+        # operating cash (typically 2% of revenue) to function. Subtracting
+        # all cash artificially inflates ROIC for cash-rich companies.
         if operating_income and equity and income_before_tax and net_income:
             # Estimate tax rate
             tax_expense = income_before_tax - net_income
@@ -249,7 +252,11 @@ class RatioCalculator:
             tax_rate = max(0, min(tax_rate, 0.5))  # Bound between 0% and 50%
             
             nopat = operating_income * (1 - tax_rate)
-            invested_capital = equity + total_debt - cash
+            
+            # Calculate excess cash (only subtract what's above operating needs)
+            operating_cash = 0.02 * revenue if revenue else 0  # 2% of revenue
+            excess_cash = max(0, cash - operating_cash)
+            invested_capital = equity + total_debt - excess_cash
             
             if invested_capital > 0:
                 ratios.roic = nopat / invested_capital
