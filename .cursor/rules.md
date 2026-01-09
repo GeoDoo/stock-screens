@@ -94,3 +94,9 @@ All bugfixes must add a regression test for the exact failure mode:
   - **Risk** (contracts, provider fallback, rate-limit behavior)
 
 - After landing: pull `main` and do a quick smoke run.
+
+## Project Hygiene (Reviews / NOTES.md)
+- Any time we append a new review to `NOTES.md`, the entry must include an explicit **date + time** in the heading (**UTC preferred**).
+
+## API Contract Discipline (Backend ↔ Frontend)
+- OpenAPI is the source of truth: if an endpoint response/request shape changes, update **backend schema/tests** and **frontend `types` + normalizers + tests** in the same PR.
