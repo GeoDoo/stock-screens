@@ -133,6 +133,11 @@ class YahooProvider(StockDataProvider):
                     retained_earnings=get_val(balance_df, "Retained Earnings"),
                     net_receivables=get_val(balance_df, "Receivables", "Accounts Receivable", "Net Receivables"),
                     property_plant_equipment=get_val(balance_df, "Net PPE", "Property Plant And Equipment Net"),
+                    # Equity Bridge components
+                    minority_interest=get_val(balance_df, "Minority Interest"),
+                    preferred_stock=get_val(balance_df, "Preferred Stock", "Preferred Securities Outside Stock Equity"),
+                    deferred_tax_assets=get_val(balance_df, "Deferred Tax Assets", "Non Current Deferred Tax Assets"),
+                    pension_liability=get_val(balance_df, "Defined Benefit Plans", "Pension And Other Post Retirement Benefit Plans Current"),
                     # Cash Flow
                     operating_cash_flow=get_val(cash_df, "Operating Cash Flow", "Cash Flow From Continuing Operating Activities"),
                     capital_expenditure=get_val(cash_df, "Capital Expenditure"),

@@ -1346,3 +1346,137 @@ class TestBeneishMScore:
         # SGI (Sales Growth Index) should be calculated
         # Revenue grew from 45B to 50B = 11% growth
 
+
+class TestMScoreEdgeCases:
+    """
+    Edge case tests for Beneish M-Score index calculations.
+    
+    Bug: M-Score index calculations check some denominators but not all
+    numerators/denominators, allowing edge cases to produce incorrect results.
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_m_score_with_zero_gross_margin_current(self, calculator):
+        """
+        When current year gross margin is zero, GMI should use default.
+        Bug: GMI checks gm_t > 0 for denominator but current year could have
+        zero gross profit making gm_t = 0, causing division issues.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 50_000_000_000},
+            "income_statement": [
+                {"revenue": 50_000_000_000, "grossProfit": 0},  # Zero GM
+                {"revenue": 40_000_000_000, "grossProfit": 10_000_000_000},
+            ],
+            "balance_sheet": [
+                {"totalAssets": 80_000_000_000, "totalLiabilities": 40_000_000_000},
+                {"totalAssets": 70_000_000_000, "totalLiabilities": 35_000_000_000},
+            ],
+            "cash_flow": [{}, {}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Should still produce a valid M-Score (using default GMI=1.0)
+        assert ratios.risk.beneish_m_score is not None
+    
+    def test_m_score_with_zero_sga_current(self, calculator):
+        """
+        When current year SG&A ratio is zero, SGAI should use default.
+        Bug: SGAI checks sga_ratio_t1 > 0 but not sga_ratio_t > 0.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 50_000_000_000},
+            "income_statement": [
+                {"revenue": 50_000_000_000, "sellingGeneralAndAdministrative": 0},  # Zero SGA
+                {"revenue": 40_000_000_000, "sellingGeneralAndAdministrative": 5_000_000_000},
+            ],
+            "balance_sheet": [
+                {"totalAssets": 80_000_000_000, "totalLiabilities": 40_000_000_000},
+                {"totalAssets": 70_000_000_000, "totalLiabilities": 35_000_000_000},
+            ],
+            "cash_flow": [{}, {}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Should still produce a valid M-Score (using default SGAI=1.0)
+        assert ratios.risk.beneish_m_score is not None
+    
+    def test_m_score_with_zero_depreciation_prior(self, calculator):
+        """
+        When prior year depreciation rate is zero, DEPI should use default.
+        Bug: DEPI checks dep_rate_t > 0 but not dep_rate_t1 > 0.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 50_000_000_000},
+            "income_statement": [
+                {"revenue": 50_000_000_000},
+                {"revenue": 40_000_000_000},
+            ],
+            "balance_sheet": [
+                {"totalAssets": 80_000_000_000, "totalLiabilities": 40_000_000_000,
+                 "propertyPlantEquipmentNet": 20_000_000_000},
+                {"totalAssets": 70_000_000_000, "totalLiabilities": 35_000_000_000,
+                 "propertyPlantEquipmentNet": 18_000_000_000},
+            ],
+            "cash_flow": [
+                {"depreciationAndAmortization": 3_000_000_000},
+                {"depreciationAndAmortization": 0},  # Zero depreciation prior
+            ],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Should still produce a valid M-Score (using default DEPI=1.0)
+        assert ratios.risk.beneish_m_score is not None
+    
+    def test_m_score_with_negative_gross_profit(self, calculator):
+        """
+        When gross profit is negative, GMI calculation should be safe.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 50_000_000_000},
+            "income_statement": [
+                {"revenue": 50_000_000_000, "grossProfit": -5_000_000_000},  # Negative GP
+                {"revenue": 40_000_000_000, "grossProfit": 10_000_000_000},
+            ],
+            "balance_sheet": [
+                {"totalAssets": 80_000_000_000, "totalLiabilities": 40_000_000_000},
+                {"totalAssets": 70_000_000_000, "totalLiabilities": 35_000_000_000},
+            ],
+            "cash_flow": [{}, {}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Should still produce a valid M-Score
+        assert ratios.risk.beneish_m_score is not None
+    
+    def test_m_score_with_zero_dsr_prior(self, calculator):
+        """
+        When prior year DSR is zero, DSRI should use default.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 50_000_000_000},
+            "income_statement": [
+                {"revenue": 50_000_000_000},
+                {"revenue": 40_000_000_000},
+            ],
+            "balance_sheet": [
+                {"totalAssets": 80_000_000_000, "totalLiabilities": 40_000_000_000,
+                 "netReceivables": 8_000_000_000},
+                {"totalAssets": 70_000_000_000, "totalLiabilities": 35_000_000_000,
+                 "netReceivables": 0},  # Zero receivables prior
+            ],
+            "cash_flow": [{}, {}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Should still produce a valid M-Score (using default DSRI=1.0)
+        assert ratios.risk.beneish_m_score is not None
+

@@ -70,6 +70,11 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
             "retainedEarnings": fin.retained_earnings,
             "netReceivables": fin.net_receivables,
             "propertyPlantEquipmentNet": fin.property_plant_equipment,
+            # Equity Bridge components
+            "minorityInterest": fin.minority_interest,
+            "preferredStock": fin.preferred_stock,
+            "deferredTaxAssets": fin.deferred_tax_assets,
+            "pensionLiability": fin.pension_liability,
         })
         
         # Cash flow

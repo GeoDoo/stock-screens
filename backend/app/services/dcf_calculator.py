@@ -10,6 +10,14 @@ class DCFCalculator:
     Mid-year convention assumes cash flows are received at the middle of each year
     rather than at the end. This is more realistic for most businesses and produces
     slightly higher valuations (since cash is received sooner on average).
+    
+    Equity Bridge (institutional-grade):
+        Equity Value = Enterprise Value
+                     - Net Debt (Total Debt - Cash)
+                     - Minority Interest (Non-Controlling Interest)
+                     - Preferred Stock
+                     + Deferred Tax Assets (NOLs/Tax Shields)
+                     - Pension Deficit (Underfunded Pension Obligations)
     """
     current_fcf: float
     growth_rate: float
@@ -20,6 +28,11 @@ class DCFCalculator:
     total_debt: float = 0.0
     cash: float = 0.0
     mid_year_discounting: bool = False  # Professional feature: assumes FCF received mid-year
+    # Institutional equity bridge components
+    minority_interest: float = 0.0  # Non-controlling interest (subtract from equity)
+    preferred_stock: float = 0.0  # Preferred equity (subtract from common equity)
+    deferred_tax_assets: float = 0.0  # NOLs/tax shields (add to equity)
+    pension_deficit: float = 0.0  # Underfunded pension obligations (subtract from equity)
 
     def calculate(self) -> dict:
         """
@@ -89,8 +102,25 @@ class DCFCalculator:
         net_debt = self.total_debt - self.cash
         result["net_debt"] = net_debt
 
-        # Equity value = Enterprise value - Net debt
-        equity_value = enterprise_value - net_debt
+        # Institutional-grade Equity Bridge:
+        # Equity = EV - Net Debt - Minority Interest - Preferred + NOLs - Pension
+        equity_bridge = {
+            "net_debt": net_debt,
+            "minority_interest": self.minority_interest,
+            "preferred_stock": self.preferred_stock,
+            "deferred_tax_assets": self.deferred_tax_assets,
+            "pension_deficit": self.pension_deficit,
+        }
+        result["equity_bridge"] = equity_bridge
+        
+        equity_value = (
+            enterprise_value
+            - net_debt
+            - self.minority_interest
+            - self.preferred_stock
+            + self.deferred_tax_assets
+            - self.pension_deficit
+        )
         result["equity_value"] = equity_value
 
         # Intrinsic value per share (based on equity value)

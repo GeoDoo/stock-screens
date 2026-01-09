@@ -73,6 +73,23 @@ class DataExtractor:
         """Cash and equivalents from balance sheet."""
         return self._get_latest(self.balance_sheet, "cashAndCashEquivalents")
     
+    # Equity Bridge components (institutional-grade)
+    def minority_interest(self) -> Optional[float]:
+        """Non-controlling interest - subtract from equity value."""
+        return self._get_latest(self.balance_sheet, "minorityInterest")
+    
+    def preferred_stock(self) -> Optional[float]:
+        """Preferred stock - sits above common equity, subtract from common."""
+        return self._get_latest(self.balance_sheet, "preferredStock")
+    
+    def deferred_tax_assets(self) -> Optional[float]:
+        """Deferred tax assets (NOLs/tax shields) - add to equity value."""
+        return self._get_latest(self.balance_sheet, "deferredTaxAssets")
+    
+    def pension_liability(self) -> Optional[float]:
+        """Underfunded pension obligations - debt-like, subtract from equity."""
+        return self._get_latest(self.balance_sheet, "pensionLiability")
+    
     def latest_revenue(self) -> Optional[float]:
         """Latest revenue from income statement."""
         return self._get_latest(self.income_statement, "revenue")
