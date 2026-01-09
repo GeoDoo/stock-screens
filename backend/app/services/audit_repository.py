@@ -54,7 +54,7 @@ class AuditRepository:
                     entry_id INTEGER NOT NULL,
                     field TEXT NOT NULL,
                     old_value REAL,
-                    new_value REAL NOT NULL,
+                    new_value REAL,  -- Can be NULL when clearing an assumption
                     FOREIGN KEY (entry_id) REFERENCES audit_entries(id)
                 );
                 

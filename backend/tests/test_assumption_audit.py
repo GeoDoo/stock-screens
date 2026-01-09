@@ -326,3 +326,128 @@ class TestAuditRepository:
         assert repo.has_history("AAPL") is True
         assert repo.has_history("MSFT") is False
 
+
+
+class TestNullNewValue:
+    """
+    Regression tests for new_value being None.
+    
+    Bug: AssumptionChange.new_value was typed as float (not Optional[float]),
+    but the diff() method can produce None values when clearing an assumption.
+    This caused:
+    1. Type annotation mismatch
+    2. DB insert failure (NOT NULL constraint)
+    3. apply_changes crash when doing int(None)
+    """
+    
+    @pytest.fixture
+    def repo(self):
+        """Create a temporary repository for testing."""
+        fd, path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        repo = AuditRepository(db_path=path)
+        yield repo
+        os.unlink(path)
+    
+    def test_diff_handles_value_to_none(self):
+        """
+        Should detect change from a value to None (clearing an assumption).
+        
+        Use case: User had custom discount rate, now wants to use default WACC.
+        """
+        snapshot = AssumptionSnapshot(
+            symbol="AAPL",
+            discount_rate=0.10,
+        )
+        
+        new_values = {
+            "discount_rate": None,  # Clear the custom discount rate
+        }
+        
+        changes = snapshot.diff(new_values)
+        
+        assert len(changes) == 1
+        assert changes[0].field == AssumptionField.DISCOUNT_RATE
+        assert changes[0].old_value == 0.10
+        assert changes[0].new_value is None
+    
+    def test_apply_changes_handles_none_new_value(self):
+        """
+        apply_changes should handle new_value=None without crashing.
+        """
+        snapshot = AssumptionSnapshot(
+            symbol="AAPL",
+            discount_rate=0.10,
+            projection_years=10,
+        )
+        
+        changes = [
+            AssumptionChange(
+                field=AssumptionField.DISCOUNT_RATE,
+                old_value=0.10,
+                new_value=None,
+            ),
+            AssumptionChange(
+                field=AssumptionField.PROJECTION_YEARS,
+                old_value=10,
+                new_value=None,
+            ),
+        ]
+        
+        # Should not crash
+        new_snapshot = snapshot.apply_changes(changes)
+        
+        assert new_snapshot.discount_rate is None
+        assert new_snapshot.projection_years is None
+    
+    def test_repo_saves_none_new_value(self, repo):
+        """
+        Repository should be able to save entries where new_value is None.
+        """
+        entry = AuditEntry(
+            id=None,
+            symbol="AAPL",
+            timestamp=datetime.now(),
+            changes=[
+                AssumptionChange(
+                    field=AssumptionField.DISCOUNT_RATE,
+                    old_value=0.10,
+                    new_value=None,  # Clearing the value
+                )
+            ],
+            note="Cleared custom discount rate",
+            is_initial=False,
+        )
+        
+        # Should not raise
+        saved = repo.save_entry(entry)
+        
+        assert saved.id is not None
+        
+        # Verify retrieval
+        history = repo.get_history("AAPL")
+        assert len(history) == 1
+        assert history[0].changes[0].new_value is None
+    
+    def test_to_dict_serializes_none_new_value(self):
+        """
+        AuditEntry.to_dict() should correctly serialize None new_value.
+        """
+        entry = AuditEntry(
+            id=1,
+            symbol="AAPL",
+            timestamp=datetime(2025, 1, 9, 10, 0, 0),
+            changes=[
+                AssumptionChange(
+                    field=AssumptionField.DISCOUNT_RATE,
+                    old_value=0.10,
+                    new_value=None,
+                )
+            ],
+            note="Test",
+            is_initial=False,
+        )
+        
+        result = entry.to_dict()
+        
+        assert result["changes"][0]["new_value"] is None
