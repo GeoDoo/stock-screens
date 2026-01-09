@@ -548,3 +548,157 @@ class TestROICExcessCash:
             "can't calculate operating cash needs without revenue"
         )
 
+
+class TestROTIC:
+    """
+    Tests for Return on Tangible Invested Capital (ROTIC).
+    
+    ROTIC = NOPAT / Tangible Invested Capital
+    Tangible IC = Invested Capital - Goodwill - Intangible Assets
+    
+    ROTIC reveals the core business's operating efficiency by stripping out
+    acquisition history (goodwill) and non-physical assets (intangibles).
+    For acquisitive companies, ROIC can look artificially low due to
+    inflated invested capital from past M&A.
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_rotic_excludes_goodwill_and_intangibles(self, calculator):
+        """
+        ROTIC should use Tangible IC = Invested Capital - Goodwill - Intangibles.
+        
+        Professional critique from Gemini: "Total Equity includes Goodwill and
+        Intangibles from past acquisitions. This often inflates the Invested
+        Capital base for acquisitive companies."
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+                "operatingIncome": 30_000_000_000,
+                "incomeBeforeTax": 28_000_000_000,
+                "netIncome": 21_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalStockholdersEquity": 150_000_000_000,
+                "totalDebt": 50_000_000_000,
+                "cashAndCashEquivalents": 10_000_000_000,  # Excess = 8B
+                "goodwill": 40_000_000_000,  # Acquisition history
+                "intangibleAssets": 30_000_000_000,  # Patents, etc.
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # NOPAT = 30B * (1 - 0.25) = 22.5B (tax rate ~25%)
+        # Invested Capital = 150B + 50B - 8B = 192B
+        # Tangible IC = 192B - 40B - 30B = 122B
+        # ROTIC = 22.5B / 122B ≈ 18.4%
+        # ROIC = 22.5B / 192B ≈ 11.7%
+        
+        assert ratios.profitability.rotic is not None, "ROTIC should be calculated"
+        assert ratios.profitability.roic is not None, "ROIC should also be calculated"
+        
+        # ROTIC should be higher than ROIC (due to smaller denominator)
+        assert ratios.profitability.rotic > ratios.profitability.roic, (
+            f"ROTIC ({ratios.profitability.rotic:.2%}) should be > "
+            f"ROIC ({ratios.profitability.roic:.2%}) when goodwill/intangibles exist"
+        )
+        
+        # ROTIC should be ~18% (22.5B / 122B)
+        assert 0.17 < ratios.profitability.rotic < 0.20
+    
+    def test_rotic_equals_roic_when_no_intangibles(self, calculator):
+        """
+        When goodwill and intangibles are zero, ROTIC should equal ROIC.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+                "operatingIncome": 30_000_000_000,
+                "incomeBeforeTax": 28_000_000_000,
+                "netIncome": 21_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalStockholdersEquity": 100_000_000_000,
+                "totalDebt": 50_000_000_000,
+                "cashAndCashEquivalents": 10_000_000_000,
+                "goodwill": 0,
+                "intangibleAssets": 0,
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.profitability.rotic is not None
+        assert ratios.profitability.roic is not None
+        
+        # Should be equal when no intangibles
+        assert abs(ratios.profitability.rotic - ratios.profitability.roic) < 0.001
+    
+    def test_rotic_handles_missing_goodwill(self, calculator):
+        """
+        When goodwill/intangibles are missing from data, ROTIC should still
+        be calculated (treating missing as zero).
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+                "operatingIncome": 30_000_000_000,
+                "incomeBeforeTax": 28_000_000_000,
+                "netIncome": 21_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalStockholdersEquity": 100_000_000_000,
+                "totalDebt": 50_000_000_000,
+                "cashAndCashEquivalents": 10_000_000_000,
+                # No goodwill or intangibleAssets keys
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Should still calculate ROTIC (equals ROIC when no intangibles)
+        assert ratios.profitability.rotic is not None
+        assert ratios.profitability.roic is not None
+        assert abs(ratios.profitability.rotic - ratios.profitability.roic) < 0.001
+    
+    def test_rotic_none_when_tangible_ic_negative(self, calculator):
+        """
+        If Tangible IC becomes negative or zero (extreme goodwill), ROTIC = None.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+                "operatingIncome": 30_000_000_000,
+                "incomeBeforeTax": 28_000_000_000,
+                "netIncome": 21_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalStockholdersEquity": 50_000_000_000,
+                "totalDebt": 20_000_000_000,
+                "cashAndCashEquivalents": 5_000_000_000,
+                "goodwill": 60_000_000_000,  # Exceeds equity!
+                "intangibleAssets": 10_000_000_000,
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # IC = 50 + 20 - 4 = 66B
+        # Tangible IC = 66B - 60B - 10B = -4B (negative!)
+        # ROTIC should be None
+        assert ratios.profitability.rotic is None, (
+            "ROTIC should be None when Tangible IC is negative"
+        )
+
