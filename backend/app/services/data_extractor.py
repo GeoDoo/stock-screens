@@ -80,18 +80,47 @@ class DataExtractor:
 
     def tax_rate(self) -> Optional[float]:
         """
-        Effective tax rate calculated from income statement.
-        tax_rate = income_tax_expense / income_before_tax
+        Effective tax rate using multi-year average for stability.
+        
+        Effective tax rates are notoriously volatile due to one-time items:
+        - R&D tax credits
+        - Foreign tax adjustments  
+        - Deferred tax benefits/charges
+        - One-time restructuring charges
+        
+        Using a single year can badly distort 10-year FCF projections.
+        We use a 3-year average, excluding:
+        - Years with negative income (loss years)
+        - Years with extreme rates (< 0% or > 50%)
         """
-        tax_expense = self._get_latest(self.income_statement, "incomeTaxExpense")
-        income_before_tax = self._get_latest(self.income_statement, "incomeBeforeTax")
-
-        if tax_expense is None or income_before_tax is None:
+        valid_rates = []
+        
+        for statement in self.income_statement[:3]:  # Up to 3 years
+            tax_expense = statement.get("incomeTaxExpense")
+            income_before_tax = statement.get("incomeBeforeTax")
+            
+            if tax_expense is None or income_before_tax is None:
+                continue
+            if income_before_tax <= 0:  # Skip loss years
+                continue
+                
+            rate = tax_expense / income_before_tax
+            
+            # Skip extreme outliers (< 0% or > 50%)
+            if rate < 0 or rate > 0.50:
+                continue
+                
+            valid_rates.append(rate)
+        
+        if not valid_rates:
+            # Fallback: try latest year even if extreme rate, but still require positive income
+            tax_expense = self._get_latest(self.income_statement, "incomeTaxExpense")
+            income_before_tax = self._get_latest(self.income_statement, "incomeBeforeTax")
+            if tax_expense is not None and income_before_tax is not None and income_before_tax > 0:
+                return tax_expense / income_before_tax
             return None
-        if income_before_tax == 0:
-            return 0.0
-
-        return tax_expense / income_before_tax
+        
+        return sum(valid_rates) / len(valid_rates)
 
     def cost_of_debt(self) -> Optional[float]:
         """
