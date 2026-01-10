@@ -692,7 +692,8 @@ POST /api/stock/{symbol}/valuation
       "wc_ratio": 0.0,
       "end_wc_ratio": 0.0
     }
-  ]
+  ],
+  "annual_dilution_rate": 0.0
 }
 ```
 
@@ -710,6 +711,7 @@ POST /api/stock/{symbol}/valuation
 | `use_mid_year_discounting` | boolean | No |  |
 | `wc_mode` | string | No |  |
 | `growth_stages` | array | null | No |  |
+| `annual_dilution_rate` | number | No |  |
 
 
 ---

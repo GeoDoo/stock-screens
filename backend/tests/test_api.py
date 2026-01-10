@@ -562,6 +562,79 @@ class TestAdvancedDCFOptions:
                 f"Margin should expand from {year_1_margin:.2%} to {year_10_margin:.2%}"
             )
 
+    def test_valuation_accepts_annual_dilution_rate(self):
+        """
+        Valuation endpoint should accept annual_dilution_rate for SBC dilution.
+        
+        P0 Fix: The backend ValuationService supports dilution, but the API
+        didn't expose it. This test ensures the parameter is wired through.
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={
+                    "revenue_growth": 0.10,
+                    "operating_margin": 0.25,
+                    "terminal_growth_rate": 0.025,
+                    "market_risk_premium": 0.06,
+                    "projection_years": 10,
+                    "annual_dilution_rate": 0.02,  # 2% annual dilution from SBC
+                }
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert "intrinsic_value_per_share" in data
+            # Should have inputs recorded including dilution rate
+            assert "inputs" in data
+            assert data["inputs"].get("annual_dilution_rate") == 0.02
+
+    def test_dilution_rate_reduces_per_share_value(self):
+        """
+        Higher dilution rate should result in lower per-share intrinsic value.
+        
+        This is the economic reality: if a company issues 2% more shares each year,
+        the per-share value is diluted over the projection period.
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        base_request = {
+            "revenue_growth": 0.10,
+            "operating_margin": 0.25,
+            "terminal_growth_rate": 0.025,
+            "market_risk_premium": 0.06,
+            "projection_years": 10,
+        }
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            # No dilution
+            response_no_dilution = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={**base_request, "annual_dilution_rate": 0.0}
+            )
+            value_no_dilution = response_no_dilution.json()["intrinsic_value_per_share"]
+            
+            # 3% annual dilution
+            response_with_dilution = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={**base_request, "annual_dilution_rate": 0.03}
+            )
+            value_with_dilution = response_with_dilution.json()["intrinsic_value_per_share"]
+            
+            # Higher dilution = lower per-share value
+            assert value_no_dilution > value_with_dilution, (
+                f"No dilution value ${value_no_dilution:.2f} should exceed "
+                f"diluted value ${value_with_dilution:.2f}"
+            )
+
 
 class TestFullMonteCarloEndpoint:
     """Tests for Full-Model Monte Carlo API endpoint."""

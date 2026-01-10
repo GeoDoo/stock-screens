@@ -165,6 +165,7 @@ export interface RunValuationParams {
   useMidYearDiscounting?: boolean;
   wcMode?: 'level' | 'incremental';
   growthStages?: GrowthStage[];
+  annualDilutionRate?: number;  // SBC dilution - e.g. 0.02 for 2% annual share issuance
 }
 
 export async function runValuation(
@@ -183,6 +184,7 @@ export async function runValuation(
     use_mid_year_discounting: params.useMidYearDiscounting,
     wc_mode: params.wcMode,
     growth_stages: params.growthStages,
+    annual_dilution_rate: params.annualDilutionRate,
   };
 
   const res = await fetch(
