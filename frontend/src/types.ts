@@ -318,6 +318,7 @@ export interface FinancialRatiosPeriod {
     roa: number | null;
     roic: number | null;
     rotic: number | null;  // Return on Tangible Invested Capital
+    incremental_roic: number | null;  // ΔNOPAT / ΔInvested Capital
   };
   liquidity: {
     current_ratio: number | null;

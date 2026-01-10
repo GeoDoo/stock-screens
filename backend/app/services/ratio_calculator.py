@@ -36,6 +36,7 @@ class ProfitabilityRatios:
     roa: Optional[float] = None
     roic: Optional[float] = None
     rotic: Optional[float] = None  # Return on Tangible Invested Capital
+    incremental_roic: Optional[float] = None  # ΔNOPAT / ΔInvested Capital
 
 
 @dataclass
@@ -165,6 +166,31 @@ class RatioCalculator:
         if operating_income is not None:
             ebitda = operating_income + depreciation
         
+        # Calculate prior year NOPAT and Invested Capital for incremental ROIC
+        prior_nopat = None
+        prior_invested_capital = None
+        if prior_income and prior_balance:
+            prior_oi = prior_income.get("operatingIncome")
+            prior_ibt = prior_income.get("incomeBeforeTax")
+            prior_ni = prior_income.get("netIncome")
+            prior_rev = prior_income.get("revenue")
+            prior_equity = prior_balance.get("totalStockholdersEquity")
+            prior_debt = prior_balance.get("totalDebt") or 0
+            prior_cash = prior_balance.get("cashAndCashEquivalents") or 0
+            
+            if prior_oi and prior_ibt and prior_ni and prior_rev and prior_equity:
+                # Calculate prior tax rate
+                prior_tax_expense = prior_ibt - prior_ni
+                prior_tax_rate = prior_tax_expense / prior_ibt if prior_ibt > 0 else 0.21
+                prior_tax_rate = max(0, min(prior_tax_rate, 0.5))
+                
+                prior_nopat = prior_oi * (1 - prior_tax_rate)
+                
+                # Calculate prior excess cash and invested capital
+                prior_op_cash = 0.02 * prior_rev
+                prior_excess_cash = max(0, prior_cash - prior_op_cash)
+                prior_invested_capital = prior_equity + prior_debt - prior_excess_cash
+        
         return FinancialRatios(
             valuation=self._calc_valuation(
                 price, market_cap, shares, net_income, revenue, equity, ev, ebitda
@@ -175,7 +201,9 @@ class RatioCalculator:
             profitability=self._calc_profitability(
                 revenue, gross_profit, operating_income, net_income,
                 equity, total_assets, total_debt, cash, income_before_tax,
-                goodwill, intangibles
+                goodwill, intangibles,
+                prior_nopat=prior_nopat,
+                prior_invested_capital=prior_invested_capital
             ),
             liquidity=self._calc_liquidity(
                 current_assets, current_liabilities, inventory,
@@ -274,6 +302,9 @@ class RatioCalculator:
         income_before_tax: Optional[float],
         goodwill: float = 0,
         intangibles: float = 0,
+        # Prior year data for incremental ROIC
+        prior_nopat: Optional[float] = None,
+        prior_invested_capital: Optional[float] = None,
     ) -> ProfitabilityRatios:
         """Calculate profitability ratios."""
         ratios = ProfitabilityRatios()
@@ -300,6 +331,8 @@ class RatioCalculator:
         # operating cash (typically 2% of revenue) to function. Subtracting
         # all cash artificially inflates ROIC for cash-rich companies.
         # Revenue is required to calculate operating cash needs.
+        nopat = None
+        invested_capital = None
         if operating_income and equity and income_before_tax and net_income and revenue:
             # Estimate tax rate
             tax_expense = income_before_tax - net_income
@@ -322,6 +355,15 @@ class RatioCalculator:
             tangible_invested_capital = invested_capital - goodwill - intangibles
             if tangible_invested_capital > 0:
                 ratios.rotic = nopat / tangible_invested_capital
+        
+        # Incremental ROIC = ΔNOPAT / ΔInvested Capital
+        # Measures return on NEW capital invested - critical for reinvestment quality
+        if (nopat is not None and invested_capital is not None and
+            prior_nopat is not None and prior_invested_capital is not None):
+            delta_nopat = nopat - prior_nopat
+            delta_ic = invested_capital - prior_invested_capital
+            if delta_ic != 0:
+                ratios.incremental_roic = delta_nopat / delta_ic
         
         return ratios
     

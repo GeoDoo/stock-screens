@@ -462,6 +462,13 @@ export const glossaryTerms: GlossaryTerm[] = [
     investopediaUrl: "https://www.investopedia.com/terms/r/returnoninvestmentcapital.asp",
   },
   {
+    id: "incremental-roic",
+    term: "Inc. ROIC",
+    fullName: "Incremental Return on Invested Capital",
+    definition: "Change in NOPAT divided by change in invested capital (ΔNOPAT / ΔIC). Measures the return on NEW capital invested. If Inc. ROIC > ROIC, returns are improving; if Inc. ROIC < ROIC, the company is experiencing diminishing returns - a red flag for growth sustainability.",
+    investopediaUrl: "https://www.investopedia.com/terms/r/returnoninvestmentcapital.asp",
+  },
+  {
     id: "altman-z-score",
     term: "Altman Z-Score",
     definition: "A bankruptcy prediction model using five financial ratios. Scores above 2.99 suggest financial safety ('safe zone'), below 1.81 indicate distress risk, and between is the 'grey zone' of uncertainty.",

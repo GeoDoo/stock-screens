@@ -1480,3 +1480,186 @@ class TestMScoreEdgeCases:
         # Should still produce a valid M-Score (using default DSRI=1.0)
         assert ratios.risk.beneish_m_score is not None
 
+
+class TestIncrementalROIC:
+    """
+    Tests for Incremental ROIC calculation.
+    
+    Incremental ROIC = ΔNOPAT / ΔInvested Capital
+    
+    Measures the return on NEW capital invested, which is critical for
+    assessing whether a company's reinvestment is creating value.
+    
+    Key insight: If Incremental ROIC < ROIC, the company is experiencing
+    diminishing returns (red flag for growth sustainability).
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_incremental_roic_calculated(self, calculator):
+        """Incremental ROIC should be calculated when prior year data exists."""
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [
+                # Current year
+                {
+                    "revenue": 110_000_000_000,
+                    "operatingIncome": 33_000_000_000,  # 30% margin
+                    "incomeBeforeTax": 30_000_000_000,
+                    "netIncome": 22_500_000_000,  # 25% tax rate
+                },
+                # Prior year
+                {
+                    "revenue": 100_000_000_000,
+                    "operatingIncome": 30_000_000_000,
+                    "incomeBeforeTax": 28_000_000_000,
+                    "netIncome": 21_000_000_000,
+                },
+            ],
+            "balance_sheet": [
+                # Current year
+                {
+                    "totalStockholdersEquity": 110_000_000_000,
+                    "totalDebt": 55_000_000_000,
+                    "cashAndCashEquivalents": 10_000_000_000,
+                },
+                # Prior year
+                {
+                    "totalStockholdersEquity": 100_000_000_000,
+                    "totalDebt": 50_000_000_000,
+                    "cashAndCashEquivalents": 8_000_000_000,
+                },
+            ],
+            "cash_flow": [{}, {}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.profitability.incremental_roic is not None
+    
+    def test_incremental_roic_improving_returns(self, calculator):
+        """
+        Incremental ROIC > ROIC indicates improving returns (bullish signal).
+        
+        This means new investments are generating higher returns than the
+        average of all invested capital.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [
+                # Current year: Significant earnings increase
+                {
+                    "revenue": 110_000_000_000,
+                    "operatingIncome": 36_000_000_000,  # NOPAT ≈ 27B
+                    "incomeBeforeTax": 34_000_000_000,
+                    "netIncome": 25_500_000_000,  # 25% tax
+                },
+                # Prior year
+                {
+                    "revenue": 100_000_000_000,
+                    "operatingIncome": 30_000_000_000,  # NOPAT ≈ 22.5B
+                    "incomeBeforeTax": 28_000_000_000,
+                    "netIncome": 21_000_000_000,
+                },
+            ],
+            "balance_sheet": [
+                # Current year: Modest capital increase
+                {
+                    "totalStockholdersEquity": 115_000_000_000,
+                    "totalDebt": 52_000_000_000,
+                    "cashAndCashEquivalents": 10_000_000_000,
+                },
+                # Prior year
+                {
+                    "totalStockholdersEquity": 100_000_000_000,
+                    "totalDebt": 50_000_000_000,
+                    "cashAndCashEquivalents": 8_000_000_000,
+                },
+            ],
+            "cash_flow": [{}, {}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Large NOPAT increase with modest capital increase = high incremental ROIC
+        # ΔNOPAT ≈ 4.5B, ΔIC ≈ 15B → Incremental ROIC ≈ 30%
+        # Current ROIC ≈ 27B / 155B ≈ 17%
+        assert ratios.profitability.incremental_roic is not None
+        assert ratios.profitability.roic is not None
+        assert ratios.profitability.incremental_roic > ratios.profitability.roic
+    
+    def test_incremental_roic_diminishing_returns(self, calculator):
+        """
+        Incremental ROIC < ROIC indicates diminishing returns (red flag).
+        
+        This means new investments are generating lower returns than the
+        average of all invested capital - a warning sign for growth.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [
+                # Current year: Modest earnings increase
+                {
+                    "revenue": 110_000_000_000,
+                    "operatingIncome": 31_000_000_000,  # NOPAT ≈ 23.25B
+                    "incomeBeforeTax": 29_000_000_000,
+                    "netIncome": 21_750_000_000,  # 25% tax
+                },
+                # Prior year
+                {
+                    "revenue": 100_000_000_000,
+                    "operatingIncome": 30_000_000_000,  # NOPAT ≈ 22.5B
+                    "incomeBeforeTax": 28_000_000_000,
+                    "netIncome": 21_000_000_000,
+                },
+            ],
+            "balance_sheet": [
+                # Current year: Large capital increase
+                {
+                    "totalStockholdersEquity": 140_000_000_000,  # +40B equity
+                    "totalDebt": 60_000_000_000,  # +10B debt
+                    "cashAndCashEquivalents": 12_000_000_000,
+                },
+                # Prior year
+                {
+                    "totalStockholdersEquity": 100_000_000_000,
+                    "totalDebt": 50_000_000_000,
+                    "cashAndCashEquivalents": 8_000_000_000,
+                },
+            ],
+            "cash_flow": [{}, {}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Small NOPAT increase with large capital increase = low incremental ROIC
+        # ΔNOPAT ≈ 0.75B, ΔIC ≈ 48B → Incremental ROIC ≈ 1.5%
+        # Current ROIC ≈ 23.25B / 186B ≈ 12.5%
+        assert ratios.profitability.incremental_roic is not None
+        assert ratios.profitability.roic is not None
+        assert ratios.profitability.incremental_roic < ratios.profitability.roic
+    
+    def test_incremental_roic_none_without_prior_year(self, calculator):
+        """Incremental ROIC should be None when prior year data is missing."""
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+                "operatingIncome": 30_000_000_000,
+                "incomeBeforeTax": 28_000_000_000,
+                "netIncome": 21_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalStockholdersEquity": 100_000_000_000,
+                "totalDebt": 50_000_000_000,
+                "cashAndCashEquivalents": 10_000_000_000,
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.profitability.incremental_roic is None
+
