@@ -459,3 +459,190 @@ class TestVolumeConfirmation:
         confirmation = TechnicalIndicators.volume_confirms_trend(volumes, trend, period=3)
         
         assert confirmation == "neutral"
+
+
+class TestVWMA:
+    """Tests for Volume Weighted Moving Average."""
+    
+    def test_vwma_basic(self):
+        """VWMA should weight prices by volume."""
+        prices = [10, 20]
+        volumes = [100, 300]  # Second price has 3x volume
+        
+        result = TechnicalIndicators.vwma(prices, volumes, period=2)
+        
+        # VWMA = (10*100 + 20*300) / (100 + 300) = (1000 + 6000) / 400 = 17.5
+        assert result[-1] == pytest.approx(17.5, rel=0.01)
+    
+    def test_vwma_vs_sma_high_volume_at_higher_price(self):
+        """VWMA > SMA when high volume at higher prices."""
+        prices = [10, 20, 30]
+        volumes = [100, 100, 500]  # High volume at highest price
+        
+        vwma = TechnicalIndicators.vwma(prices, volumes, period=3)
+        sma = TechnicalIndicators.sma(prices, period=3)
+        
+        # VWMA should be pulled toward 30 (high volume price)
+        assert vwma[-1] > sma[-1]
+    
+    def test_vwma_returns_none_initially(self):
+        """VWMA should return None for initial period."""
+        prices = [10, 20, 30, 40, 50]
+        volumes = [100, 100, 100, 100, 100]
+        
+        result = TechnicalIndicators.vwma(prices, volumes, period=3)
+        
+        assert result[0] is None
+        assert result[1] is None
+        assert result[2] is not None
+
+
+class TestOBV:
+    """Tests for On-Balance Volume."""
+    
+    def test_obv_up_days(self):
+        """OBV should add volume on up days."""
+        prices = [10, 12]  # Up day
+        volumes = [100, 200]
+        
+        result = TechnicalIndicators.obv(prices, volumes)
+        
+        # Starts at 0, adds 200 on up day
+        assert result[0] == 0
+        assert result[1] == 200
+    
+    def test_obv_down_days(self):
+        """OBV should subtract volume on down days."""
+        prices = [10, 8]  # Down day
+        volumes = [100, 200]
+        
+        result = TechnicalIndicators.obv(prices, volumes)
+        
+        # Starts at 0, subtracts 200 on down day
+        assert result[0] == 0
+        assert result[1] == -200
+    
+    def test_obv_accumulation_pattern(self):
+        """OBV should increase with consistent accumulation."""
+        prices = [10, 11, 12, 13, 14]  # All up
+        volumes = [100, 100, 100, 100, 100]
+        
+        result = TechnicalIndicators.obv(prices, volumes)
+        
+        # Cumulative: 0, 100, 200, 300, 400
+        assert result[-1] == 400
+    
+    def test_obv_trend_detection(self):
+        """Should detect OBV trend direction."""
+        # Strong accumulation pattern
+        obv_accumulating = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900,
+                           1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700, 1800, 1900]
+        
+        trend = TechnicalIndicators.obv_trend(obv_accumulating, period=20)
+        
+        assert trend == "accumulation"
+    
+    def test_obv_distribution_pattern(self):
+        """Should detect distribution pattern."""
+        # Strong distribution pattern (declining OBV)
+        obv_distributing = [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100,
+                           0, -100, -200, -300, -400, -500, -600, -700, -800, -900]
+        
+        trend = TechnicalIndicators.obv_trend(obv_distributing, period=20)
+        
+        assert trend == "distribution"
+    
+    def test_obv_trend_zero_crossing(self):
+        """Should detect trend even when OBV crosses zero (mean is ~0)."""
+        # OBV goes from positive to negative - mean is close to 0
+        # but there's a clear distribution pattern
+        obv_crossing = [500, 400, 300, 200, 100, 0, -100, -200, -300, -400,
+                        -500, -600, -700, -800, -900, -1000, -1100, -1200, -1300, -1400]
+        
+        trend = TechnicalIndicators.obv_trend(obv_crossing, period=20)
+        
+        # Should detect distribution, NOT neutral (bug was returning neutral)
+        assert trend == "distribution", f"Zero-crossing OBV should detect distribution, got {trend}"
+    
+    def test_obv_trend_accumulation_from_negative(self):
+        """Should detect accumulation when OBV rises from negative to positive."""
+        obv_rising = [-1400, -1300, -1200, -1100, -1000, -900, -800, -700, -600, -500,
+                      -400, -300, -200, -100, 0, 100, 200, 300, 400, 500]
+        
+        trend = TechnicalIndicators.obv_trend(obv_rising, period=20)
+        
+        assert trend == "accumulation"
+
+
+class TestMFI:
+    """Tests for Money Flow Index (volume-weighted RSI)."""
+    
+    def test_mfi_basic_calculation(self):
+        """MFI should produce values between 0-100."""
+        # Create simple test data
+        highs = [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+        lows = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+        closes = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+        volumes = [1000] * 15
+        
+        result = TechnicalIndicators.mfi(highs, lows, closes, volumes, period=14)
+        
+        # Should have valid values after period
+        valid_values = [v for v in result if v is not None]
+        assert len(valid_values) > 0
+        
+        for v in valid_values:
+            assert 0 <= v <= 100
+    
+    def test_mfi_high_buying_pressure(self):
+        """MFI should be high when consistent buying pressure."""
+        # All prices rising = positive money flow
+        highs = list(range(20, 35))
+        lows = list(range(18, 33))
+        closes = list(range(19, 34))
+        volumes = [1000] * 15
+        
+        result = TechnicalIndicators.mfi(highs, lows, closes, volumes, period=14)
+        
+        # Last value should be high (strong buying)
+        last_mfi = result[-1]
+        assert last_mfi is not None
+        assert last_mfi > 50, "Rising prices should produce MFI > 50"
+    
+    def test_mfi_signal_overbought(self):
+        """MFI >= 80 should signal overbought."""
+        mfi_values = [None] * 14 + [85.0]
+        
+        signal = TechnicalIndicators.analyze_mfi(mfi_values)
+        
+        assert signal == "overbought"
+    
+    def test_mfi_signal_oversold(self):
+        """MFI <= 20 should signal oversold."""
+        mfi_values = [None] * 14 + [15.0]
+        
+        signal = TechnicalIndicators.analyze_mfi(mfi_values)
+        
+        assert signal == "oversold"
+    
+    def test_mfi_signal_neutral(self):
+        """MFI between 20-80 should be neutral."""
+        mfi_values = [None] * 14 + [50.0]
+        
+        signal = TechnicalIndicators.analyze_mfi(mfi_values)
+        
+        assert signal == "neutral"
+    
+    def test_mfi_no_price_movement_is_neutral(self):
+        """MFI should be 50 (neutral) when no price movement."""
+        # All prices the same = no positive or negative flow
+        highs = [20] * 15
+        lows = [18] * 15
+        closes = [19] * 15  # All same price
+        volumes = [1000] * 15
+        
+        result = TechnicalIndicators.mfi(highs, lows, closes, volumes, period=14)
+        
+        # Should be 50 (neutral), not 100 (overbought)
+        last_mfi = result[-1]
+        assert last_mfi == 50.0, f"No price movement should give MFI=50, got {last_mfi}"

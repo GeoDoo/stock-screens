@@ -612,7 +612,29 @@ GET /api/stock/{symbol}
       }
     ]
   },
-  "is_using_ltm": true
+  "is_using_ltm": true,
+  "provenance": {
+    "tax_rate": {
+      "source": "string",
+      "description": "string",
+      "confidence": "string"
+    },
+    "shares_outstanding": {
+      "source": "string",
+      "description": "string",
+      "confidence": "string"
+    },
+    "revenue_source": {
+      "source": "string",
+      "description": "string",
+      "confidence": "string"
+    },
+    "cost_of_debt": {
+      "source": "string",
+      "description": "string",
+      "confidence": "string"
+    }
+  }
 }
 ```
 
@@ -1047,5 +1069,106 @@ POST /api/stock/{symbol}/monte-carlo-full
 | `growth_stages` | array | null | No |  |
 | `use_mid_year_discounting` | boolean | No |  |
 
+
+---
+
+### Get Sensitivity Matrix
+
+Generate 2D sensitivity matrix for valuation.
+
+Supports two matrix types:
+
+1. **margin_growth** (default): Varies operating margin and revenue growth.
+   Shows how intrinsic value changes with execution (margin) and
+   market size (growth) assumptions. Useful for understanding
+   execution risk and upside potential.
+
+2. **wacc_terminal**: Varies discount rate (WACC) and terminal growth.
+   Classic DCF sensitivity showing value sensitivity to
+   risk (WACC) and long-term growth assumptions.
+
+Each cell shows intrinsic value per share for that parameter combination.
+Matrix is 5×5 by default, centered on base values.
+
+```
+POST /api/stock/{symbol}/sensitivity-matrix
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `symbol` | string | Yes |  |
+| `provider` | string | Yes |  |
+
+**Request Body**
+
+```json
+{
+  "matrix_type": "string",
+  "base_growth": 0.0,
+  "base_margin": 0.0,
+  "base_discount_rate": 0.0,
+  "terminal_growth": 0.0,
+  "projection_years": 0,
+  "growth_steps": [
+    0.0
+  ],
+  "margin_steps": [
+    0.0
+  ],
+  "discount_rate_steps": [
+    0.0
+  ],
+  "terminal_growth_steps": [
+    0.0
+  ],
+  "da_ratio": 0.0,
+  "capex_ratio": 0.0,
+  "wc_ratio": 0.0
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `matrix_type` | string | No |  |
+| `base_growth` | number | null | No |  |
+| `base_margin` | number | null | No |  |
+| `base_discount_rate` | number | null | No |  |
+| `terminal_growth` | number | No |  |
+| `projection_years` | integer | No |  |
+| `growth_steps` | array | No |  |
+| `margin_steps` | array | No |  |
+| `discount_rate_steps` | array | No |  |
+| `terminal_growth_steps` | array | No |  |
+| `da_ratio` | number | null | No |  |
+| `capex_ratio` | number | null | No |  |
+| `wc_ratio` | number | null | No |  |
+
+**Response**
+
+```json
+{
+  "matrix_type": "string",
+  "margins": [
+    0.0
+  ],
+  "growth_rates": [
+    0.0
+  ],
+  "discount_rates": [
+    0.0
+  ],
+  "terminal_growth_rates": [
+    0.0
+  ],
+  "matrix": [
+    [
+      0.0
+    ]
+  ],
+  "base_values": {}
+}
+```
 
 ---
