@@ -241,17 +241,40 @@ class ValuationService:
         )
 
         # 7. Calculate value drivers (what moves intrinsic value most)
+        # Pass FCF projector and base ratios so we can perturb-and-revalue
+        effective_revenue_growth = revenue_growth or fcf_projector.revenue_cagr()
+        effective_operating_margin = operating_margin or fcf_projector.operating_margin()
+        effective_da_ratio = da_ratio or fcf_projector.da_to_revenue_ratio()
+        effective_capex_ratio = capex_ratio or fcf_projector.capex_to_revenue_ratio()
+        effective_wc_ratio = wc_ratio or fcf_projector.wc_to_revenue_ratio()
+        
         value_drivers = self._calculate_value_drivers(
             base_value=intrinsic_value_per_share,
-            projected_fcf=projected_fcf,
+            fcf_projector=fcf_projector,
             discount_rate=discount_rate,
             terminal_growth_rate=terminal_growth_rate,
             projection_years=projection_years,
             shares=terminal_shares,  # Use terminal shares for consistency
-            total_debt=total_debt,
-            cash=cash,
-            revenue_growth=revenue_growth or fcf_projector.revenue_cagr(),
-            operating_margin=operating_margin or fcf_projector.operating_margin(),
+            net_debt=net_debt,
+            revenue_growth=effective_revenue_growth,
+            operating_margin=effective_operating_margin,
+            da_ratio=effective_da_ratio,
+            capex_ratio=effective_capex_ratio,
+            wc_ratio=effective_wc_ratio,
+            # Match main valuation methodology
+            wc_mode=wc_mode,
+            use_mid_year_discounting=use_mid_year_discounting,
+            # Multi-stage schedules (if provided, match main valuation)
+            growth_schedule=growth_schedule,
+            margin_schedule=margin_schedule,
+            da_schedule=da_schedule,
+            capex_schedule=capex_schedule,
+            wc_schedule=wc_schedule,
+            # Equity bridge for full calculation
+            minority_interest=minority_interest,
+            preferred_stock=preferred_stock,
+            deferred_tax_assets=deferred_tax_assets,
+            pension_deficit=pension_deficit,
         )
 
         # 8. Terminal Value sanity check via Exit Multiple AND dominance warning
@@ -303,39 +326,110 @@ class ValuationService:
     def _calculate_value_drivers(
         self,
         base_value: float,
-        projected_fcf: List[float],
+        fcf_projector: FCFProjector,
         discount_rate: float,
         terminal_growth_rate: float,
         projection_years: int,
         shares: float,
-        total_debt: float,
-        cash: float,
+        net_debt: float,
         revenue_growth: float,
         operating_margin: float,
+        da_ratio: float,
+        capex_ratio: float,
+        wc_ratio: float,
+        wc_mode: str = "level",
+        use_mid_year_discounting: bool = False,
+        # Multi-stage schedules (if provided, used instead of constant values)
+        growth_schedule: Optional[List[float]] = None,
+        margin_schedule: Optional[List[float]] = None,
+        da_schedule: Optional[List[float]] = None,
+        capex_schedule: Optional[List[float]] = None,
+        wc_schedule: Optional[List[float]] = None,
+        # Equity bridge
+        minority_interest: float = 0.0,
+        preferred_stock: float = 0.0,
+        deferred_tax_assets: float = 0.0,
+        pension_deficit: float = 0.0,
     ) -> List[Dict]:
         """
         Calculate which inputs have the largest impact on intrinsic value.
         
-        Tests +/- 10% changes to each input and ranks by value impact.
+        Uses perturb-and-revalue: actually re-runs the DCF with ±10% changes
+        to each input and measures the resulting change in intrinsic value.
+        
+        This is superior to proxy methods because it captures the full
+        non-linear interactions in the DCF model.
+        
+        IMPORTANT: Uses the same methodology as the main valuation:
+        - wc_mode (level vs incremental)
+        - use_mid_year_discounting
+        - Multi-stage schedules (growth, margin, da, capex, wc)
         """
         drivers = []
         
-        # Helper to recalculate intrinsic value with modified inputs
-        def calc_value(dr: float, tg: float) -> Optional[float]:
+        # Discount offset for mid-year discounting (same as main valuation)
+        discount_offset = 0.5 if use_mid_year_discounting else 0.0
+        
+        # Helper to run full DCF and get intrinsic value
+        def calc_full_value(
+            growth: float = revenue_growth,
+            margin: float = operating_margin,
+            dr: float = discount_rate,
+            tg: float = terminal_growth_rate,
+            # Allow perturbing schedules directly (for multi-stage sensitivity)
+            perturbed_growth_schedule: Optional[List[float]] = None,
+            perturbed_margin_schedule: Optional[List[float]] = None,
+        ) -> Optional[float]:
             if dr <= tg:
                 return None
-            sensitivity_calc = SensitivityCalculator(
-                projected_fcfs=projected_fcf,
-                projection_years=projection_years,
-                shares_outstanding=shares,
-                total_debt=total_debt,
-                cash=cash,
+            
+            # Re-project FCF with new inputs
+            # Use perturbed schedules if provided, otherwise use base schedules
+            projections = fcf_projector.project(
+                years=projection_years,
+                revenue_growth=growth,
+                operating_margin=margin,
+                da_ratio=da_ratio,
+                capex_ratio=capex_ratio,
+                wc_ratio=wc_ratio,
+                wc_mode=wc_mode,
+                # Use perturbed schedules for sensitivity, or base schedules
+                growth_schedule=perturbed_growth_schedule or growth_schedule,
+                margin_schedule=perturbed_margin_schedule or margin_schedule,
+                da_schedule=da_schedule,
+                capex_schedule=capex_schedule,
+                wc_schedule=wc_schedule,
             )
-            return sensitivity_calc.calculate_intrinsic_value(dr, tg)
+            
+            projected_fcf = [p["fcf"] for p in projections]
+            
+            # Calculate DCF value (using same discounting as main valuation)
+            pv_fcf = sum(
+                fcf / ((1 + dr) ** (year - discount_offset))
+                for year, fcf in enumerate(projected_fcf, start=1)
+            )
+            
+            final_fcf = projected_fcf[-1]
+            terminal_value = final_fcf * (1 + tg) / (dr - tg)
+            pv_terminal = terminal_value / ((1 + dr) ** (projection_years - discount_offset))
+            
+            enterprise_value = pv_fcf + pv_terminal
+            
+            # Full equity bridge
+            equity_value = (
+                enterprise_value
+                - net_debt
+                - minority_interest
+                - preferred_stock
+                + deferred_tax_assets
+                - pension_deficit
+            )
+            
+            return equity_value / shares if shares > 0 else None
         
         # Test discount rate sensitivity (+/- 1 percentage point)
-        val_high_dr = calc_value(discount_rate + 0.01, terminal_growth_rate)
-        val_low_dr = calc_value(discount_rate - 0.01, terminal_growth_rate)
+        val_high_dr = calc_full_value(dr=discount_rate + 0.01)
+        val_low_dr = calc_full_value(dr=discount_rate - 0.01)
         if val_high_dr and val_low_dr and base_value:
             dr_impact = abs(val_high_dr - val_low_dr) / base_value * 100
             drivers.append({
@@ -345,8 +439,8 @@ class ValuationService:
             })
         
         # Test terminal growth sensitivity (+/- 0.5 percentage point)
-        val_high_tg = calc_value(discount_rate, terminal_growth_rate + 0.005)
-        val_low_tg = calc_value(discount_rate, terminal_growth_rate - 0.005)
+        val_high_tg = calc_full_value(tg=terminal_growth_rate + 0.005)
+        val_low_tg = calc_full_value(tg=terminal_growth_rate - 0.005)
         if val_high_tg and val_low_tg and base_value:
             tg_impact = abs(val_high_tg - val_low_tg) / base_value * 100
             drivers.append({
@@ -355,20 +449,62 @@ class ValuationService:
                 "description": "±0.5% change in terminal growth",
             })
         
-        # Revenue growth impact (via FCF impact)
-        # Higher growth = higher FCF = higher value
-        drivers.append({
-            "input": "revenue_growth",
-            "impact_percent": round(revenue_growth * 100, 1),  # Proxy: growth rate itself
-            "description": "Revenue compounds over projection period",
-        })
+        # Test revenue growth sensitivity (+/- 10% relative change)
+        # E.g., 8% growth becomes 7.2% (-10%) and 8.8% (+10%)
+        # IMPORTANT: If growth_schedule exists, we must perturb the schedule itself,
+        # not just the single value (which would be ignored by project())
+        if growth_schedule:
+            # Perturb entire schedule by ±10%
+            high_growth_schedule = [g * 1.10 for g in growth_schedule]
+            low_growth_schedule = [g * 0.90 for g in growth_schedule]
+            val_high_growth = calc_full_value(perturbed_growth_schedule=high_growth_schedule)
+            val_low_growth = calc_full_value(perturbed_growth_schedule=low_growth_schedule)
+            avg_growth = sum(growth_schedule) / len(growth_schedule)
+            growth_desc = f"±10% change in growth schedule (avg {avg_growth*100:.1f}%)"
+        else:
+            growth_delta = revenue_growth * 0.10  # 10% of current growth
+            if growth_delta > 0.001:  # Only test if growth is meaningful
+                val_high_growth = calc_full_value(growth=revenue_growth + growth_delta)
+                val_low_growth = calc_full_value(growth=revenue_growth - growth_delta)
+            else:
+                val_high_growth = val_low_growth = None
+            growth_desc = f"±10% change in revenue growth ({revenue_growth*100:.1f}% base)"
         
-        # Operating margin impact
-        drivers.append({
-            "input": "operating_margin",
-            "impact_percent": round(operating_margin * 100, 1),  # Proxy: margin itself
-            "description": "Margin directly scales EBIT → NOPAT → FCF",
-        })
+        if val_high_growth and val_low_growth and base_value:
+            growth_impact = abs(val_high_growth - val_low_growth) / base_value * 100
+            drivers.append({
+                "input": "revenue_growth",
+                "impact_percent": round(growth_impact, 1),
+                "description": growth_desc,
+            })
+        
+        # Test operating margin sensitivity (+/- 10% relative change)
+        # E.g., 25% margin becomes 22.5% (-10%) and 27.5% (+10%)
+        # IMPORTANT: If margin_schedule exists, we must perturb the schedule itself
+        if margin_schedule:
+            # Perturb entire schedule by ±10%
+            high_margin_schedule = [m * 1.10 for m in margin_schedule]
+            low_margin_schedule = [m * 0.90 for m in margin_schedule]
+            val_high_margin = calc_full_value(perturbed_margin_schedule=high_margin_schedule)
+            val_low_margin = calc_full_value(perturbed_margin_schedule=low_margin_schedule)
+            avg_margin = sum(margin_schedule) / len(margin_schedule)
+            margin_desc = f"±10% change in margin schedule (avg {avg_margin*100:.1f}%)"
+        else:
+            margin_delta = operating_margin * 0.10  # 10% of current margin
+            if margin_delta > 0.001:  # Only test if margin is meaningful
+                val_high_margin = calc_full_value(margin=operating_margin + margin_delta)
+                val_low_margin = calc_full_value(margin=operating_margin - margin_delta)
+            else:
+                val_high_margin = val_low_margin = None
+            margin_desc = f"±10% change in operating margin ({operating_margin*100:.1f}% base)"
+        
+        if val_high_margin and val_low_margin and base_value:
+            margin_impact = abs(val_high_margin - val_low_margin) / base_value * 100
+            drivers.append({
+                "input": "operating_margin",
+                "impact_percent": round(margin_impact, 1),
+                "description": margin_desc,
+            })
         
         # Sort by impact (highest first)
         drivers.sort(key=lambda x: x["impact_percent"], reverse=True)

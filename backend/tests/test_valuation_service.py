@@ -278,6 +278,224 @@ class TestValuationService:
         assert "impact_percent" in drivers[0]
 
 
+class TestValueDriversPerturbAndRevalue:
+    """
+    Tests for P1: Value drivers should use actual perturb-and-revalue
+    instead of proxy calculations.
+    
+    Bug: revenue_growth and operating_margin impact were just returning
+    the rates themselves (proxies), not actual DCF sensitivity.
+    
+    Fix: Re-run FCF projection with ±10% perturbations to measure
+    true value impact.
+    """
+    
+    @pytest.fixture
+    def mock_client(self):
+        """Create a mock StockDataClient."""
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=create_mock_stock_data())
+        client.get_treasury_rate = AsyncMock(return_value=0.045)
+        return client
+    
+    @pytest.mark.asyncio
+    async def test_revenue_growth_impact_is_calculated_not_proxy(self, mock_client):
+        """
+        Revenue growth impact should be calculated by perturbing the DCF,
+        not by just returning the growth rate itself.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Run with specific growth rate
+        result = await service.value_stock("AAPL", revenue_growth=0.08)
+        
+        drivers = result["value_drivers"]
+        growth_driver = next((d for d in drivers if d["input"] == "revenue_growth"), None)
+        
+        assert growth_driver is not None, "Should have revenue_growth in drivers"
+        
+        # The old proxy implementation would return 8.0 (the rate as %)
+        # The new implementation should return actual DCF sensitivity
+        # which is typically much higher (10-40% depending on company)
+        assert growth_driver["impact_percent"] != 8.0, (
+            "Impact should be calculated from perturb-and-revalue, not be the rate itself"
+        )
+        assert growth_driver["impact_percent"] > 0, "Impact should be positive"
+    
+    @pytest.mark.asyncio
+    async def test_operating_margin_impact_is_calculated_not_proxy(self, mock_client):
+        """
+        Operating margin impact should be calculated by perturbing the DCF,
+        not by just returning the margin itself.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Run with specific margin
+        result = await service.value_stock("AAPL", operating_margin=0.25)
+        
+        drivers = result["value_drivers"]
+        margin_driver = next((d for d in drivers if d["input"] == "operating_margin"), None)
+        
+        assert margin_driver is not None, "Should have operating_margin in drivers"
+        
+        # The old proxy implementation would return 25.0 (the margin as %)
+        # The new implementation should return actual DCF sensitivity
+        assert margin_driver["impact_percent"] != 25.0, (
+            "Impact should be calculated from perturb-and-revalue, not be the margin itself"
+        )
+        assert margin_driver["impact_percent"] > 0, "Impact should be positive"
+    
+    @pytest.mark.asyncio
+    async def test_value_drivers_all_have_descriptions(self, mock_client):
+        """All value drivers should have meaningful descriptions."""
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock("AAPL")
+        
+        for driver in result["value_drivers"]:
+            assert "description" in driver
+            assert len(driver["description"]) > 10, (
+                f"Description for {driver['input']} too short"
+            )
+    
+    @pytest.mark.asyncio
+    async def test_higher_growth_produces_higher_impact(self, mock_client):
+        """
+        With higher base growth, a ±10% perturbation should show
+        larger absolute impact (compounding effect).
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Low growth scenario
+        low_result = await service.value_stock("AAPL", revenue_growth=0.05)
+        low_driver = next(
+            d for d in low_result["value_drivers"] if d["input"] == "revenue_growth"
+        )
+        
+        # High growth scenario
+        high_result = await service.value_stock("AAPL", revenue_growth=0.15)
+        high_driver = next(
+            d for d in high_result["value_drivers"] if d["input"] == "revenue_growth"
+        )
+        
+        # Higher growth base should have higher impact from ±10% perturbation
+        # because the absolute change in FCF is larger
+        assert high_driver["impact_percent"] > low_driver["impact_percent"], (
+            f"15% growth ({high_driver['impact_percent']:.1f}% impact) should have "
+            f"larger impact than 5% growth ({low_driver['impact_percent']:.1f}% impact)"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_value_drivers_respects_wc_mode(self, mock_client):
+        """
+        Value drivers should use the same wc_mode as the main valuation.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Run with incremental WC mode
+        result = await service.value_stock("AAPL", wc_mode="incremental")
+        
+        # Should complete without error and have value drivers
+        assert "value_drivers" in result
+        assert len(result["value_drivers"]) > 0
+        
+        # All drivers should have positive impact
+        for driver in result["value_drivers"]:
+            assert driver["impact_percent"] >= 0
+    
+    @pytest.mark.asyncio
+    async def test_value_drivers_respects_mid_year_discounting(self, mock_client):
+        """
+        Value drivers should use the same discounting method as main valuation.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Run with mid-year discounting
+        result = await service.value_stock("AAPL", use_mid_year_discounting=True)
+        
+        # Should complete without error and have value drivers
+        assert "value_drivers" in result
+        assert len(result["value_drivers"]) > 0
+        
+        # All drivers should have positive impact
+        for driver in result["value_drivers"]:
+            assert driver["impact_percent"] >= 0
+    
+    @pytest.mark.asyncio
+    async def test_value_drivers_respects_multi_stage_schedules(self, mock_client):
+        """
+        Value drivers should use the same multi-stage schedules as main valuation.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Run with multi-stage schedules
+        result = await service.value_stock(
+            "AAPL",
+            growth_schedule=[0.15, 0.12, 0.10, 0.08, 0.05],
+            margin_schedule=[0.25, 0.27, 0.28, 0.29, 0.30],
+        )
+        
+        # Should complete without error and have value drivers
+        assert "value_drivers" in result
+        assert len(result["value_drivers"]) > 0
+        
+        # All drivers should have positive impact
+        for driver in result["value_drivers"]:
+            assert driver["impact_percent"] >= 0
+    
+    @pytest.mark.asyncio
+    async def test_value_drivers_perturbs_schedules_not_single_values(self, mock_client):
+        """
+        When multi-stage schedules are provided, the sensitivity analysis
+        should perturb the schedules themselves, not the single value
+        (which would be ignored by project()).
+        
+        Bug: fcf_projector.project() prioritizes schedules over single values,
+        so perturbing the single value had no effect when schedules existed.
+        
+        Fix: Perturb the schedule entries by ±10% for sensitivity analysis.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Run with multi-stage schedules
+        result = await service.value_stock(
+            "AAPL",
+            growth_schedule=[0.15, 0.12, 0.10, 0.08, 0.05],
+            margin_schedule=[0.25, 0.27, 0.28, 0.29, 0.30],
+        )
+        
+        # Find the revenue_growth driver
+        growth_driver = next(
+            (d for d in result["value_drivers"] if d["input"] == "revenue_growth"),
+            None
+        )
+        
+        # With schedules, the impact should NOT be zero
+        # (zero would indicate the perturbation was ignored)
+        assert growth_driver is not None, "Should have revenue_growth driver"
+        assert growth_driver["impact_percent"] > 0, (
+            "Growth schedule perturbation should have non-zero impact. "
+            f"Got {growth_driver['impact_percent']}% - schedule likely being ignored."
+        )
+        
+        # Description should mention "schedule"
+        assert "schedule" in growth_driver["description"].lower(), (
+            f"Description should mention schedule: {growth_driver['description']}"
+        )
+        
+        # Same for margin
+        margin_driver = next(
+            (d for d in result["value_drivers"] if d["input"] == "operating_margin"),
+            None
+        )
+        assert margin_driver is not None, "Should have operating_margin driver"
+        assert margin_driver["impact_percent"] > 0, (
+            "Margin schedule perturbation should have non-zero impact. "
+            f"Got {margin_driver['impact_percent']}% - schedule likely being ignored."
+        )
+        assert "schedule" in margin_driver["description"].lower()
+
+
 class TestExitMultipleSanityCheck:
     """
     Regression tests for Exit Multiple sanity check.
