@@ -624,7 +624,12 @@ Run DCF valuation with user-provided assumptions.
 
 Supports two modes:
 1. Single growth rate: Uses revenue_growth for all projection_years
-2. Multi-stage growth: Uses growth_stages to define phases (overrides revenue_growth)
+2. Multi-stage growth: Uses growth_stages to define phases with fading economics
+
+Multi-stage economics (institutional modeling):
+- margin_schedule: Fade from high-growth margins to mature margins
+- capex_schedule: Fade from growth-phase CapEx to maintenance CapEx
+- wc_schedule: Model working capital efficiency improvements
 
 ```
 POST /api/stock/{symbol}/valuation
@@ -657,7 +662,13 @@ POST /api/stock/{symbol}/valuation
       "name": "string",
       "years": 0,
       "growth_rate": 0.0,
-      "end_growth_rate": 0.0
+      "end_growth_rate": 0.0,
+      "operating_margin": 0.0,
+      "end_operating_margin": 0.0,
+      "capex_ratio": 0.0,
+      "end_capex_ratio": 0.0,
+      "wc_ratio": 0.0,
+      "end_wc_ratio": 0.0
     }
   ]
 }
@@ -999,7 +1010,12 @@ POST /api/stock/{symbol}/monte-carlo-full
       "years": 0,
       "growth_rate": 0.0,
       "end_growth_rate": 0.0,
-      "growth_std": 0.0
+      "operating_margin": 0.0,
+      "end_operating_margin": 0.0,
+      "capex_ratio": 0.0,
+      "end_capex_ratio": 0.0,
+      "wc_ratio": 0.0,
+      "end_wc_ratio": 0.0
     }
   ],
   "use_mid_year_discounting": true
