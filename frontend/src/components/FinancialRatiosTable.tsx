@@ -73,6 +73,22 @@ export function FinancialRatiosTable({ ratios }: Props) {
                 <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratios.profitability.rotic)}</td>
               </tr>
             )}
+            {ratios.profitability.incremental_roic != null && (
+              <tr className="border-b border-gray-100">
+                <td className="py-2 text-sm text-gray-500">Inc. ROIC<GlossaryRef id="incremental-roic" /></td>
+                <td className="py-2 text-sm font-mono font-medium text-right">
+                  <span className={
+                    ratios.profitability.roic != null && ratios.profitability.incremental_roic > ratios.profitability.roic
+                      ? 'text-green-600'
+                      : ratios.profitability.roic != null && ratios.profitability.incremental_roic < ratios.profitability.roic * 0.5
+                      ? 'text-red-600'
+                      : 'text-amber-600'
+                  }>
+                    {formatPercent(ratios.profitability.incremental_roic)}
+                  </span>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

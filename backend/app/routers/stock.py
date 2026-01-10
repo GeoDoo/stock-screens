@@ -618,6 +618,7 @@ async def get_ratios(symbol: str, provider: str):
             "roe": ratios.profitability.roe,
             "roa": ratios.profitability.roa,
             "roic": ratios.profitability.roic,
+            "incremental_roic": ratios.profitability.incremental_roic,
         },
         "liquidity": {
             "current_ratio": ratios.liquidity.current_ratio,
@@ -985,6 +986,7 @@ async def batch_analyze(symbol: str, provider: str):
             "roa": ratios.profitability.roa,
             "roic": ratios.profitability.roic,
             "rotic": ratios.profitability.rotic,
+            "incremental_roic": ratios.profitability.incremental_roic,
         },
         "liquidity": {
             "current_ratio": ratios.liquidity.current_ratio,
@@ -1056,6 +1058,7 @@ async def batch_analyze(symbol: str, provider: str):
                     "roa": ttm_ratios.profitability.roa,
                     "roic": ttm_ratios.profitability.roic,
                     "rotic": ttm_ratios.profitability.rotic,
+                    "incremental_roic": ttm_ratios.profitability.incremental_roic,
                 },
                 "liquidity": {
                     "current_ratio": ttm_ratios.liquidity.current_ratio,

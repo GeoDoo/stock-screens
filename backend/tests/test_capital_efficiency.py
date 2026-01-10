@@ -167,3 +167,145 @@ class TestAnalyzeValueCreation:
         
         assert result["is_value_creating"] is False
         assert "destroyer" in result["assessment"].lower() or "reduces" in result["assessment"].lower()
+
+
+class TestIncrementalROIC:
+    """
+    Tests for Incremental ROIC calculation.
+    
+    Incremental ROIC = ΔNOPAT / ΔInvested Capital
+    
+    This measures the return on NEW capital invested, which is critical
+    for assessing whether a company's reinvestment is creating value.
+    
+    Key insight: If Incremental ROIC < ROIC, the company is experiencing
+    diminishing returns (red flag for growth sustainability).
+    """
+    
+    def test_incremental_roic_basic(self):
+        """Basic incremental ROIC calculation."""
+        calculator = CapitalEfficiencyCalculator(
+            nopat=120,
+            invested_capital=600,
+            revenue_growth=0.10,
+            prior_nopat=100,
+            prior_invested_capital=500,
+        )
+        
+        # ΔNOPAT = 120 - 100 = 20
+        # ΔIC = 600 - 500 = 100
+        # Incremental ROIC = 20 / 100 = 0.20 (20%)
+        inc_roic = calculator.incremental_roic()
+        assert inc_roic is not None
+        assert abs(inc_roic - 0.20) < 0.001
+    
+    def test_incremental_roic_higher_than_roic(self):
+        """Incremental ROIC > ROIC means improving returns (bullish)."""
+        calculator = CapitalEfficiencyCalculator(
+            nopat=130,           # Current: 130/600 = 21.7%
+            invested_capital=600,
+            revenue_growth=0.10,
+            prior_nopat=100,     # Prior: 100/500 = 20%
+            prior_invested_capital=500,
+        )
+        
+        # ΔNOPAT = 30, ΔIC = 100, Incremental = 30%
+        roic = calculator.roic()  # 21.7%
+        inc_roic = calculator.incremental_roic()  # 30%
+        
+        assert inc_roic > roic, "Incremental ROIC should exceed ROIC (improving returns)"
+    
+    def test_incremental_roic_lower_than_roic(self):
+        """Incremental ROIC < ROIC means diminishing returns (bearish)."""
+        calculator = CapitalEfficiencyCalculator(
+            nopat=105,           # Current: 105/600 = 17.5%
+            invested_capital=600,
+            revenue_growth=0.10,
+            prior_nopat=100,     # Prior: 100/500 = 20%
+            prior_invested_capital=500,
+        )
+        
+        # ΔNOPAT = 5, ΔIC = 100, Incremental = 5%
+        roic = calculator.roic()  # 17.5%
+        inc_roic = calculator.incremental_roic()  # 5%
+        
+        assert inc_roic < roic, "Incremental ROIC should be below ROIC (diminishing returns)"
+    
+    def test_incremental_roic_without_prior_data(self):
+        """Should return None when prior data is not provided."""
+        calculator = CapitalEfficiencyCalculator(
+            nopat=120,
+            invested_capital=600,
+            revenue_growth=0.10,
+            # No prior_nopat or prior_invested_capital
+        )
+        
+        assert calculator.incremental_roic() is None
+    
+    def test_incremental_roic_zero_capital_change(self):
+        """Should return None when invested capital didn't change."""
+        calculator = CapitalEfficiencyCalculator(
+            nopat=120,
+            invested_capital=500,  # Same as prior
+            revenue_growth=0.10,
+            prior_nopat=100,
+            prior_invested_capital=500,  # No change
+        )
+        
+        # ΔIC = 0, can't divide
+        assert calculator.incremental_roic() is None
+    
+    def test_incremental_roic_negative_capital_change(self):
+        """
+        Negative capital change (shrinking) needs careful interpretation.
+        If NOPAT increased while IC decreased, that's very good (higher efficiency).
+        """
+        calculator = CapitalEfficiencyCalculator(
+            nopat=110,           # Increased
+            invested_capital=450,  # Decreased
+            revenue_growth=0.10,
+            prior_nopat=100,
+            prior_invested_capital=500,
+        )
+        
+        # ΔNOPAT = 10, ΔIC = -50
+        # Incremental ROIC = 10 / -50 = -0.20 (negative, but actually good!)
+        # This is a rare edge case - company is more efficient with less capital
+        inc_roic = calculator.incremental_roic()
+        assert inc_roic is not None
+        # Negative incremental ROIC with shrinking capital is actually positive efficiency
+    
+    def test_analyze_value_creation_includes_incremental_roic(self):
+        """analyze_value_creation should include incremental ROIC when available."""
+        result = analyze_value_creation(
+            nopat=120,
+            invested_capital=600,
+            revenue_growth=0.10,
+            wacc=0.10,
+            prior_nopat=100,
+            prior_invested_capital=500,
+        )
+        
+        assert "incremental_roic" in result
+        assert result["incremental_roic"] is not None
+    
+    def test_incremental_roic_vs_roic_assessment(self):
+        """Assessment should mention if incremental ROIC is concerning."""
+        # Case: Diminishing returns
+        result = analyze_value_creation(
+            nopat=105,           # Current ROIC = 17.5%
+            invested_capital=600,
+            revenue_growth=0.10,
+            wacc=0.10,
+            prior_nopat=100,     # Incremental ROIC = 5% (much lower!)
+            prior_invested_capital=500,
+        )
+        
+        # Should flag diminishing returns
+        inc_roic = result.get("incremental_roic")
+        roic = result.get("roic")
+        
+        if inc_roic is not None and roic is not None and inc_roic < roic * 0.5:
+            # Incremental ROIC is less than half of ROIC - should be flagged
+            assert "diminishing" in result.get("incremental_assessment", "").lower() or \
+                   result.get("incremental_roic_warning") is not None

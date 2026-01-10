@@ -20,6 +20,7 @@ class CapitalEfficiencyCalculator:
     
     Key metrics:
     - ROIC: Return on Invested Capital (how efficiently capital is deployed)
+    - Incremental ROIC: Return on NEW capital invested (quality of reinvestment)
     - Reinvestment Rate: Portion of earnings reinvested for growth
     - Value Spread: ROIC - WACC (positive = value creation)
     - Economic Profit (EVA): Excess return × Capital
@@ -27,6 +28,9 @@ class CapitalEfficiencyCalculator:
     nopat: float  # Net Operating Profit After Tax
     invested_capital: float  # Equity + Debt - Excess Cash
     revenue_growth: float  # Expected growth rate
+    # Prior period data for incremental ROIC calculation
+    prior_nopat: Optional[float] = None
+    prior_invested_capital: Optional[float] = None
     
     def roic(self) -> Optional[float]:
         """
@@ -43,6 +47,33 @@ class CapitalEfficiencyCalculator:
         if self.invested_capital <= 0:
             return None
         return self.nopat / self.invested_capital
+    
+    def incremental_roic(self) -> Optional[float]:
+        """
+        Incremental ROIC = ΔNOPAT / ΔInvested Capital.
+        
+        Measures the return on NEW capital invested, which is critical
+        for assessing whether a company's reinvestment is creating value.
+        
+        Interpretation:
+        - Incremental ROIC > ROIC: Improving returns (bullish)
+        - Incremental ROIC ≈ ROIC: Stable returns
+        - Incremental ROIC < ROIC: Diminishing returns (bearish - red flag!)
+        
+        Returns None if:
+        - Prior period data is not available
+        - Change in invested capital is zero
+        """
+        if self.prior_nopat is None or self.prior_invested_capital is None:
+            return None
+        
+        delta_nopat = self.nopat - self.prior_nopat
+        delta_ic = self.invested_capital - self.prior_invested_capital
+        
+        if delta_ic == 0:
+            return None
+        
+        return delta_nopat / delta_ic
     
     def reinvestment_rate(self) -> Optional[float]:
         """
@@ -107,6 +138,8 @@ def analyze_value_creation(
     invested_capital: float,
     revenue_growth: float,
     wacc: float,
+    prior_nopat: Optional[float] = None,
+    prior_invested_capital: Optional[float] = None,
 ) -> dict:
     """
     Comprehensive value creation analysis.
@@ -114,25 +147,30 @@ def analyze_value_creation(
     Returns:
         Dictionary with:
         - roic: Return on Invested Capital
+        - incremental_roic: Return on new capital invested
         - reinvestment_rate: % of earnings needed for growth
         - value_spread: ROIC - WACC
         - economic_profit: Dollar value created/destroyed
         - is_value_creating: Boolean
         - assessment: Human-readable analysis
+        - incremental_assessment: Assessment of reinvestment quality
     """
     calc = CapitalEfficiencyCalculator(
         nopat=nopat,
         invested_capital=invested_capital,
         revenue_growth=revenue_growth,
+        prior_nopat=prior_nopat,
+        prior_invested_capital=prior_invested_capital,
     )
     
     roic = calc.roic()
+    inc_roic = calc.incremental_roic()
     rr = calc.reinvestment_rate()
     spread = calc.value_spread(wacc)
     eva = calc.economic_profit(wacc)
     is_creating = calc.is_value_creating(wacc)
     
-    # Generate assessment
+    # Generate main assessment
     if roic is None:
         assessment = "Unable to calculate ROIC (invalid invested capital)"
     elif spread is not None:
@@ -147,11 +185,26 @@ def analyze_value_creation(
     else:
         assessment = "Unable to assess value creation"
     
+    # Generate incremental ROIC assessment
+    incremental_assessment = None
+    if inc_roic is not None and roic is not None and roic > 0:
+        ratio = inc_roic / roic
+        if ratio > 1.2:
+            incremental_assessment = f"Improving returns: Incremental ROIC ({inc_roic:.1%}) exceeds ROIC ({roic:.1%}). New investments are more productive."
+        elif ratio > 0.8:
+            incremental_assessment = f"Stable returns: Incremental ROIC ({inc_roic:.1%}) similar to ROIC ({roic:.1%}). Consistent investment quality."
+        elif ratio > 0.5:
+            incremental_assessment = f"⚠️ Declining returns: Incremental ROIC ({inc_roic:.1%}) below ROIC ({roic:.1%}). Reinvestment quality deteriorating."
+        else:
+            incremental_assessment = f"🚨 Diminishing returns: Incremental ROIC ({inc_roic:.1%}) much lower than ROIC ({roic:.1%}). Growth may not be sustainable."
+    
     return {
         "roic": roic,
+        "incremental_roic": inc_roic,
         "reinvestment_rate": rr,
         "value_spread": spread,
         "economic_profit": eva,
         "is_value_creating": is_creating,
         "assessment": assessment,
+        "incremental_assessment": incremental_assessment,
     }
