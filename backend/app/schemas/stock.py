@@ -46,11 +46,36 @@ class StockDataResponse(BaseModel):
 
 
 class GrowthStageInput(BaseModel):
-    """A single growth stage for multi-stage DCF."""
+    """
+    A single growth stage for multi-stage DCF.
+    
+    Supports fading not just revenue growth, but also unit economics:
+    - Operating margin (margin expansion/compression as company matures)
+    - CapEx ratio (capital intensity changes)
+    - Working capital ratio (efficiency improvements)
+    
+    Example:
+        High-growth SaaS company:
+        - Stage 1: 25% growth, 15% margin (investing heavily)
+        - Stage 2: 25%→10% growth, 15%→25% margin (operating leverage)
+        - Stage 3: 5% growth, 25% margin (mature)
+    """
     name: str
     years: int
     growth_rate: float  # e.g., 0.20 for 20%
     end_growth_rate: Optional[float] = None  # If set, fade linearly to this rate
+    
+    # Economics - operating margin as % of revenue
+    operating_margin: Optional[float] = None  # e.g., 0.25 for 25%
+    end_operating_margin: Optional[float] = None  # If set, fade to this margin
+    
+    # Economics - CapEx as % of revenue
+    capex_ratio: Optional[float] = None  # e.g., 0.10 for 10%
+    end_capex_ratio: Optional[float] = None  # If set, fade to this ratio
+    
+    # Economics - Working Capital as % of revenue
+    wc_ratio: Optional[float] = None  # e.g., 0.15 for 15%
+    end_wc_ratio: Optional[float] = None  # If set, fade to this ratio
 
 
 class ValuationRequest(BaseModel):
@@ -180,15 +205,6 @@ class WACCComponentsInput(BaseModel):
     # Optional: std devs for sampling WACC inputs
     beta_std: Optional[float] = None  # If set, sample beta with this std dev
     market_risk_premium_std: Optional[float] = None  # If set, sample MRP
-
-
-class GrowthStageInput(BaseModel):
-    """A single growth stage for multi-stage growth model."""
-    name: str
-    years: int
-    growth_rate: float  # e.g., 0.20 for 20%
-    end_growth_rate: Optional[float] = None  # If set, fade linearly to this rate
-    growth_std: Optional[float] = None  # Per-stage std dev (defaults to global)
 
 
 class FullMonteCarloRequest(BaseModel):

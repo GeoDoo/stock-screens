@@ -481,6 +481,72 @@ class TestAdvancedDCFOptions:
             # Values should be different (multi-stage has higher early growth)
             assert value_constant != value_stages
 
+    def test_multi_stage_economics_margin_fade(self):
+        """
+        Multi-stage economics should allow margin fade.
+        
+        This tests the institutional-grade modeling where:
+        - High-growth phase: Lower margins (investing in growth)
+        - Mature phase: Higher margins (operating leverage)
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            # Multi-stage with margin expansion
+            response = client.post(
+                "/api/stock/AAPL/valuation?provider=fmp",
+                json={
+                    "revenue_growth": 0.10,
+                    "operating_margin": 0.15,  # Fallback if not in stages
+                    "terminal_growth_rate": 0.025,
+                    "market_risk_premium": 0.06,
+                    "projection_years": 10,
+                    "growth_stages": [
+                        {
+                            "name": "High Growth",
+                            "years": 3,
+                            "growth_rate": 0.25,
+                            "operating_margin": 0.15,  # Lower margins during growth
+                        },
+                        {
+                            "name": "Margin Expansion",
+                            "years": 4,
+                            "growth_rate": 0.25,
+                            "end_growth_rate": 0.08,
+                            "operating_margin": 0.15,
+                            "end_operating_margin": 0.28,  # Margins expand
+                        },
+                        {
+                            "name": "Mature",
+                            "years": 3,
+                            "growth_rate": 0.05,
+                            "operating_margin": 0.28,  # Stable mature margins
+                        },
+                    ]
+                }
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert "intrinsic_value_per_share" in data
+            
+            # Should have 10 projections with varying margins
+            projections = data["projections"]
+            assert len(projections) == 10
+            
+            # Verify margin expansion is reflected in projections
+            # Early years should have lower EBIT margins, later years higher
+            year_1_margin = projections[0]["ebit"] / projections[0]["revenue"]
+            year_10_margin = projections[9]["ebit"] / projections[9]["revenue"]
+            
+            # Mature margin should be higher than growth margin
+            assert year_10_margin > year_1_margin, (
+                f"Margin should expand from {year_1_margin:.2%} to {year_10_margin:.2%}"
+            )
+
 
 class TestFullMonteCarloEndpoint:
     """Tests for Full-Model Monte Carlo API endpoint."""

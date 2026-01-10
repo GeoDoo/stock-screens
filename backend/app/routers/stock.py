@@ -309,25 +309,40 @@ async def run_valuation(symbol: str, provider: str, request: ValuationRequest):
     
     Supports two modes:
     1. Single growth rate: Uses revenue_growth for all projection_years
-    2. Multi-stage growth: Uses growth_stages to define phases (overrides revenue_growth)
+    2. Multi-stage growth: Uses growth_stages to define phases with fading economics
+    
+    Multi-stage economics (institutional modeling):
+    - margin_schedule: Fade from high-growth margins to mature margins
+    - capex_schedule: Fade from growth-phase CapEx to maintenance CapEx
+    - wc_schedule: Model working capital efficiency improvements
     """
     from app.services.multi_stage_growth import GrowthStage, MultiStageGrowthModel
     
     client = get_client_for_provider(provider)
     service = ValuationService(client=client)
 
-    # Determine if using multi-stage growth
+    # Determine if using multi-stage growth with economics
     growth_schedule = None
+    margin_schedule = None
+    capex_schedule = None
+    wc_schedule = None
     projection_years = request.projection_years
     
     if request.growth_stages and len(request.growth_stages) > 0:
-        # Convert API stages to model stages
+        # Convert API stages to model stages (including economics)
         stages = [
             GrowthStage(
                 name=s.name,
                 years=s.years,
                 growth_rate=s.growth_rate,
                 end_growth_rate=s.end_growth_rate,
+                # Economics - margin, capex, wc with optional fade
+                operating_margin=s.operating_margin,
+                end_operating_margin=s.end_operating_margin,
+                capex_ratio=s.capex_ratio,
+                end_capex_ratio=s.end_capex_ratio,
+                wc_ratio=s.wc_ratio,
+                end_wc_ratio=s.end_wc_ratio,
             )
             for s in request.growth_stages
         ]
@@ -336,6 +351,9 @@ async def run_valuation(symbol: str, provider: str, request: ValuationRequest):
             terminal_growth_rate=request.terminal_growth_rate,
         )
         growth_schedule = model.growth_schedule
+        margin_schedule = model.margin_schedule
+        capex_schedule = model.capex_schedule
+        wc_schedule = model.wc_schedule
         projection_years = model.total_projection_years
 
     try:
@@ -353,6 +371,9 @@ async def run_valuation(symbol: str, provider: str, request: ValuationRequest):
             use_mid_year_discounting=request.use_mid_year_discounting,
             wc_mode=request.wc_mode,
             growth_schedule=growth_schedule,
+            margin_schedule=margin_schedule,
+            capex_schedule=capex_schedule,
+            wc_schedule=wc_schedule,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Valuation error: {str(e)}")
