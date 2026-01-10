@@ -435,4 +435,213 @@ class TestMultiStageGrowthIntegration:
         assert projections[4]["revenue"] > projections[3]["revenue"]  # More growth
 
 
+class TestEconomicsScheduleIntegration:
+    """
+    Test FCFProjector with year-by-year economics schedules.
+    
+    This enables modeling of operating leverage (margin expansion),
+    economies of scale (capex reduction), and working capital efficiency
+    improvements as a company matures.
+    """
+    
+    def test_margin_schedule_applies_year_by_year(self):
+        """Operating margin schedule should vary margins per year."""
+        projector = FCFProjector(
+            historical_revenue=[1000],
+            historical_ebit=[200],  # 20% margin
+            historical_da=[50],
+            historical_capex=[100],
+            historical_working_capital=[150],
+            tax_rate=0.25,
+        )
+        
+        # Margin expansion: 20% → 25% → 30%
+        margin_schedule = [0.20, 0.25, 0.30]
+        growth_schedule = [0.10, 0.10, 0.10]
+        
+        projections = projector.project(
+            years=3,
+            growth_schedule=growth_schedule,
+            margin_schedule=margin_schedule,
+        )
+        
+        assert len(projections) == 3
+        
+        # Year 1: Revenue 1100, EBIT = 1100 * 0.20 = 220
+        # Year 2: Revenue 1210, EBIT = 1210 * 0.25 = 302.5
+        # Year 3: Revenue 1331, EBIT = 1331 * 0.30 = 399.3
+        assert abs(projections[0]["ebit"] - 220) < 1
+        assert abs(projections[1]["ebit"] - 302.5) < 1
+        assert abs(projections[2]["ebit"] - 399.3) < 1
+    
+    def test_capex_schedule_applies_year_by_year(self):
+        """CapEx schedule should vary CapEx per year."""
+        projector = FCFProjector(
+            historical_revenue=[1000],
+            historical_ebit=[200],
+            historical_da=[50],
+            historical_capex=[100],  # 10%
+            historical_working_capital=[150],
+            tax_rate=0.25,
+        )
+        
+        # CapEx ratio decline: 10% → 8% → 6%
+        capex_schedule = [0.10, 0.08, 0.06]
+        growth_schedule = [0.10, 0.10, 0.10]
+        
+        projections = projector.project(
+            years=3,
+            growth_schedule=growth_schedule,
+            capex_schedule=capex_schedule,
+        )
+        
+        # Year 1: Revenue 1100, CapEx = 1100 * 0.10 = 110
+        # Year 2: Revenue 1210, CapEx = 1210 * 0.08 = 96.8
+        # Year 3: Revenue 1331, CapEx = 1331 * 0.06 = 79.86
+        assert abs(projections[0]["capex"] - 110) < 1
+        assert abs(projections[1]["capex"] - 96.8) < 1
+        assert abs(projections[2]["capex"] - 79.86) < 1
+    
+    def test_wc_schedule_applies_year_by_year(self):
+        """Working capital schedule should vary WC per year (level mode)."""
+        projector = FCFProjector(
+            historical_revenue=[1000],
+            historical_ebit=[200],
+            historical_da=[50],
+            historical_capex=[100],
+            historical_working_capital=[150],  # 15%
+            tax_rate=0.25,
+        )
+        
+        # WC efficiency improvement: 15% → 12% → 10%
+        wc_schedule = [0.15, 0.12, 0.10]
+        growth_schedule = [0.10, 0.10, 0.10]
+        
+        projections = projector.project(
+            years=3,
+            growth_schedule=growth_schedule,
+            wc_schedule=wc_schedule,
+            wc_mode="level",
+        )
+        
+        # Year 1: Revenue 1100, WC = 1100 * 0.15 = 165
+        # Year 2: Revenue 1210, WC = 1210 * 0.12 = 145.2
+        # Year 3: Revenue 1331, WC = 1331 * 0.10 = 133.1
+        assert abs(projections[0]["working_capital"] - 165) < 1
+        assert abs(projections[1]["working_capital"] - 145.2) < 1
+        assert abs(projections[2]["working_capital"] - 133.1) < 1
+    
+    def test_all_schedules_combined(self):
+        """Test all economics schedules working together."""
+        projector = FCFProjector(
+            historical_revenue=[1000],
+            historical_ebit=[200],
+            historical_da=[50],
+            historical_capex=[100],
+            historical_working_capital=[150],
+            tax_rate=0.25,
+        )
+        
+        # High-growth transitioning to mature
+        growth_schedule = [0.20, 0.15, 0.10]
+        margin_schedule = [0.20, 0.22, 0.25]   # Margin expansion
+        capex_schedule = [0.10, 0.08, 0.06]    # CapEx declining
+        wc_schedule = [0.15, 0.13, 0.11]       # WC efficiency
+        
+        projections = projector.project(
+            years=3,
+            growth_schedule=growth_schedule,
+            margin_schedule=margin_schedule,
+            capex_schedule=capex_schedule,
+            wc_schedule=wc_schedule,
+        )
+        
+        assert len(projections) == 3
+        
+        # Verify each year uses correct parameters
+        # Year 1: Rev = 1200, EBIT = 240 (20%), CapEx = 120 (10%), WC = 180 (15%)
+        assert abs(projections[0]["revenue"] - 1200) < 1
+        assert abs(projections[0]["ebit"] - 240) < 1
+        assert abs(projections[0]["capex"] - 120) < 1
+        assert abs(projections[0]["working_capital"] - 180) < 1
+    
+    def test_schedule_shorter_than_growth_schedule(self):
+        """When economics schedule is shorter, last value should repeat."""
+        projector = FCFProjector(
+            historical_revenue=[1000],
+            historical_ebit=[200],
+            historical_da=[50],
+            historical_capex=[100],
+            historical_working_capital=[150],
+            tax_rate=0.25,
+        )
+        
+        growth_schedule = [0.10, 0.10, 0.10, 0.10]  # 4 years
+        margin_schedule = [0.20, 0.25]  # Only 2 years specified
+        
+        projections = projector.project(
+            years=4,
+            growth_schedule=growth_schedule,
+            margin_schedule=margin_schedule,
+        )
+        
+        assert len(projections) == 4
+        
+        # Years 3 & 4 should use last margin (0.25)
+        margin_year3 = projections[2]["ebit"] / projections[2]["revenue"]
+        margin_year4 = projections[3]["ebit"] / projections[3]["revenue"]
+        assert abs(margin_year3 - 0.25) < 0.001
+        assert abs(margin_year4 - 0.25) < 0.001
+    
+    def test_none_schedule_uses_constant_value(self):
+        """When schedule is None, constant value is used (backward compatible)."""
+        projector = FCFProjector(
+            historical_revenue=[1000],
+            historical_ebit=[200],
+            historical_da=[50],
+            historical_capex=[100],
+            historical_working_capital=[150],
+            tax_rate=0.25,
+        )
+        
+        projections = projector.project(
+            years=3,
+            operating_margin=0.22,  # Constant margin
+            margin_schedule=None,   # No schedule
+        )
+        
+        # All years should use 22% margin
+        for proj in projections:
+            actual_margin = proj["ebit"] / proj["revenue"]
+            assert abs(actual_margin - 0.22) < 0.001
+    
+    def test_da_schedule_applies_year_by_year(self):
+        """D&A schedule should vary D&A per year."""
+        projector = FCFProjector(
+            historical_revenue=[1000],
+            historical_ebit=[200],
+            historical_da=[50],  # 5%
+            historical_capex=[100],
+            historical_working_capital=[150],
+            tax_rate=0.25,
+        )
+        
+        # D&A ratio decline (assets maturing): 5% → 4% → 3%
+        da_schedule = [0.05, 0.04, 0.03]
+        growth_schedule = [0.10, 0.10, 0.10]
+        
+        projections = projector.project(
+            years=3,
+            growth_schedule=growth_schedule,
+            da_schedule=da_schedule,
+        )
+        
+        # Year 1: Revenue 1100, D&A = 1100 * 0.05 = 55
+        # Year 2: Revenue 1210, D&A = 1210 * 0.04 = 48.4
+        # Year 3: Revenue 1331, D&A = 1331 * 0.03 = 39.93
+        assert abs(projections[0]["da"] - 55) < 1
+        assert abs(projections[1]["da"] - 48.4) < 1
+        assert abs(projections[2]["da"] - 39.93) < 1
+
+
 

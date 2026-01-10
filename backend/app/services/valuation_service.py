@@ -47,6 +47,11 @@ class ValuationService:
         wc_mode: str = "level",
         # Multi-stage growth - if provided, overrides revenue_growth
         growth_schedule: Optional[List[float]] = None,
+        # Multi-stage economics schedules - for modeling maturing companies
+        margin_schedule: Optional[List[float]] = None,
+        da_schedule: Optional[List[float]] = None,
+        capex_schedule: Optional[List[float]] = None,
+        wc_schedule: Optional[List[float]] = None,
         # SBC dilution - annual share growth rate from stock-based compensation
         annual_dilution_rate: float = 0.0,
     ) -> dict:
@@ -140,6 +145,11 @@ class ValuationService:
             wc_ratio=wc_ratio,
             wc_mode=wc_mode,
             growth_schedule=growth_schedule,
+            # Multi-stage economics schedules
+            margin_schedule=margin_schedule,
+            da_schedule=da_schedule,
+            capex_schedule=capex_schedule,
+            wc_schedule=wc_schedule,
         )
 
         # 5. Run DCF

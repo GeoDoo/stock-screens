@@ -617,3 +617,96 @@ class TestTerminalValueDominance:
             assert check.get("dominance_warning") is None, (
                 f"With TV at {pct:.0%} of EV, should not have dominance_warning"
             )
+
+
+class TestMultiStageEconomicsIntegration:
+    """
+    Test that ValuationService correctly passes economics schedules
+    to FCFProjector for multi-stage DCF modeling.
+    """
+    
+    @pytest.fixture
+    def mock_client(self):
+        """Create mock client with realistic stock data."""
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=create_mock_stock_data())
+        client.get_treasury_rate = AsyncMock(return_value=0.04)
+        return client
+    
+    @pytest.mark.asyncio
+    async def test_accepts_economics_schedules(self, mock_client):
+        """ValuationService should accept margin, capex, and wc schedules."""
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock(
+            "AAPL",
+            growth_schedule=[0.10, 0.08, 0.06],
+            margin_schedule=[0.25, 0.27, 0.30],
+            capex_schedule=[0.06, 0.05, 0.04],
+            wc_schedule=[0.15, 0.12, 0.10],
+        )
+        
+        assert result["intrinsic_value_per_share"] > 0
+        assert len(result["projections"]) == 3
+    
+    @pytest.mark.asyncio
+    async def test_schedules_affect_fcf_projections(self, mock_client):
+        """Economics schedules should produce different FCF from constant values."""
+        service = ValuationService(client=mock_client)
+        
+        # With constant margin
+        result_constant = await service.value_stock(
+            "AAPL",
+            projection_years=3,
+            operating_margin=0.25,
+        )
+        
+        # With improving margin schedule
+        result_schedule = await service.value_stock(
+            "AAPL",
+            growth_schedule=[0.05, 0.05, 0.05],  # Same growth
+            margin_schedule=[0.25, 0.27, 0.30],  # Improving margins
+        )
+        
+        # Improving margins should produce higher FCF in later years
+        # and thus higher overall valuation
+        assert result_schedule["intrinsic_value_per_share"] > result_constant["intrinsic_value_per_share"], (
+            "Improving margin schedule should produce higher valuation than constant margin"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_declining_capex_improves_fcf(self, mock_client):
+        """Declining CapEx schedule should improve FCF and valuation."""
+        service = ValuationService(client=mock_client)
+        
+        # With high constant CapEx
+        result_high_capex = await service.value_stock(
+            "AAPL",
+            projection_years=3,
+            capex_ratio=0.08,
+        )
+        
+        # With declining CapEx schedule (company maturing)
+        result_declining = await service.value_stock(
+            "AAPL",
+            growth_schedule=[0.05, 0.05, 0.05],
+            capex_schedule=[0.08, 0.06, 0.04],  # CapEx declining
+        )
+        
+        # Lower CapEx = higher FCF = higher valuation
+        assert result_declining["intrinsic_value_per_share"] > result_high_capex["intrinsic_value_per_share"]
+    
+    @pytest.mark.asyncio
+    async def test_schedules_with_da_schedule(self, mock_client):
+        """D&A schedule should also be accepted and applied."""
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock(
+            "AAPL",
+            growth_schedule=[0.10, 0.08, 0.06],
+            da_schedule=[0.05, 0.04, 0.03],  # D&A declining as assets mature
+        )
+        
+        assert result["intrinsic_value_per_share"] > 0
+        # Verify projections were made
+        assert len(result["projections"]) == 3
