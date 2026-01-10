@@ -1232,3 +1232,209 @@ class TestRiskFreeRateConsistency:
         # Verify cost of equity uses our risk-free rate
         expected_coe = risk_free_rate + 1.1 * 0.06  # Rf + beta * MRP
         assert abs(wacc_calc.cost_of_equity() - expected_coe) < 0.001
+
+
+class TestTTMFYMixingGuard:
+    """
+    Tests for ensuring history series don't mix TTM and annual data.
+    
+    The issue: If a provider returns [TTM, FY2024, FY2023, ...], CAGR 
+    calculations become invalid because TTM overlaps with FY2024.
+    History series should only include annual data for valid CAGR/ratios.
+    """
+    
+    def test_revenue_history_excludes_ttm(self):
+        """Revenue history should not include TTM records."""
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"period": "TTM", "revenue": 400_000_000_000},    # TTM - should be excluded
+                {"period": "FY", "revenue": 380_000_000_000},     # FY2024
+                {"period": "FY", "revenue": 350_000_000_000},     # FY2023
+                {"period": "FY", "revenue": 320_000_000_000},     # FY2022
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        history = extractor.revenue_history()
+        
+        # Should have 3 values (FY only), not 4
+        assert len(history) == 3, f"Expected 3 annual values, got {len(history)}"
+        # Oldest first: 320B, 350B, 380B
+        assert history == [320_000_000_000, 350_000_000_000, 380_000_000_000]
+    
+    def test_ebit_history_excludes_ltm(self):
+        """EBIT history should not include LTM records."""
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"period": "LTM", "operatingIncome": 50_000_000_000},  # LTM - exclude
+                {"period": "annual", "operatingIncome": 48_000_000_000},
+                {"period": "annual", "operatingIncome": 45_000_000_000},
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        history = extractor.ebit_history()
+        
+        assert len(history) == 2, f"Expected 2 annual values, got {len(history)}"
+        assert history == [45_000_000_000, 48_000_000_000]
+    
+    def test_da_history_excludes_ttm(self):
+        """D&A history should exclude TTM from cash flow statements."""
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [],
+            "cash_flow": [
+                {"period": "ttm", "depreciationAndAmortization": 12_000_000_000},  # ttm - exclude
+                {"period": "FY", "depreciationAndAmortization": 11_500_000_000},
+                {"period": "FY", "depreciationAndAmortization": 11_000_000_000},
+            ],
+        }
+        extractor = DataExtractor(data)
+        
+        history = extractor.da_history()
+        
+        assert len(history) == 2
+        assert history == [11_000_000_000, 11_500_000_000]
+    
+    def test_capex_history_excludes_ttm(self):
+        """CapEx history should exclude TTM."""
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [],
+            "cash_flow": [
+                {"period": "TTM", "capitalExpenditure": -11_000_000_000},  # TTM - exclude
+                {"period": "FY", "capitalExpenditure": -10_500_000_000},
+                {"period": "FY", "capitalExpenditure": -10_000_000_000},
+            ],
+        }
+        extractor = DataExtractor(data)
+        
+        history = extractor.capex_history()
+        
+        assert len(history) == 2
+        # CapEx is abs() converted
+        assert history == [10_000_000_000, 10_500_000_000]
+    
+    def test_working_capital_history_excludes_ttm(self):
+        """Working capital history should exclude TTM from balance sheets."""
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [
+                {
+                    "period": "TTM",
+                    "totalCurrentAssets": 150_000_000_000,
+                    "cashAndCashEquivalents": 50_000_000_000,
+                    "totalCurrentLiabilities": 100_000_000_000,
+                    "shortTermDebt": 10_000_000_000,
+                },
+                {
+                    "period": "FY",
+                    "totalCurrentAssets": 145_000_000_000,
+                    "cashAndCashEquivalents": 48_000_000_000,
+                    "totalCurrentLiabilities": 95_000_000_000,
+                    "shortTermDebt": 9_000_000_000,
+                },
+                {
+                    "period": "FY",
+                    "totalCurrentAssets": 140_000_000_000,
+                    "cashAndCashEquivalents": 45_000_000_000,
+                    "totalCurrentLiabilities": 90_000_000_000,
+                    "shortTermDebt": 8_000_000_000,
+                },
+            ],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        history = extractor.working_capital_history()
+        
+        # Should have 2 values (FY only)
+        assert len(history) == 2, f"Expected 2 annual WC values, got {len(history)}"
+    
+    def test_history_without_period_field_treats_as_annual(self):
+        """Records without 'period' field should be treated as annual."""
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"revenue": 400_000_000_000},  # No period - treat as annual
+                {"revenue": 380_000_000_000},
+                {"revenue": 350_000_000_000},
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        history = extractor.revenue_history()
+        
+        # All should be included
+        assert len(history) == 3
+        assert history == [350_000_000_000, 380_000_000_000, 400_000_000_000]
+    
+    def test_cagr_not_distorted_by_ttm_exclusion(self):
+        """CAGR calculation should use only annual data."""
+        from app.services.fcf_projector import FCFProjector
+        
+        # With TTM included, CAGR would be different (TTM overlaps FY2024)
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"period": "TTM", "revenue": 420_000_000_000},    # Should be excluded
+                {"period": "FY", "revenue": 400_000_000_000},     # FY2024
+                {"period": "FY", "revenue": 350_000_000_000},     # FY2023
+                {"period": "FY", "revenue": 300_000_000_000},     # FY2022
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        history = extractor.revenue_history()
+        
+        # Create projector with the (filtered) history
+        projector = FCFProjector(
+            historical_revenue=history,
+            historical_ebit=[30, 35, 40],  # dummy
+            historical_da=[5, 5, 5],
+            historical_capex=[10, 10, 10],
+            historical_working_capital=[20, 22, 24],
+        )
+        
+        cagr = projector.revenue_cagr()
+        
+        # 3 years of data: 300B → 400B
+        # CAGR = (400/300)^(1/2) - 1 = 15.47%
+        expected_cagr = (400 / 300) ** (1/2) - 1
+        assert abs(cagr - expected_cagr) < 0.001, (
+            f"CAGR should be ~{expected_cagr:.2%} using annual data only, got {cagr:.2%}"
+        )
+    
+    def test_quarterly_data_also_excluded(self):
+        """Quarterly data (Q1, Q2, etc.) should also be excluded from history."""
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"period": "Q4", "revenue": 110_000_000_000},   # Quarterly - exclude
+                {"period": "Q3", "revenue": 100_000_000_000},   # Quarterly - exclude
+                {"period": "FY", "revenue": 400_000_000_000},   # Annual - include
+                {"period": "FY", "revenue": 380_000_000_000},   # Annual - include
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        history = extractor.revenue_history()
+        
+        # Should only have 2 annual values
+        assert len(history) == 2
+        assert history == [380_000_000_000, 400_000_000_000]
