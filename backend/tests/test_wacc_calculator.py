@@ -3,6 +3,13 @@ from app.services.wacc_calculator import WACCCalculator, validate_wacc_inputs
 
 
 class TestWACCCalculator:
+    """
+    Basic WACC calculation tests.
+    
+    Note: These tests disable size premium to isolate testing of core WACC mechanics.
+    Size premium is tested separately in TestSizePremium.
+    """
+    
     def test_cost_of_equity(self):
         """Cost of equity using CAPM: rf + beta * (rm - rf)"""
         calculator = WACCCalculator(
@@ -13,6 +20,7 @@ class TestWACCCalculator:
             tax_rate=0.25,
             market_cap=1000,
             total_debt=500,
+            include_size_premium=False,  # Disable size premium for pure CAPM test
         )
 
         # Cost of equity = 0.04 + 1.2 * 0.06 = 0.112 (11.2%)
@@ -28,6 +36,7 @@ class TestWACCCalculator:
             tax_rate=0.25,  # 25%
             market_cap=1000,
             total_debt=500,
+            include_size_premium=False,
         )
 
         # After-tax cost of debt = 0.08 * (1 - 0.25) = 0.06 (6%)
@@ -43,6 +52,7 @@ class TestWACCCalculator:
             tax_rate=0.25,
             market_cap=1000,  # E
             total_debt=500,   # D
+            include_size_premium=False,
         )
 
         # V = 1000 + 500 = 1500
@@ -388,4 +398,122 @@ class TestBetaUnleverRelever:
         assert adjusted_wacc > 0
         # The adjusted beta should give different result
         assert standard_wacc != adjusted_wacc
+
+
+class TestSizePremium:
+    """
+    Tests for Size Premium in WACC calculation.
+    
+    Small-cap companies historically earn returns higher than predicted by CAPM.
+    This "size effect" (Banz, 1981) is one of the oldest documented anomalies.
+    
+    We add a size premium based on Duff & Phelps / Ibbotson SBBI decile data.
+    """
+    
+    def test_large_cap_no_premium(self):
+        """Large caps ($51B+) should have no size premium."""
+        from app.services.wacc_calculator import get_size_premium
+        
+        premium, category = get_size_premium(100_000_000_000)  # $100B
+        assert premium == 0.0
+        assert "Large Cap (1)" in category
+    
+    def test_small_cap_has_premium(self):
+        """Small caps should have size premium."""
+        from app.services.wacc_calculator import get_size_premium
+        
+        premium, category = get_size_premium(2_000_000_000)  # $2B
+        assert premium == 0.015  # 1.5%
+        assert "Small Cap" in category
+    
+    def test_micro_cap_higher_premium(self):
+        """Micro caps should have higher premium than small caps."""
+        from app.services.wacc_calculator import get_size_premium
+        
+        small_premium, _ = get_size_premium(2_000_000_000)   # $2B
+        micro_premium, _ = get_size_premium(500_000_000)     # $500M
+        nano_premium, _ = get_size_premium(50_000_000)       # $50M
+        
+        assert micro_premium > small_premium
+        assert nano_premium > micro_premium
+        assert nano_premium == 0.05  # 5% max premium
+    
+    def test_size_premium_in_wacc(self):
+        """Size premium should increase cost of equity and WACC."""
+        # Large cap - no premium
+        large_calc = WACCCalculator(
+            risk_free_rate=0.04,
+            beta=1.0,
+            market_risk_premium=0.06,
+            cost_of_debt=0.05,
+            tax_rate=0.25,
+            market_cap=100_000_000_000,  # $100B
+            total_debt=10_000_000_000,
+            include_size_premium=True,
+        )
+        
+        # Small cap - has premium
+        small_calc = WACCCalculator(
+            risk_free_rate=0.04,
+            beta=1.0,
+            market_risk_premium=0.06,
+            cost_of_debt=0.05,
+            tax_rate=0.25,
+            market_cap=500_000_000,  # $500M (Micro cap)
+            total_debt=50_000_000,
+            include_size_premium=True,
+        )
+        
+        # Small cap should have higher cost of equity
+        assert small_calc.cost_of_equity() > large_calc.cost_of_equity()
+        
+        # Difference should be the size premium (2.2% for micro cap)
+        coe_diff = small_calc.cost_of_equity() - large_calc.cost_of_equity()
+        assert abs(coe_diff - 0.022) < 0.001
+    
+    def test_size_premium_can_be_disabled(self):
+        """Setting include_size_premium=False should skip premium."""
+        calc_with = WACCCalculator(
+            risk_free_rate=0.04,
+            beta=1.0,
+            market_risk_premium=0.06,
+            cost_of_debt=0.05,
+            tax_rate=0.25,
+            market_cap=500_000_000,  # $500M
+            total_debt=50_000_000,
+            include_size_premium=True,
+        )
+        
+        calc_without = WACCCalculator(
+            risk_free_rate=0.04,
+            beta=1.0,
+            market_risk_premium=0.06,
+            cost_of_debt=0.05,
+            tax_rate=0.25,
+            market_cap=500_000_000,
+            total_debt=50_000_000,
+            include_size_premium=False,
+        )
+        
+        # Without premium, cost of equity = CAPM only
+        assert calc_without.cost_of_equity() == 0.04 + 1.0 * 0.06  # 10%
+        assert calc_without.size_premium() == 0.0
+        
+        # With premium, cost of equity = CAPM + 2.2%
+        assert calc_with.cost_of_equity() == pytest.approx(0.122, rel=0.01)
+    
+    def test_size_category_available(self):
+        """Size category should be accessible for display."""
+        calc = WACCCalculator(
+            risk_free_rate=0.04,
+            beta=1.0,
+            market_risk_premium=0.06,
+            cost_of_debt=0.05,
+            tax_rate=0.25,
+            market_cap=2_000_000_000,  # $2B
+            total_debt=200_000_000,
+        )
+        
+        assert calc.size_category() == "Small Cap (5)"
+        assert calc.size_premium() == 0.015
 

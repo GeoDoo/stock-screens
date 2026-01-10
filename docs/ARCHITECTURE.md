@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-10 14:43
+> Last updated: 2026-01-10 14:54
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -97,7 +97,9 @@ Orchestrates the full DCF valuation:
 Weighted Average Cost of Capital calculator.
 
 **Key Methods:**
-- `cost_of_equity()` - Calculate cost of equity using CAPM.
+- `size_premium()` - Get size premium for this company based on market cap.
+- `size_category()` - Get size category description (e.g., 'Small Cap (5)').
+- `cost_of_equity()` - Calculate cost of equity using CAPM with Size Premium.
 - `after_tax_cost_of_debt()` - Calculate after-tax cost of debt.
 - `calculate()` - Calculate WACC.
 

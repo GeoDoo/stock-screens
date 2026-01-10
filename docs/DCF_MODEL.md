@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code docstrings.
 > 
-> Last updated: 2026-01-10 14:43
+> Last updated: 2026-01-10 14:54
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -36,9 +36,14 @@ Where:
 - E = Market cap (equity value)
 - D = Total debt
 - V = E + D (total firm value)
-- Re = Cost of equity
+- Re = Cost of equity (CAPM + Size Premium)
 - Rd = Cost of debt
 - T = Tax rate
+
+Size Premium:
+Small-cap companies historically earn returns higher than predicted by CAPM.
+This is one of the oldest documented market anomalies (Banz, 1981).
+We add a size premium based on Duff & Phelps / Ibbotson SBBI data.
 
 ## FCF Projector
 
