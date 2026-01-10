@@ -1,11 +1,64 @@
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 # Maximum beta cap for edge cases (insolvent companies, etc.)
 MAX_BETA = 5.0
 # Minimum beta (some defensive stocks can have very low or even negative beta)
 MIN_BETA = 0.0
+
+
+# Size Premium Table (based on Duff & Phelps / Ibbotson SBBI data)
+# Small-cap companies have historically earned higher returns than predicted by CAPM
+# This premium compensates for illiquidity, higher volatility, and business risk
+#
+# Format: (min_market_cap_billions, size_category, premium)
+# Premium is added to cost of equity: Re = Rf + β*(Rm-Rf) + Size Premium
+# Table is ordered from largest to smallest for lookup
+SIZE_PREMIUM_TABLE: List[Tuple[float, str, float]] = [
+    (51.0, "Large Cap (1)", 0.0000),    # > $51B: No premium
+    (14.0, "Large Cap (2)", 0.0050),    # $14B - $51B: 0.50%
+    (6.0, "Mid Cap (3)", 0.0080),       # $6B - $14B: 0.80%
+    (2.5, "Mid Cap (4)", 0.0100),       # $2.5B - $6B: 1.00%
+    (1.5, "Small Cap (5)", 0.0150),     # $1.5B - $2.5B: 1.50%
+    (0.7, "Small Cap (6)", 0.0180),     # $700M - $1.5B: 1.80%
+    (0.3, "Micro Cap (7)", 0.0220),     # $300M - $700M: 2.20%
+    (0.1, "Micro Cap (8)", 0.0280),     # $100M - $300M: 2.80%
+    (0.0, "Nano Cap (9-10)", 0.0500),   # < $100M: 5.00%
+]
+
+
+def get_size_premium(market_cap: float) -> Tuple[float, str]:
+    """
+    Get size premium based on market capitalization.
+    
+    Small-cap companies historically earn excess returns not explained by CAPM beta.
+    This "size effect" is one of the oldest documented market anomalies.
+    
+    Args:
+        market_cap: Market capitalization in dollars (not billions)
+        
+    Returns:
+        Tuple of (premium as decimal, size category description)
+        
+    Example:
+        >>> get_size_premium(500_000_000)  # $500M company
+        (0.022, "Micro Cap (7)")  # 2.20% size premium
+    """
+    # Convert to billions for table lookup
+    market_cap_billions = market_cap / 1_000_000_000
+    
+    # Handle edge cases
+    if market_cap_billions <= 0:
+        return (0.05, "Nano Cap (Unknown)")
+    
+    # Find the appropriate tier (table sorted largest to smallest)
+    for min_cap, category, premium in SIZE_PREMIUM_TABLE:
+        if market_cap_billions >= min_cap:
+            return (premium, category)
+    
+    # Fallback for very small caps
+    return (0.05, "Nano Cap (9-10)")
 
 
 def _clamp_beta(beta: float) -> float:
@@ -177,9 +230,14 @@ class WACCCalculator:
     - E = Market cap (equity value)
     - D = Total debt
     - V = E + D (total firm value)
-    - Re = Cost of equity
+    - Re = Cost of equity (CAPM + Size Premium)
     - Rd = Cost of debt
     - T = Tax rate
+    
+    Size Premium:
+    Small-cap companies historically earn returns higher than predicted by CAPM.
+    This is one of the oldest documented market anomalies (Banz, 1981).
+    We add a size premium based on Duff & Phelps / Ibbotson SBBI data.
     """
     risk_free_rate: float      # e.g., 10-year treasury yield
     beta: float                # Stock's beta
@@ -188,13 +246,35 @@ class WACCCalculator:
     tax_rate: float            # Effective tax rate
     market_cap: float          # Market capitalization
     total_debt: float          # Total debt
+    include_size_premium: bool = True  # Whether to add size premium to cost of equity
+
+    def size_premium(self) -> float:
+        """
+        Get size premium for this company based on market cap.
+        
+        Returns 0 if include_size_premium is False or if large cap.
+        """
+        if not self.include_size_premium:
+            return 0.0
+        premium, _ = get_size_premium(self.market_cap)
+        return premium
+    
+    def size_category(self) -> str:
+        """Get size category description (e.g., 'Small Cap (5)')."""
+        _, category = get_size_premium(self.market_cap)
+        return category
 
     def cost_of_equity(self) -> float:
         """
-        Calculate cost of equity using CAPM.
-        Re = Rf + β * (Rm - Rf)
+        Calculate cost of equity using CAPM with Size Premium.
+        
+        Re = Rf + β * (Rm - Rf) + Size Premium
+        
+        The size premium adjusts for the empirical observation that
+        small-cap stocks earn higher returns than predicted by beta alone.
         """
-        return self.risk_free_rate + self.beta * self.market_risk_premium
+        capm = self.risk_free_rate + self.beta * self.market_risk_premium
+        return capm + self.size_premium()
 
     @property
     def _effective_tax_rate(self) -> float:
