@@ -1,6 +1,6 @@
 import logging
 import httpx
-from typing import Any, List
+from typing import Any, List, Optional
 
 from datetime import datetime, timedelta
 
@@ -108,6 +108,15 @@ class FMPProvider(StockDataProvider):
         # Build standardized financials (merge income, balance, cash flow by date)
         financials = self._merge_financials(income_stmt, balance_sheet, cash_flow)
         
+        # P0 Fix: "Quarterly Trap" - Reconstruct TTM if not available
+        # If FMP doesn't return TTM and we have quarterly data, reconstruct it
+        # to avoid using 3-month revenue as "Latest Revenue" (catastrophic)
+        if not self._has_ttm(financials):
+            ttm_stmt = self._reconstruct_ttm_from_quarterly(financials)
+            if ttm_stmt:
+                # Insert TTM at the beginning (most recent)
+                financials.insert(0, ttm_stmt)
+        
         return StockData(
             profile=profile,
             financials=financials,
@@ -189,6 +198,103 @@ class FMPProvider(StockDataProvider):
             financials.append(stmt)
         
         return financials
+    
+    def _has_ttm(self, financials: List[FinancialStatement]) -> bool:
+        """Check if there's already a TTM statement in the list."""
+        return any(f.period == "ttm" for f in financials)
+    
+    def _reconstruct_ttm_from_quarterly(
+        self, 
+        financials: List[FinancialStatement]
+    ) -> Optional[FinancialStatement]:
+        """
+        Reconstruct TTM (Trailing Twelve Months) from quarterly data.
+        
+        P0 Fix: The "Quarterly Trap" - if FMP doesn't return TTM data and
+        a company just filed a 10-Q, we might use 3-month revenue as
+        "Latest Revenue" (catastrophic data integrity issue).
+        
+        Solution:
+        - Income/Cash flow items: Sum last 4 quarters
+        - Balance sheet items: Use most recent quarter
+        
+        Returns None if we don't have at least 4 quarterly statements.
+        """
+        # Get quarterly statements only
+        quarterly = [f for f in financials if f.period == "quarterly"]
+        
+        if len(quarterly) < 4:
+            return None
+        
+        # Sort by date descending (most recent first)
+        quarterly_sorted = sorted(quarterly, key=lambda f: f.date or "", reverse=True)
+        
+        # Take the 4 most recent quarters
+        last_4_quarters = quarterly_sorted[:4]
+        
+        # Most recent quarter for balance sheet items
+        latest_quarter = quarterly_sorted[0]
+        
+        # Helper to sum a field across 4 quarters
+        def sum_field(field_name: str) -> Optional[float]:
+            values = []
+            for q in last_4_quarters:
+                val = getattr(q, field_name, None)
+                if val is not None:
+                    values.append(val)
+            if len(values) == 4:
+                return sum(values)
+            return None
+        
+        # Helper to get latest quarter value
+        def latest_field(field_name: str) -> Optional[float]:
+            return getattr(latest_quarter, field_name, None)
+        
+        # Construct TTM statement
+        return FinancialStatement(
+            date="TTM",
+            period="ttm",
+            # Income Statement - SUM 4 quarters
+            revenue=sum_field("revenue"),
+            cost_of_revenue=sum_field("cost_of_revenue"),
+            gross_profit=sum_field("gross_profit"),
+            operating_income=sum_field("operating_income"),
+            net_income=sum_field("net_income"),
+            interest_expense=sum_field("interest_expense"),
+            income_tax_expense=sum_field("income_tax_expense"),
+            selling_general_admin=sum_field("selling_general_admin"),
+            # Share counts - use latest (not summed)
+            weighted_avg_shares=latest_field("weighted_avg_shares"),
+            weighted_avg_shares_diluted=latest_field("weighted_avg_shares_diluted"),
+            # Balance Sheet - LATEST quarter
+            total_assets=latest_field("total_assets"),
+            total_liabilities=latest_field("total_liabilities"),
+            total_equity=latest_field("total_equity"),
+            total_debt=latest_field("total_debt"),
+            cash_and_equivalents=latest_field("cash_and_equivalents"),
+            current_assets=latest_field("current_assets"),
+            current_liabilities=latest_field("current_liabilities"),
+            short_term_debt=latest_field("short_term_debt"),
+            goodwill=latest_field("goodwill"),
+            intangible_assets=latest_field("intangible_assets"),
+            retained_earnings=latest_field("retained_earnings"),
+            net_receivables=latest_field("net_receivables"),
+            property_plant_equipment=latest_field("property_plant_equipment"),
+            inventory=latest_field("inventory"),
+            accounts_payable=latest_field("accounts_payable"),
+            # Equity Bridge components - LATEST quarter
+            minority_interest=latest_field("minority_interest"),
+            preferred_stock=latest_field("preferred_stock"),
+            deferred_tax_assets=latest_field("deferred_tax_assets"),
+            pension_liability=latest_field("pension_liability"),
+            # Cash Flow - SUM 4 quarters
+            operating_cash_flow=sum_field("operating_cash_flow"),
+            capital_expenditure=sum_field("capital_expenditure"),
+            free_cash_flow=sum_field("free_cash_flow"),
+            depreciation_amortization=sum_field("depreciation_amortization"),
+            dividends_paid=sum_field("dividends_paid"),
+            stock_based_compensation=sum_field("stock_based_compensation"),
+        )
     
     async def get_treasury_rate(self) -> float:
         """Fetch current 10-year treasury rate."""

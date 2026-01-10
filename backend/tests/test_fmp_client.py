@@ -203,3 +203,148 @@ class TestFMPClient:
 
             # Should return default 4.5%
             assert result == 0.045
+
+
+class TestFMPProviderTTMReconstruction:
+    """
+    Tests for TTM (Trailing Twelve Months) reconstruction.
+    
+    P0 Fix: The "Quarterly Trap" - if FMP doesn't return TTM data and
+    a company just filed a 10-Q, we might use 3-month revenue as
+    "Latest Revenue" (catastrophic data integrity issue).
+    
+    Solution: Reconstruct TTM from quarterly data if no TTM is available:
+    - Income/Cash flow items: Sum last 4 quarters
+    - Balance sheet items: Use most recent quarter
+    """
+    
+    @pytest.mark.asyncio
+    async def test_reconstructs_ttm_from_quarterly_when_no_ttm_available(self, fmp_provider):
+        """
+        If FMP returns quarterly data but no TTM, we should reconstruct it.
+        
+        TTM Revenue = Q1 + Q2 + Q3 + Q4 = 100k * 4 = 400k
+        """
+        # Mock: FMP returns 4 quarterly periods but no TTM
+        quarterly_income = [
+            {"date": "2024-09-30", "period": "Q4", "revenue": 100_000, "netIncome": 25_000},
+            {"date": "2024-06-30", "period": "Q3", "revenue": 100_000, "netIncome": 25_000},
+            {"date": "2024-03-31", "period": "Q2", "revenue": 100_000, "netIncome": 25_000},
+            {"date": "2023-12-31", "period": "Q1", "revenue": 100_000, "netIncome": 25_000},
+        ]
+        quarterly_balance = [
+            {"date": "2024-09-30", "totalAssets": 500_000, "totalDebt": 100_000},
+            {"date": "2024-06-30", "totalAssets": 480_000, "totalDebt": 95_000},
+        ]
+        quarterly_cash_flow = [
+            {"date": "2024-09-30", "period": "Q4", "freeCashFlow": 20_000, "depreciationAndAmortization": 5_000},
+            {"date": "2024-06-30", "period": "Q3", "freeCashFlow": 20_000, "depreciationAndAmortization": 5_000},
+            {"date": "2024-03-31", "period": "Q2", "freeCashFlow": 20_000, "depreciationAndAmortization": 5_000},
+            {"date": "2023-12-31", "period": "Q1", "freeCashFlow": 20_000, "depreciationAndAmortization": 5_000},
+        ]
+        
+        with patch.object(fmp_provider, "_request", new_callable=AsyncMock) as mock_request:
+            # Return annual and quarterly data (no TTM)
+            async def side_effect(endpoint, **kwargs):
+                if endpoint == "/profile":
+                    return [{"symbol": "TEST", "companyName": "Test Corp", "marketCap": 1_000_000}]
+                elif endpoint == "/income-statement":
+                    return quarterly_income
+                elif endpoint == "/balance-sheet-statement":
+                    return quarterly_balance
+                elif endpoint == "/cash-flow-statement":
+                    return quarterly_cash_flow
+                elif "quarter" in endpoint:  # Quarterly endpoints
+                    if "income" in endpoint:
+                        return quarterly_income
+                    elif "balance" in endpoint:
+                        return quarterly_balance
+                    elif "cash" in endpoint:
+                        return quarterly_cash_flow
+                return []
+            
+            mock_request.side_effect = side_effect
+            
+            stock_data = await fmp_provider.get_stock_data("TEST")
+            
+            # Should have a TTM statement reconstructed
+            ttm_statements = [f for f in stock_data.financials if f.period == "ttm"]
+            assert len(ttm_statements) >= 1, "Should have reconstructed TTM statement"
+            
+            ttm = ttm_statements[0]
+            
+            # TTM Revenue = sum of 4 quarters = 400_000
+            assert ttm.revenue == 400_000, f"TTM revenue should be 400k, got {ttm.revenue}"
+            
+            # TTM Net Income = sum of 4 quarters = 100_000
+            assert ttm.net_income == 100_000, f"TTM net income should be 100k, got {ttm.net_income}"
+            
+            # Balance sheet uses latest quarter
+            assert ttm.total_assets == 500_000, f"TTM total_assets should be 500k (latest quarter)"
+    
+    @pytest.mark.asyncio
+    async def test_does_not_reconstruct_if_ttm_already_exists(self, fmp_provider):
+        """
+        If FMP already returns TTM data, don't reconstruct.
+        """
+        # FMP returns TTM directly
+        income_with_ttm = [
+            {"date": "2024-09-30", "period": "TTM", "revenue": 450_000, "netIncome": 110_000},
+            {"date": "2024-06-30", "period": "Q3", "revenue": 100_000, "netIncome": 25_000},
+        ]
+        balance_sheet = [{"date": "2024-09-30", "totalAssets": 500_000}]
+        cash_flow = [{"date": "2024-09-30", "period": "TTM", "freeCashFlow": 85_000}]
+        
+        with patch.object(fmp_provider, "_request", new_callable=AsyncMock) as mock_request:
+            async def side_effect(endpoint, **kwargs):
+                if endpoint == "/profile":
+                    return [{"symbol": "TEST", "companyName": "Test Corp", "marketCap": 1_000_000}]
+                elif endpoint == "/income-statement":
+                    return income_with_ttm
+                elif endpoint == "/balance-sheet-statement":
+                    return balance_sheet
+                elif endpoint == "/cash-flow-statement":
+                    return cash_flow
+                return []
+            
+            mock_request.side_effect = side_effect
+            
+            stock_data = await fmp_provider.get_stock_data("TEST")
+            
+            # Should have exactly 1 TTM statement (the original one, not reconstructed)
+            ttm_statements = [f for f in stock_data.financials if f.period == "ttm"]
+            assert len(ttm_statements) == 1, "Should have exactly 1 TTM (original)"
+            
+            # Revenue should be the original TTM value, not reconstructed
+            assert ttm_statements[0].revenue == 450_000
+    
+    @pytest.mark.asyncio
+    async def test_skips_ttm_reconstruction_if_insufficient_quarters(self, fmp_provider):
+        """
+        Don't try to reconstruct TTM if we have fewer than 4 quarters.
+        """
+        # Only 2 quarters available
+        quarterly_income = [
+            {"date": "2024-09-30", "period": "Q4", "revenue": 100_000},
+            {"date": "2024-06-30", "period": "Q3", "revenue": 100_000},
+        ]
+        
+        with patch.object(fmp_provider, "_request", new_callable=AsyncMock) as mock_request:
+            async def side_effect(endpoint, **kwargs):
+                if endpoint == "/profile":
+                    return [{"symbol": "TEST", "companyName": "Test Corp", "marketCap": 1_000_000}]
+                elif endpoint == "/income-statement":
+                    return quarterly_income
+                elif endpoint == "/balance-sheet-statement":
+                    return []
+                elif endpoint == "/cash-flow-statement":
+                    return []
+                return []
+            
+            mock_request.side_effect = side_effect
+            
+            stock_data = await fmp_provider.get_stock_data("TEST")
+            
+            # Should NOT have a TTM statement
+            ttm_statements = [f for f in stock_data.financials if f.period == "ttm"]
+            assert len(ttm_statements) == 0, "Should not reconstruct TTM with < 4 quarters"
