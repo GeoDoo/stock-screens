@@ -95,6 +95,7 @@ export default function App() {
   const [useMidYearDiscounting, setUseMidYearDiscounting] = useState(false);
   const [wcMode, setWcMode] = useState<'level' | 'incremental'>('level');
   const [growthStages, setGrowthStages] = useState<GrowthStage[]>([]);
+  const [annualDilutionRate, setAnnualDilutionRate] = useState('0');  // SBC dilution %
   
   // Valuation state (loading/error tracked but not displayed separately)
   const [_valuationLoading, setValuationLoading] = useState(false);
@@ -283,6 +284,8 @@ export default function App() {
       wc_mode: wcMode,
       // Multi-stage growth (overrides revenue_growth if provided)
       growth_stages: growthStages.length > 0 ? growthStages : null,
+      // SBC dilution - affects per-share value
+      annual_dilution_rate: annualDilutionRate ? parseFloat(annualDilutionRate) / 100 : 0,
     };
     
     try {
@@ -1243,6 +1246,24 @@ export default function App() {
                       <option value="level">Level (WC = Revenue × Ratio)</option>
                       <option value="incremental">Incremental (ΔWC = ΔRevenue × Intensity)</option>
                     </select>
+                  </div>
+                  
+                  {/* SBC Dilution Rate */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-500">SBC Dilution:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.1"
+                      value={annualDilutionRate}
+                      onChange={(e) => setAnnualDilutionRate(e.target.value)}
+                      className="w-16 px-2 py-1 text-sm font-mono border border-gray-200 rounded bg-white text-gray-700"
+                    />
+                    <span className="text-xs text-gray-400">%/year</span>
+                    <span className="text-xs text-gray-400" title="Annual share issuance from stock-based compensation. Reduces per-share value.">
+                      (share dilution)
+                    </span>
                   </div>
                 </div>
                 

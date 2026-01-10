@@ -116,6 +116,9 @@ class ValuationRequest(BaseModel):
     wc_mode: str = "level"  # "level" or "incremental"
     # Multi-stage growth - if provided, overrides revenue_growth and projection_years
     growth_stages: Optional[List[GrowthStageInput]] = None
+    # SBC dilution - annual share growth rate from stock-based compensation
+    # E.g., 0.02 means 2% more shares issued each year (dilutes per-share value)
+    annual_dilution_rate: float = 0.0
     
     @field_validator('terminal_growth_rate')
     @classmethod

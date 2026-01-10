@@ -114,6 +114,9 @@ export interface ValuationRequest {
   wc_mode?: 'level' | 'incremental';
   // Multi-stage growth - if provided, overrides revenue_growth and projection_years
   growth_stages?: GrowthStage[] | null;
+  // SBC dilution - annual share growth rate from stock-based compensation
+  // E.g., 0.02 means 2% more shares issued each year (dilutes per-share value)
+  annual_dilution_rate?: number;
 }
 
 export interface SensitivityMatrix {
