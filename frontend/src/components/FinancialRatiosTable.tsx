@@ -127,6 +127,20 @@ export function FinancialRatiosTable({ ratios }: Props) {
               <td className="py-2 text-sm text-gray-500">Inventory Turnover<GlossaryRef id="inventory-turnover" /></td>
               <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratios.efficiency.inventory_turnover)}</td>
             </tr>
+            {ratios.efficiency.cash_conversion_cycle != null && (
+              <tr className="border-b border-gray-100">
+                <td className="py-2 text-sm text-gray-500">Cash Conv. Cycle<GlossaryRef id="cash-conversion-cycle" /></td>
+                <td className="py-2 text-sm font-mono font-medium text-right">
+                  <span className={
+                    ratios.efficiency.cash_conversion_cycle < 0 ? 'text-green-600' :
+                    ratios.efficiency.cash_conversion_cycle > 60 ? 'text-amber-600' :
+                    ''
+                  }>
+                    {formatNumber(ratios.efficiency.cash_conversion_cycle, 0)} days
+                  </span>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

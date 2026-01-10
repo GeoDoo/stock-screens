@@ -629,6 +629,10 @@ async def get_ratios(symbol: str, provider: str):
         "efficiency": {
             "asset_turnover": ratios.efficiency.asset_turnover,
             "inventory_turnover": ratios.efficiency.inventory_turnover,
+            "days_sales_outstanding": ratios.efficiency.days_sales_outstanding,
+            "days_inventory_outstanding": ratios.efficiency.days_inventory_outstanding,
+            "days_payables_outstanding": ratios.efficiency.days_payables_outstanding,
+            "cash_conversion_cycle": ratios.efficiency.cash_conversion_cycle,
         },
     }
 
@@ -996,6 +1000,10 @@ async def batch_analyze(symbol: str, provider: str):
         "efficiency": {
             "asset_turnover": ratios.efficiency.asset_turnover,
             "inventory_turnover": ratios.efficiency.inventory_turnover,
+            "days_sales_outstanding": ratios.efficiency.days_sales_outstanding,
+            "days_inventory_outstanding": ratios.efficiency.days_inventory_outstanding,
+            "days_payables_outstanding": ratios.efficiency.days_payables_outstanding,
+            "cash_conversion_cycle": ratios.efficiency.cash_conversion_cycle,
         },
         "risk": {
             "altman_z_score": ratios.risk.altman_z_score,
@@ -1068,6 +1076,10 @@ async def batch_analyze(symbol: str, provider: str):
                 "efficiency": {
                     "asset_turnover": ttm_ratios.efficiency.asset_turnover,
                     "inventory_turnover": ttm_ratios.efficiency.inventory_turnover,
+                    "days_sales_outstanding": ttm_ratios.efficiency.days_sales_outstanding,
+                    "days_inventory_outstanding": ttm_ratios.efficiency.days_inventory_outstanding,
+                    "days_payables_outstanding": ttm_ratios.efficiency.days_payables_outstanding,
+                    "cash_conversion_cycle": ttm_ratios.efficiency.cash_conversion_cycle,
                 },
                 "risk": {
                     "altman_z_score": ttm_ratios.risk.altman_z_score,

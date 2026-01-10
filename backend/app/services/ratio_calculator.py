@@ -53,6 +53,11 @@ class EfficiencyRatios:
     """Efficiency metrics."""
     asset_turnover: Optional[float] = None
     inventory_turnover: Optional[float] = None
+    # Cash Conversion Cycle components
+    days_sales_outstanding: Optional[float] = None  # DSO = (AR / Revenue) × 365
+    days_inventory_outstanding: Optional[float] = None  # DIO = (Inventory / COGS) × 365
+    days_payables_outstanding: Optional[float] = None  # DPO = (AP / COGS) × 365
+    cash_conversion_cycle: Optional[float] = None  # CCC = DSO + DIO - DPO
 
 
 @dataclass
@@ -150,6 +155,8 @@ class RatioCalculator:
         goodwill = balance_sheet.get("goodwill") or 0
         intangibles = balance_sheet.get("intangibleAssets") or 0
         retained_earnings = balance_sheet.get("retainedEarnings") or 0
+        accounts_receivable = balance_sheet.get("netReceivables")
+        accounts_payable = balance_sheet.get("accountPayables")
         
         dividends_paid = abs(cash_flow.get("dividendsPaid") or 0)
         operating_cash_flow = cash_flow.get("operatingCashFlow")
@@ -210,7 +217,8 @@ class RatioCalculator:
                 total_debt, equity, operating_income, interest_expense
             ),
             efficiency=self._calc_efficiency(
-                revenue, total_assets, cogs, inventory
+                revenue, total_assets, cogs, inventory,
+                accounts_receivable, accounts_payable
             ),
             risk=self._calc_risk(
                 current_assets, current_liabilities, total_assets,
@@ -404,6 +412,8 @@ class RatioCalculator:
         total_assets: Optional[float],
         cogs: Optional[float],
         inventory: Optional[float],
+        accounts_receivable: Optional[float] = None,
+        accounts_payable: Optional[float] = None,
     ) -> EfficiencyRatios:
         """Calculate efficiency ratios."""
         ratios = EfficiencyRatios()
@@ -415,6 +425,30 @@ class RatioCalculator:
         # Inventory Turnover
         if cogs and inventory and inventory > 0:
             ratios.inventory_turnover = cogs / inventory
+        
+        # Cash Conversion Cycle components
+        # DSO = (Accounts Receivable / Revenue) × 365
+        if accounts_receivable is not None and revenue and revenue > 0:
+            ratios.days_sales_outstanding = (accounts_receivable / revenue) * 365
+        
+        # DIO = (Inventory / COGS) × 365
+        if inventory and cogs and cogs > 0:
+            ratios.days_inventory_outstanding = (inventory / cogs) * 365
+        
+        # DPO = (Accounts Payable / COGS) × 365
+        if accounts_payable is not None and cogs and cogs > 0:
+            ratios.days_payables_outstanding = (accounts_payable / cogs) * 365
+        
+        # CCC = DSO + DIO - DPO
+        # Only calculate if all components are available
+        if (ratios.days_sales_outstanding is not None and
+            ratios.days_inventory_outstanding is not None and
+            ratios.days_payables_outstanding is not None):
+            ratios.cash_conversion_cycle = (
+                ratios.days_sales_outstanding +
+                ratios.days_inventory_outstanding -
+                ratios.days_payables_outstanding
+            )
         
         return ratios
     

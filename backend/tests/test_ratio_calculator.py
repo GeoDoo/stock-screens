@@ -1663,3 +1663,187 @@ class TestIncrementalROIC:
         
         assert ratios.profitability.incremental_roic is None
 
+
+class TestCashConversionCycle:
+    """
+    Tests for Cash Conversion Cycle (CCC) calculation.
+    
+    CCC = DSO + DIO - DPO
+    
+    Where:
+    - DSO (Days Sales Outstanding) = (AR / Revenue) × 365
+    - DIO (Days Inventory Outstanding) = (Inventory / COGS) × 365
+    - DPO (Days Payables Outstanding) = (AP / COGS) × 365
+    
+    Lower CCC is better - company converts inventory to cash faster.
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_cash_conversion_cycle_calculated(self, calculator):
+        """CCC should be calculated when all components are available."""
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 365_000_000_000,  # $365B - makes daily revenue = $1B
+                "costOfRevenue": 219_000_000_000,  # ~60% of revenue
+            }],
+            "balance_sheet": [{
+                "netReceivables": 30_000_000_000,  # $30B AR
+                "inventory": 18_000_000_000,  # $18B inventory
+                "accountPayables": 15_000_000_000,  # $15B AP
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # DSO = (30B / 365B) × 365 = 30 days
+        # DIO = (18B / 219B) × 365 = 30 days
+        # DPO = (15B / 219B) × 365 = 25 days
+        # CCC = 30 + 30 - 25 = 35 days
+        
+        assert ratios.efficiency.days_sales_outstanding is not None
+        assert ratios.efficiency.days_inventory_outstanding is not None
+        assert ratios.efficiency.days_payables_outstanding is not None
+        assert ratios.efficiency.cash_conversion_cycle is not None
+        
+        assert ratios.efficiency.days_sales_outstanding == pytest.approx(30.0, rel=0.01)
+        assert ratios.efficiency.days_inventory_outstanding == pytest.approx(30.0, rel=0.01)
+        assert ratios.efficiency.days_payables_outstanding == pytest.approx(25.0, rel=0.01)
+        assert ratios.efficiency.cash_conversion_cycle == pytest.approx(35.0, rel=0.01)
+    
+    def test_ccc_negative_is_good(self, calculator):
+        """
+        Negative CCC means company receives cash before paying suppliers.
+        This is excellent (e.g., Amazon, Costco).
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 365_000_000_000,
+                "costOfRevenue": 300_000_000_000,
+            }],
+            "balance_sheet": [{
+                "netReceivables": 10_000_000_000,  # Low AR (fast collection)
+                "inventory": 20_000_000_000,  # Reasonable inventory
+                "accountPayables": 60_000_000_000,  # High AP (slow payment)
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # DSO = (10B / 365B) × 365 = 10 days
+        # DIO = (20B / 300B) × 365 = 24.3 days
+        # DPO = (60B / 300B) × 365 = 73 days
+        # CCC = 10 + 24.3 - 73 = -38.7 days (EXCELLENT!)
+        
+        assert ratios.efficiency.cash_conversion_cycle < 0, (
+            "Negative CCC indicates excellent working capital management"
+        )
+    
+    def test_ccc_none_when_missing_ar(self, calculator):
+        """CCC should be None when accounts receivable is missing."""
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+                "costOfRevenue": 60_000_000_000,
+            }],
+            "balance_sheet": [{
+                # NO netReceivables
+                "inventory": 10_000_000_000,
+                "accountPayables": 8_000_000_000,
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.efficiency.days_sales_outstanding is None
+        assert ratios.efficiency.cash_conversion_cycle is None
+        # DIO and DPO should still be calculated
+        assert ratios.efficiency.days_inventory_outstanding is not None
+        assert ratios.efficiency.days_payables_outstanding is not None
+    
+    def test_ccc_none_when_missing_ap(self, calculator):
+        """CCC should be None when accounts payable is missing."""
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+                "costOfRevenue": 60_000_000_000,
+            }],
+            "balance_sheet": [{
+                "netReceivables": 10_000_000_000,
+                "inventory": 10_000_000_000,
+                # NO accountPayables
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.efficiency.days_payables_outstanding is None
+        assert ratios.efficiency.cash_conversion_cycle is None
+        # DSO and DIO should still be calculated
+        assert ratios.efficiency.days_sales_outstanding is not None
+        assert ratios.efficiency.days_inventory_outstanding is not None
+    
+    def test_ccc_none_when_missing_inventory(self, calculator):
+        """CCC should be None when inventory is missing (service companies)."""
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+                "costOfRevenue": 60_000_000_000,
+            }],
+            "balance_sheet": [{
+                "netReceivables": 10_000_000_000,
+                # NO inventory (or zero)
+                "accountPayables": 8_000_000_000,
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.efficiency.days_inventory_outstanding is None
+        assert ratios.efficiency.cash_conversion_cycle is None
+        # DSO and DPO should still be calculated
+        assert ratios.efficiency.days_sales_outstanding is not None
+        assert ratios.efficiency.days_payables_outstanding is not None
+    
+    def test_retail_vs_software_ccc(self, calculator):
+        """
+        Retail has higher CCC (inventory) vs software (no inventory).
+        
+        This test demonstrates how CCC reflects business model differences.
+        """
+        # Retail company
+        retail_data = {
+            "profile": {"price": 100, "marketCap": 100_000_000_000},
+            "income_statement": [{
+                "revenue": 100_000_000_000,
+                "costOfRevenue": 75_000_000_000,  # High COGS
+            }],
+            "balance_sheet": [{
+                "netReceivables": 5_000_000_000,
+                "inventory": 15_000_000_000,  # High inventory
+                "accountPayables": 10_000_000_000,
+            }],
+            "cash_flow": [{}],
+        }
+        
+        retail_ratios = calculator.calculate(retail_data)
+        
+        # Retail: DSO ~18 days, DIO ~73 days, DPO ~49 days
+        # CCC = 18 + 73 - 49 = 42 days
+        assert retail_ratios.efficiency.cash_conversion_cycle is not None
+        assert retail_ratios.efficiency.cash_conversion_cycle > 30, (
+            "Retail companies typically have CCC > 30 days due to inventory"
+        )
+

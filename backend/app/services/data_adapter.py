@@ -74,6 +74,8 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
             "retainedEarnings": fin.retained_earnings,
             "netReceivables": fin.net_receivables,
             "propertyPlantEquipmentNet": fin.property_plant_equipment,
+            "inventory": fin.inventory,
+            "accountPayables": fin.accounts_payable,
             # Equity Bridge components
             "minorityInterest": fin.minority_interest,
             "preferredStock": fin.preferred_stock,

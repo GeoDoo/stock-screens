@@ -160,6 +160,8 @@ class FMPProvider(StockDataProvider):
                 retained_earnings=bal.get("retainedEarnings"),
                 net_receivables=bal.get("netReceivables"),
                 property_plant_equipment=bal.get("propertyPlantEquipmentNet"),
+                inventory=bal.get("inventory"),
+                accounts_payable=bal.get("accountPayables"),
                 # Equity Bridge components
                 minority_interest=bal.get("minorityInterest"),
                 preferred_stock=bal.get("preferredStock"),
