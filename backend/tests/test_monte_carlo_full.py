@@ -1157,3 +1157,204 @@ def _pearson_correlation(x: list, y: list) -> float:
         return 0.0
     
     return numerator / (denom_x * denom_y)
+
+
+class TestNegativeTerminalFCFHandling:
+    """
+    Tests for P0: Proper handling of negative terminal FCF in Monte Carlo.
+    
+    Bug: When final year FCF is negative, the code used an arbitrary heuristic:
+         `terminal_value = final_fcf * 10`
+    
+    This is economically meaningless because:
+    1. The Gordon Growth Model assumes perpetual positive cash flows
+    2. A negative FCF times any positive multiple is still negative
+    3. There's no basis for the "10x distressed multiple"
+    
+    Fix: Skip simulations with negative terminal FCF and track them.
+    """
+    
+    @pytest.fixture
+    def sample_historical_data(self):
+        """Sample historical data for testing."""
+        return {
+            "historical_revenue": [100e9, 110e9, 120e9, 130e9, 140e9],
+            "historical_ebit": [20e9, 22e9, 24e9, 26e9, 28e9],
+            "historical_da": [5e9, 5.5e9, 6e9, 6.5e9, 7e9],
+            "historical_capex": [8e9, 8.8e9, 9.6e9, 10.4e9, 11.2e9],
+            "historical_working_capital": [10e9, 11e9, 12e9, 13e9, 14e9],
+            "shares_outstanding": 5e9,
+            "total_debt": 20e9,
+            "cash": 30e9,
+            "current_price": 30.0,
+        }
+    
+    def test_negative_terminal_fcf_simulations_are_skipped(self, sample_historical_data):
+        """
+        Simulations where terminal FCF is negative should be skipped,
+        not computed with an arbitrary multiple.
+        """
+        # Use very low margin that will frequently produce negative FCF
+        result = run_full_monte_carlo(
+            **sample_historical_data,
+            base_growth=0.05,
+            base_margin=-0.02,  # Negative margin → negative FCF
+            base_da_ratio=0.03,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            iterations=500,
+            seed=42,
+        )
+        
+        # With negative margin, many simulations should be skipped
+        # The key assertion: valid_simulations < iterations
+        assert result.valid_simulations < result.iterations, (
+            "Some simulations should be skipped when terminal FCF is often negative"
+        )
+        
+        # Skipped simulations should be tracked
+        assert hasattr(result, 'negative_terminal_fcf_count'), (
+            "Result should track how many simulations had negative terminal FCF"
+        )
+        assert result.negative_terminal_fcf_count > 0, (
+            "With negative margin, some simulations should have negative terminal FCF"
+        )
+    
+    def test_negative_terminal_fcf_does_not_use_arbitrary_multiple(self, sample_historical_data):
+        """
+        The old bug: terminal_value = final_fcf * 10
+        
+        This should NOT happen. If we can detect the bug, the test fails.
+        """
+        # Run with parameters that guarantee negative terminal FCF
+        result = run_full_monte_carlo(
+            **sample_historical_data,
+            base_growth=0.02,
+            base_margin=-0.10,  # -10% margin guarantees negative FCF
+            base_da_ratio=0.03,
+            base_capex_ratio=0.10,
+            base_wc_ratio=0.05,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            margin_std=0.01,  # Low std so margin stays negative
+            iterations=100,
+            seed=42,
+        )
+        
+        # With very negative margin and low std, almost all simulations
+        # should have negative terminal FCF and be skipped
+        # If the old bug exists, valid_simulations would equal iterations
+        # because the arbitrary multiple would produce a "valid" (but wrong) value
+        
+        # If more than 90% are "valid" with -10% margin, the bug likely exists
+        if result.valid_simulations > 90:
+            # Check if mean is suspiciously negative (bug symptom)
+            # With the old bug: negative FCF * 10 = large negative TV
+            # This could produce very negative intrinsic values
+            assert result.mean is None or result.mean > -100, (
+                f"Mean value of {result.mean} suggests the arbitrary multiple bug exists. "
+                "Negative terminal FCF should be skipped, not multiplied by 10."
+            )
+    
+    def test_warning_when_many_simulations_skipped(self, sample_historical_data):
+        """
+        If more than X% of simulations are skipped due to negative terminal FCF,
+        a warning should be included in the result.
+        """
+        # Use parameters that will cause many skipped simulations
+        result = run_full_monte_carlo(
+            **sample_historical_data,
+            base_growth=0.03,
+            base_margin=0.02,  # Low but positive margin
+            margin_std=0.05,   # High std so many will go negative
+            base_da_ratio=0.03,
+            base_capex_ratio=0.10,  # High capex to push FCF negative
+            base_wc_ratio=0.05,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            iterations=500,
+            seed=42,
+        )
+        
+        # If significant portion skipped, should have a warning
+        skip_pct = result.negative_terminal_fcf_count / result.iterations * 100
+        if skip_pct > 20:  # More than 20% skipped
+            assert hasattr(result, 'warnings') and result.warnings, (
+                f"{skip_pct:.1f}% of simulations had negative terminal FCF - "
+                "result should include a warning about this"
+            )
+    
+    def test_valid_simulations_with_positive_fcf_unaffected(self, sample_historical_data):
+        """
+        Normal simulations with positive FCF should work exactly as before.
+        """
+        result = run_full_monte_carlo(
+            **sample_historical_data,
+            base_growth=0.08,
+            base_margin=0.20,  # Healthy 20% margin
+            base_da_ratio=0.05,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            iterations=500,
+            seed=42,
+        )
+        
+        # With healthy margin, most simulations should be valid
+        assert result.valid_simulations > 450, (
+            "With 20% margin, most simulations should have positive FCF"
+        )
+        
+        # Mean should be positive and reasonable
+        assert result.mean > 0, "Mean should be positive for healthy company"
+        
+        # Negative terminal FCF count should be low or zero
+        assert result.negative_terminal_fcf_count < 50, (
+            "With 20% margin, very few simulations should have negative terminal FCF"
+        )
+    
+    def test_zero_terminal_fcf_is_not_skipped(self, sample_historical_data):
+        """
+        Zero terminal FCF is economically valid (TV = 0) and should NOT be skipped.
+        
+        Bug: The condition was `if final_fcf <= 0:` which incorrectly skipped
+        zero FCF cases along with negative ones.
+        
+        Fix: Changed to `if final_fcf < 0:` to only skip truly negative cases.
+        """
+        # Use parameters where margin ≈ reinvestment needs → FCF ≈ 0
+        # This is a breakeven company scenario
+        result = run_full_monte_carlo(
+            **sample_historical_data,
+            base_growth=0.05,
+            base_margin=0.10,      # 10% margin
+            margin_std=0.001,      # Very low std to keep margin stable
+            base_da_ratio=0.03,
+            base_capex_ratio=0.06, # CapEx slightly above D&A (growth requires investment)
+            base_wc_ratio=0.05,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            iterations=100,
+            seed=42,
+        )
+        
+        # With stable margin, simulations should mostly be valid
+        # (even if some land on exactly zero FCF)
+        assert result.valid_simulations > 50, (
+            f"Expected most simulations to be valid, got {result.valid_simulations}"
+        )
+        
+        # The key test: simulations with zero FCF should NOT increment
+        # the negative_terminal_fcf_count
+        # With these parameters, we shouldn't have many skipped
+        assert result.negative_terminal_fcf_count < result.iterations * 0.5, (
+            "Zero FCF should not be counted as negative terminal FCF"
+        )

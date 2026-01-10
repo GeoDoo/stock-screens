@@ -144,15 +144,39 @@ class FullMonteCarloResult:
     margin_of_safety_mean: float = 0.0
     margin_of_safety_median: float = 0.0
     
+    # Simulation quality metrics
+    negative_terminal_fcf_count: int = 0  # How many simulations had negative terminal FCF
+    warnings: List[str] = field(default_factory=list)  # Warnings about simulation quality
+    
     @classmethod
     def from_simulations(
         cls,
         values: List[float],
         current_price: float,
         iterations: int,
+        negative_terminal_fcf_count: int = 0,
     ) -> "FullMonteCarloResult":
         """Create result from list of simulated per-share values."""
         valid_values = [v for v in values if v is not None and v > 0]
+        
+        # Generate warnings based on simulation quality
+        warnings = []
+        if negative_terminal_fcf_count > 0:
+            skip_pct = negative_terminal_fcf_count / iterations * 100
+            if skip_pct > 50:
+                warnings.append(
+                    f"⚠️ CRITICAL: {skip_pct:.0f}% of simulations had negative terminal FCF and were skipped. "
+                    "This company may not be suitable for DCF valuation - consider distressed valuation methods."
+                )
+            elif skip_pct > 20:
+                warnings.append(
+                    f"⚠️ WARNING: {skip_pct:.0f}% of simulations had negative terminal FCF and were skipped. "
+                    "Results may not be representative - review operating margin assumptions."
+                )
+            elif skip_pct > 5:
+                warnings.append(
+                    f"Note: {skip_pct:.1f}% of simulations had negative terminal FCF and were excluded."
+                )
         
         if not valid_values:
             return cls(
@@ -162,6 +186,8 @@ class FullMonteCarloResult:
                 mean=0.0,
                 median=0.0,
                 std_dev=0.0,
+                negative_terminal_fcf_count=negative_terminal_fcf_count,
+                warnings=warnings if warnings else ["No valid simulations produced positive values."],
             )
         
         sorted_values = sorted(valid_values)
@@ -207,6 +233,8 @@ class FullMonteCarloResult:
             cvar_10=cvar_10,
             margin_of_safety_mean=statistics.mean(margins),
             margin_of_safety_median=statistics.median(margins),
+            negative_terminal_fcf_count=negative_terminal_fcf_count,
+            warnings=warnings,
         )
 
 
@@ -397,6 +425,7 @@ def run_full_monte_carlo(
     discount_offset = 0.5 if use_mid_year_discounting else 0.0
     
     per_share_values = []
+    negative_terminal_fcf_count = 0  # Track simulations skipped due to negative terminal FCF
     
     for _ in range(iterations):
         # Sample correlated core inputs
@@ -516,16 +545,21 @@ def run_full_monte_carlo(
             )
             
             # Terminal value (Gordon growth)
+            # IMPORTANT: Gordon Growth Model requires non-negative terminal FCF
+            # Negative terminal FCF means the business is not a going concern
+            # in this scenario - skip rather than use arbitrary multiples
+            # Zero terminal FCF is valid (TV = 0) and should NOT be skipped
             final_fcf = fcf_values[-1]
-            if final_fcf > 0:
-                terminal_value = final_fcf * (1 + terminal_growth) / (discount - terminal_growth)
-                terminal_discount_period = actual_years - discount_offset
-                pv_terminal = terminal_value / ((1 + discount) ** terminal_discount_period)
-            else:
-                # Negative terminal FCF - use simplified exit multiple
-                terminal_value = final_fcf * 10  # 10x multiple for distressed
-                terminal_discount_period = actual_years - discount_offset
-                pv_terminal = terminal_value / ((1 + discount) ** terminal_discount_period)
+            if final_fcf < 0:
+                # Skip this simulation - Gordon Growth Model doesn't apply
+                negative_terminal_fcf_count += 1
+                per_share_values.append(None)
+                continue
+            
+            # Zero FCF gives TV = 0, positive FCF gives standard Gordon Growth
+            terminal_value = final_fcf * (1 + terminal_growth) / (discount - terminal_growth)
+            terminal_discount_period = actual_years - discount_offset
+            pv_terminal = terminal_value / ((1 + discount) ** terminal_discount_period)
             
             enterprise_value = pv_fcf + pv_terminal
             
@@ -542,4 +576,5 @@ def run_full_monte_carlo(
         values=per_share_values,
         current_price=current_price,
         iterations=iterations,
+        negative_terminal_fcf_count=negative_terminal_fcf_count,
     )
