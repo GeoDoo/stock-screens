@@ -329,6 +329,10 @@ export interface FinancialRatiosPeriod {
   efficiency: {
     asset_turnover: number | null;
     inventory_turnover: number | null;
+    days_sales_outstanding: number | null;  // DSO = (AR / Revenue) × 365
+    days_inventory_outstanding: number | null;  // DIO = (Inventory / COGS) × 365
+    days_payables_outstanding: number | null;  // DPO = (AP / COGS) × 365
+    cash_conversion_cycle: number | null;  // CCC = DSO + DIO - DPO
   };
   // Institutional-grade risk metrics
   risk?: {

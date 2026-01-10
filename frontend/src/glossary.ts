@@ -333,6 +333,13 @@ export const glossaryTerms: GlossaryTerm[] = [
     definition: "Cost of goods sold divided by average inventory. It shows how many times inventory is sold and replaced over a period. Higher turnover suggests efficient inventory management.",
     investopediaUrl: "https://www.investopedia.com/terms/i/inventoryturnover.asp",
   },
+  {
+    id: "cash-conversion-cycle",
+    term: "Cash Conv. Cycle",
+    fullName: "Cash Conversion Cycle",
+    definition: "Days to convert inventory into cash: CCC = DSO + DIO - DPO. Measures working capital efficiency. Lower is better; negative CCC (like Amazon) means the company receives customer cash before paying suppliers.",
+    investopediaUrl: "https://www.investopedia.com/terms/c/cashconversioncycle.asp",
+  },
 
   // Technical Analysis Terms
   {

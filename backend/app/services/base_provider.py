@@ -50,8 +50,10 @@ class FinancialStatement:
     goodwill: Optional[float] = None  # For ROTIC calculation
     intangible_assets: Optional[float] = None  # For ROTIC calculation
     retained_earnings: Optional[float] = None  # For Altman Z-Score
-    net_receivables: Optional[float] = None  # For Beneish M-Score
+    net_receivables: Optional[float] = None  # For Beneish M-Score & DSO
     property_plant_equipment: Optional[float] = None  # For Beneish M-Score
+    inventory: Optional[float] = None  # For DIO & Cash Conversion Cycle
+    accounts_payable: Optional[float] = None  # For DPO & Cash Conversion Cycle
     # Equity Bridge components
     minority_interest: Optional[float] = None  # Non-controlling interest
     preferred_stock: Optional[float] = None  # Preferred equity
