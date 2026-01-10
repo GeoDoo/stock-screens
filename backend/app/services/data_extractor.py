@@ -82,11 +82,46 @@ class DataExtractor:
         period = self.income_statement[0].get("period", "").upper()
         return period in ("TTM", "LTM")
 
+    def _is_annual_period(self, statement: dict) -> bool:
+        """
+        Check if a statement is from an annual (fiscal year) period.
+        
+        Excludes:
+        - TTM/LTM (trailing twelve months - overlaps with annual)
+        - Quarterly (Q1, Q2, Q3, Q4 - partial year)
+        
+        Includes:
+        - FY, annual, or no period specified (treated as annual)
+        """
+        period = statement.get("period", "").upper()
+        
+        # Explicitly exclude TTM/LTM
+        if period in ("TTM", "LTM"):
+            return False
+        
+        # Exclude quarterly periods
+        if period.startswith("Q") and len(period) <= 3:  # Q1, Q2, Q3, Q4
+            return False
+        
+        # Everything else (FY, annual, empty) is treated as annual
+        return True
+    
     def _get_history(self, statements: list, key: str) -> List[float]:
-        """Get historical values (oldest first for CAGR calculation)."""
+        """
+        Get historical annual values (oldest first for CAGR calculation).
+        
+        IMPORTANT: This excludes TTM/LTM and quarterly data to prevent
+        invalid CAGR calculations. TTM data overlaps with the most recent
+        fiscal year, which would distort year-over-year growth calculations.
+        
+        For current period data (including TTM), use _get_ttm() instead.
+        """
         if not statements:
             return []
-        values = [s.get(key) for s in reversed(statements) if s.get(key) is not None]
+        
+        # Filter to annual-only and get values
+        annual_statements = [s for s in statements if self._is_annual_period(s)]
+        values = [s.get(key) for s in reversed(annual_statements) if s.get(key) is not None]
         return values
 
     def beta(self) -> Optional[float]:
@@ -433,12 +468,18 @@ class DataExtractor:
         NCWC = (Current Assets - Cash) - (Current Liabilities - Short-term Debt)
         
         Uses same Non-Cash formula as latest_working_capital() for consistency.
+        
+        Note: Excludes TTM/LTM and quarterly data to ensure valid year-over-year
+        comparisons in FCF projections.
         """
         if not self.balance_sheet:
             return []
         
+        # Filter to annual-only balance sheets
+        annual_sheets = [bs for bs in self.balance_sheet if self._is_annual_period(bs)]
+        
         wc_values = []
-        for bs in reversed(self.balance_sheet):
+        for bs in reversed(annual_sheets):
             current_assets = bs.get("totalCurrentAssets", 0) or 0
             current_liabilities = bs.get("totalCurrentLiabilities", 0) or 0
             cash = bs.get("cashAndCashEquivalents", 0) or 0
