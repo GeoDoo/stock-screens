@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-10 15:32
+> Last updated: 2026-01-10 15:53
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -119,6 +119,9 @@ Weighted Average Cost of Capital calculator.
 | `MemosPage.tsx` | MemosPage |
 | `MonteCarloPanel.tsx` | MonteCarloPanel |
 | `MultiStageGrowth.tsx` | MultiStageGrowth |
+| `ProvenanceBadge.tsx` | ProvenanceBadge |
+| `SensitivityMatrixPanel.tsx` | SensitivityMatrixPanel |
+| `VolumeSignals.tsx` | VolumeSignals |
 
 ### Hooks (`frontend/src/hooks/`)
 
@@ -149,7 +152,7 @@ Weighted Average Cost of Capital calculator.
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
 | Backend | 31 test files | pytest |
-| Frontend | 13 test files | vitest |
+| Frontend | 16 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)
 

@@ -310,7 +310,7 @@ export interface TechnicalAnalysisResult {
     rsi: 'overbought' | 'oversold' | 'neutral';
     macd: 'bullish' | 'bearish' | 'neutral';
     volume_confirmation?: 'confirmed' | 'weak' | 'neutral';  // Volume validates signal
-    mfi?: 'overbought' | 'oversold' | 'neutral';  // MFI signal
+    mfi_signal?: 'overbought' | 'oversold' | 'neutral';  // MFI signal (matches backend field name)
     obv_trend?: 'accumulation' | 'distribution' | 'neutral';  // Smart money flow
   };
 }

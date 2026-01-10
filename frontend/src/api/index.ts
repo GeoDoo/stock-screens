@@ -18,6 +18,7 @@ import type {
   CreateMemoRequest,
   ValuationRequest,
   GrowthStage,
+  SensitivityMatrixResponse,
 } from '../types';
 import {
   normalizeStockData,
@@ -241,6 +242,50 @@ export async function runScenarios(
     throw createApiError('Invalid scenario data received', 500);
   }
   return normalized;
+}
+
+// ============================================================================
+// Sensitivity Matrix endpoint
+// ============================================================================
+
+export interface FetchSensitivityMatrixParams {
+  symbol: string;
+  provider: string;
+  matrixType: 'margin_growth' | 'wacc_terminal';
+  baseGrowth?: number;
+  baseMargin?: number;
+  baseDiscountRate?: number;
+  terminalGrowth?: number;
+  projectionYears?: number;
+  daRatio?: number;
+  capexRatio?: number;
+  wcRatio?: number;
+}
+
+export async function fetchSensitivityMatrix(
+  params: FetchSensitivityMatrixParams
+): Promise<SensitivityMatrixResponse> {
+  const body = {
+    matrix_type: params.matrixType,
+    base_growth: params.baseGrowth,
+    base_margin: params.baseMargin,
+    base_discount_rate: params.baseDiscountRate,
+    terminal_growth: params.terminalGrowth,
+    projection_years: params.projectionYears,
+    da_ratio: params.daRatio,
+    capex_ratio: params.capexRatio,
+    wc_ratio: params.wcRatio,
+  };
+
+  const res = await fetch(
+    `${API_BASE}/api/stock/${params.symbol}/sensitivity-matrix?provider=${params.provider}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }
+  );
+  return handleResponse<SensitivityMatrixResponse>(res);
 }
 
 // ============================================================================

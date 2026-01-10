@@ -520,6 +520,27 @@ export const glossaryTerms: GlossaryTerm[] = [
     definition: "Current volume compared to average volume, expressed as a multiplier. Values above 1.2x indicate unusually high volume, confirming price moves. Below 0.8x suggests weak conviction.",
     investopediaUrl: "https://www.investopedia.com/terms/r/relativevolume.asp",
   },
+  {
+    id: "mfi",
+    term: "MFI",
+    fullName: "Money Flow Index",
+    definition: "A volume-weighted RSI that measures buying and selling pressure. Above 80 indicates overbought (potential reversal down), below 20 indicates oversold (potential bounce). More reliable than price-only RSI because it incorporates volume.",
+    investopediaUrl: "https://www.investopedia.com/terms/m/mfi.asp",
+  },
+  {
+    id: "obv",
+    term: "OBV",
+    fullName: "On-Balance Volume",
+    definition: "A cumulative indicator that adds volume on up days and subtracts on down days. Rising OBV suggests 'smart money' accumulation (bullish), falling OBV suggests distribution (bearish). OBV divergences from price often precede reversals.",
+    investopediaUrl: "https://www.investopedia.com/terms/o/onbalancevolume.asp",
+  },
+  {
+    id: "vwma",
+    term: "VWMA",
+    fullName: "Volume Weighted Moving Average",
+    definition: "A moving average that weights prices by their trading volume. Higher volume days have more influence on the average. When price is above VWMA, trend is bullish; below VWMA, trend is bearish.",
+    investopediaUrl: "https://www.investopedia.com/terms/v/vwap.asp",
+  },
 ];
 
 // Create a lookup map for quick access by ID
