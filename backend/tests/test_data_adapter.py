@@ -193,3 +193,143 @@ class TestDataAdapter:
         assert result["balance_sheet"] == []
         assert result["cash_flow"] == []
 
+
+class TestPeriodFieldConsistency:
+    """
+    Tests for P0: Ensure `period` field exists in ALL statement types.
+    
+    Bug: Only income_statement had the `period` field. Balance sheet and
+    cash flow were missing it, which meant DataExtractor._is_annual_period()
+    couldn't filter TTM/quarterly data for D&A, CapEx, and WC histories.
+    
+    Fix: Add `period` field to balance_sheet and cash_flow entries.
+    """
+    
+    def test_income_statement_has_period_field(self):
+        """Income statement should have period field (already working)."""
+        stock_data = StockData(
+            profile=CompanyProfile(
+                symbol="TEST", name="Test", price=100, market_cap=1000,
+                beta=1.0, shares_outstanding=100, currency="USD",
+            ),
+            financials=[
+                FinancialStatement(date="2024", period="annual", revenue=100),
+                FinancialStatement(date="2024-Q3", period="quarterly", revenue=25),
+                FinancialStatement(date="2024-TTM", period="TTM", revenue=90),
+            ],
+            provider="test",
+        )
+        
+        result = stock_data_to_legacy(stock_data)
+        
+        assert result["income_statement"][0]["period"] == "FY"
+        assert result["income_statement"][1]["period"] == "Q"
+        assert result["income_statement"][2]["period"] == "TTM"
+    
+    def test_balance_sheet_has_period_field(self):
+        """
+        Balance sheet should have period field.
+        
+        Bug: balance_sheet entries had no 'period' key, so
+        DataExtractor._is_annual_period() defaulted to treating them as annual.
+        """
+        stock_data = StockData(
+            profile=CompanyProfile(
+                symbol="TEST", name="Test", price=100, market_cap=1000,
+                beta=1.0, shares_outstanding=100, currency="USD",
+            ),
+            financials=[
+                FinancialStatement(
+                    date="2024", period="annual",
+                    total_assets=1000, current_assets=500, current_liabilities=300,
+                ),
+                FinancialStatement(
+                    date="2024-Q3", period="quarterly",
+                    total_assets=950, current_assets=480, current_liabilities=290,
+                ),
+                FinancialStatement(
+                    date="2024-TTM", period="TTM",
+                    total_assets=980, current_assets=490, current_liabilities=295,
+                ),
+            ],
+            provider="test",
+        )
+        
+        result = stock_data_to_legacy(stock_data)
+        
+        # All balance sheets should have period field
+        for bs in result["balance_sheet"]:
+            assert "period" in bs, "Balance sheet should have 'period' field"
+        
+        assert result["balance_sheet"][0]["period"] == "FY"
+        assert result["balance_sheet"][1]["period"] == "Q"
+        assert result["balance_sheet"][2]["period"] == "TTM"
+    
+    def test_cash_flow_has_period_field(self):
+        """
+        Cash flow should have period field.
+        
+        Bug: cash_flow entries had no 'period' key, so D&A and CapEx
+        histories could be contaminated by TTM/quarterly data.
+        """
+        stock_data = StockData(
+            profile=CompanyProfile(
+                symbol="TEST", name="Test", price=100, market_cap=1000,
+                beta=1.0, shares_outstanding=100, currency="USD",
+            ),
+            financials=[
+                FinancialStatement(
+                    date="2024", period="annual",
+                    depreciation_amortization=10, capital_expenditure=-15,
+                ),
+                FinancialStatement(
+                    date="2024-Q3", period="quarterly",
+                    depreciation_amortization=2.5, capital_expenditure=-4,
+                ),
+                FinancialStatement(
+                    date="2024-TTM", period="ttm",  # lowercase
+                    depreciation_amortization=9, capital_expenditure=-14,
+                ),
+            ],
+            provider="test",
+        )
+        
+        result = stock_data_to_legacy(stock_data)
+        
+        # All cash flows should have period field
+        for cf in result["cash_flow"]:
+            assert "period" in cf, "Cash flow should have 'period' field"
+        
+        assert result["cash_flow"][0]["period"] == "FY"
+        assert result["cash_flow"][1]["period"] == "Q"
+        assert result["cash_flow"][2]["period"] == "TTM"
+    
+    def test_all_statements_have_consistent_period_for_same_financial(self):
+        """
+        For the same FinancialStatement, all three legacy dict entries
+        should have the same period value.
+        """
+        stock_data = StockData(
+            profile=CompanyProfile(
+                symbol="TEST", name="Test", price=100, market_cap=1000,
+                beta=1.0, shares_outstanding=100, currency="USD",
+            ),
+            financials=[
+                FinancialStatement(
+                    date="2024", period="annual",
+                    revenue=100, total_assets=500, operating_cash_flow=20,
+                ),
+            ],
+            provider="test",
+        )
+        
+        result = stock_data_to_legacy(stock_data)
+        
+        income_period = result["income_statement"][0]["period"]
+        balance_period = result["balance_sheet"][0]["period"]
+        cash_period = result["cash_flow"][0]["period"]
+        
+        assert income_period == balance_period == cash_period == "FY", (
+            f"All periods should match: income={income_period}, "
+            f"balance={balance_period}, cash={cash_period}"
+        )

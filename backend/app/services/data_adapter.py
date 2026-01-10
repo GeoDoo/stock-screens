@@ -33,10 +33,13 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
     cash_flows = []
     
     for fin in financials:
+        # Normalize period for all statement types (TTM, FY, or Q)
+        period = "TTM" if fin.period in ("ttm", "TTM") else ("FY" if fin.period == "annual" else "Q")
+        
         # Income statement
         income_statements.append({
             "date": fin.date,
-            "period": "TTM" if fin.period in ("ttm", "TTM") else ("FY" if fin.period == "annual" else "Q"),
+            "period": period,
             "revenue": fin.revenue,
             "costOfRevenue": fin.cost_of_revenue,
             "grossProfit": fin.gross_profit,
@@ -57,6 +60,7 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
         # Balance sheet
         balance_sheets.append({
             "date": fin.date,
+            "period": period,  # CRITICAL: Must match income_statement for annual filtering
             "totalAssets": fin.total_assets,
             "totalLiabilities": fin.total_liabilities,
             "totalStockholdersEquity": fin.total_equity,
@@ -80,6 +84,7 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
         # Cash flow
         cash_flows.append({
             "date": fin.date,
+            "period": period,  # CRITICAL: Must match income_statement for annual filtering
             "operatingCashFlow": fin.operating_cash_flow,
             "capitalExpenditure": fin.capital_expenditure,
             "freeCashFlow": fin.free_cash_flow,
