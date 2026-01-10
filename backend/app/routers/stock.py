@@ -1370,6 +1370,12 @@ async def run_full_monte_carlo_endpoint(
     total_debt = extractor.total_debt() or 0
     cash = extractor.cash() or 0
     
+    # Equity bridge components (institutional-grade valuation)
+    minority_interest = extractor.minority_interest() or 0
+    preferred_stock = extractor.preferred_stock() or 0
+    deferred_tax_assets = extractor.deferred_tax_assets() or 0
+    pension_deficit = extractor.pension_liability() or 0
+    
     current_price = stock_data.profile.price if stock_data.profile and stock_data.profile.price else 0
     if not current_price:
         market_cap = extractor.market_cap()
@@ -1437,6 +1443,11 @@ async def run_full_monte_carlo_endpoint(
         wacc_components=wacc_components_dict,
         growth_stages=growth_stages_dicts,
         use_mid_year_discounting=request.use_mid_year_discounting,
+        # Institutional equity bridge components
+        minority_interest=minority_interest,
+        preferred_stock=preferred_stock,
+        deferred_tax_assets=deferred_tax_assets,
+        pension_deficit=pension_deficit,
     )
     
     return {
