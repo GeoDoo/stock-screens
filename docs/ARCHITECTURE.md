@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-10 14:54
+> Last updated: 2026-01-10 15:32
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -25,7 +25,7 @@ Stock Screens is a full-stack stock analysis application with:
 | `capital_efficiency.py` | Calculator for capital efficiency metrics. |
 | `comparable_analyzer.py` | Key valuation metrics for a company. |
 | `data_adapter.py` | — |
-| `data_extractor.py` | Extracts financial metrics from FMP data for use in valuatio |
+| `data_extractor.py` | Tracks the source/derivation of a financial metric. |
 | `data_validator.py` | Severity levels for validation issues. |
 | `database.py` | — |
 | `dcf_calculator.py` | Discounted Cash Flow calculator with optional mid-year disco |
@@ -52,16 +52,12 @@ Stock Screens is a full-stack stock analysis application with:
 
 ### Key Services Detail
 
-#### `data_extractor.py` - DataExtractor
+#### `data_extractor.py` - ProvenanceInfo
 
-Extracts financial metrics from FMP data for use in valuation models.
+Tracks the source/derivation of a financial metric.
 
 **Key Methods:**
-- `is_using_ltm()` - Check if LTM/TTM data is available for flow items.
-- `beta()` - Stock beta from profile.
-- `market_cap()` - Market capitalization from profile.
-- `sector()` - Company sector from profile (e.g., 'Technology', 'Financial Services').
-- `industry()` - Company industry from profile (e.g., 'Software—Application', 'Banks—Regional').
+- `to_dict()` - 
 
 #### `dcf_calculator.py` - DCFCalculator
 

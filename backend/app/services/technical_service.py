@@ -111,11 +111,20 @@ class TechnicalService:
         avg_volume = TechnicalIndicators.average_volume(volumes, period=20)
         rel_volume = TechnicalIndicators.relative_volume(volumes, period=20)
         
+        # NEW: Enhanced volume-weighted indicators
+        vwma_20_values = TechnicalIndicators.vwma(closes, volumes, period=20)
+        obv_values = TechnicalIndicators.obv(closes, volumes)
+        mfi_14_values = TechnicalIndicators.mfi(highs, lows, closes, volumes, period=14)
+        
         # Analyze signals
         trend = TechnicalIndicators.analyze_trend(sma_20_values, sma_50_values, closes)
         rsi_signal = TechnicalIndicators.analyze_rsi(rsi_14_values)
         macd_signal = TechnicalIndicators.analyze_macd(macd_line, signal_line)
         volume_confirmation = TechnicalIndicators.volume_confirms_trend(volumes, trend, period=20)
+        
+        # NEW: Enhanced volume signals
+        mfi_signal = TechnicalIndicators.analyze_mfi(mfi_14_values)
+        obv_trend_signal = TechnicalIndicators.obv_trend(obv_values, period=20)
         
         return TechnicalAnalysisResult(
             symbol=symbol.upper(),
@@ -136,4 +145,10 @@ class TechnicalService:
             rsi_signal=rsi_signal,
             macd_signal=macd_signal,
             volume_confirmation=volume_confirmation,
+            # NEW: Enhanced volume-weighted indicators
+            vwma_20=to_indicator_values(vwma_20_values, bars),
+            obv=to_indicator_values(obv_values, bars),
+            mfi_14=to_indicator_values(mfi_14_values, bars),
+            mfi_signal=mfi_signal,
+            obv_trend=obv_trend_signal,
         )

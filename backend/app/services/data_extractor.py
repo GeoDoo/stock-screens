@@ -1,5 +1,26 @@
+from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple
 from app.constants import DEFAULT_MARKET_RISK_PREMIUM, DEFAULT_TREASURY_RATE, DEFAULT_CREDIT_SPREAD
+
+
+@dataclass
+class ProvenanceInfo:
+    """
+    Tracks the source/derivation of a financial metric.
+    
+    Institutional-grade transparency: analysts need to know whether
+    a value comes from TTM data, annual averages, or fallbacks.
+    """
+    source: str  # e.g., "ttm", "fy_average", "fallback", "calculated"
+    description: str  # Human-readable explanation
+    confidence: str = "high"  # "high", "medium", "low"
+    
+    def to_dict(self) -> dict:
+        return {
+            "source": self.source,
+            "description": self.description,
+            "confidence": self.confidence,
+        }
 
 
 # Synthetic Credit Rating Spread Table
@@ -270,6 +291,79 @@ class DataExtractor:
         
         return sum(valid_rates) / len(valid_rates)
 
+    def tax_rate_with_provenance(self) -> Tuple[Optional[float], ProvenanceInfo]:
+        """
+        Get tax rate with provenance information.
+        
+        Returns:
+            Tuple of (tax_rate, provenance_info)
+        """
+        # Check for TTM data first (most current)
+        if self.is_using_ltm():
+            ttm_tax = self._get_ttm(self.income_statement, "incomeTaxExpense")
+            ttm_income = self._get_ttm(self.income_statement, "incomeBeforeTax")
+            
+            if ttm_tax is not None and ttm_income is not None and ttm_income > 0:
+                rate = ttm_tax / ttm_income
+                if 0 <= rate <= 0.50:
+                    return (rate, ProvenanceInfo(
+                        source="ttm",
+                        description="Trailing 12-month effective tax rate",
+                        confidence="high"
+                    ))
+        
+        # Fallback to multi-year average
+        valid_rates = []
+        annual_count = 0
+        years_used = []
+        
+        for statement in self.income_statement:
+            if not self._is_annual_period(statement):
+                continue
+            
+            annual_count += 1
+            if annual_count > 3:
+                break
+                
+            tax_expense = statement.get("incomeTaxExpense")
+            income_before_tax = statement.get("incomeBeforeTax")
+            
+            if tax_expense is None or income_before_tax is None:
+                continue
+            if income_before_tax <= 0:
+                continue
+                
+            rate = tax_expense / income_before_tax
+            if rate < 0 or rate > 0.50:
+                continue
+                
+            valid_rates.append(rate)
+            years_used.append(statement.get("date", "unknown")[:4])
+        
+        if valid_rates:
+            avg_rate = sum(valid_rates) / len(valid_rates)
+            return (avg_rate, ProvenanceInfo(
+                source="fy_average",
+                description=f"{len(valid_rates)}-year average ({', '.join(years_used)})",
+                confidence="medium" if len(valid_rates) >= 2 else "low"
+            ))
+        
+        # Last resort fallback
+        tax_expense = self._get_latest(self.income_statement, "incomeTaxExpense")
+        income_before_tax = self._get_latest(self.income_statement, "incomeBeforeTax")
+        if tax_expense is not None and income_before_tax is not None and income_before_tax > 0:
+            return (tax_expense / income_before_tax, ProvenanceInfo(
+                source="fallback",
+                description="Latest year only (may include outliers)",
+                confidence="low"
+            ))
+        
+        return (None, ProvenanceInfo(
+            source="unavailable",
+            description="No valid tax rate data available",
+            confidence="low"
+        ))
+
     def interest_coverage_ratio(self) -> Optional[float]:
         """
         Interest Coverage Ratio (ICR) = EBIT / Interest Expense.
@@ -445,6 +539,51 @@ class DataExtractor:
         if self._get_latest(self.income_statement, "weightedAverageShsOut") is not None:
             return "basic"
         return "profile"
+    
+    def shares_provenance(self) -> ProvenanceInfo:
+        """Get provenance info for shares outstanding."""
+        share_type = self.shares_outstanding_type()
+        if share_type == "diluted":
+            return ProvenanceInfo(
+                source="diluted",
+                description="Fully diluted shares (includes options, RSUs, convertibles)",
+                confidence="high"
+            )
+        elif share_type == "basic":
+            return ProvenanceInfo(
+                source="basic",
+                description="Basic shares (may undercount dilution)",
+                confidence="medium"
+            )
+        return ProvenanceInfo(
+            source="profile",
+            description="Company profile shares (least accurate)",
+            confidence="low"
+        )
+    
+    def get_all_provenance(self) -> dict:
+        """
+        Get provenance information for all key metrics.
+        
+        Returns dict with source/confidence for each metric.
+        Useful for UI transparency about data quality.
+        """
+        _, tax_prov = self.tax_rate_with_provenance()
+        
+        return {
+            "tax_rate": tax_prov.to_dict(),
+            "shares_outstanding": self.shares_provenance().to_dict(),
+            "revenue_source": {
+                "source": "ttm" if self.is_using_ltm() else "fy",
+                "description": "TTM (trailing 12 months)" if self.is_using_ltm() else "Latest fiscal year",
+                "confidence": "high",
+            },
+            "cost_of_debt": {
+                "source": "synthetic",
+                "description": f"Synthetic rating ({self.synthetic_credit_rating()}) + historical check",
+                "confidence": "high" if self.interest_coverage_ratio() else "medium",
+            },
+        }
 
     def market_risk_premium(self) -> float:
         """

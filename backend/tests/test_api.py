@@ -127,6 +127,21 @@ class TestStockEndpoint:
             # Check validation
             assert "has_errors" in result["validation"]
             assert "has_warnings" in result["validation"]
+            
+            # Check provenance (P2 enhancement - data source transparency)
+            assert "provenance" in result
+            provenance = result["provenance"]
+            assert "tax_rate" in provenance
+            assert "shares_outstanding" in provenance
+            assert "revenue_source" in provenance
+            assert "cost_of_debt" in provenance
+            
+            # Each provenance item has source, description, confidence
+            tax_prov = provenance["tax_rate"]
+            assert "source" in tax_prov
+            assert "description" in tax_prov
+            assert "confidence" in tax_prov
+            assert tax_prov["confidence"] in ["high", "medium", "low"]
 
     def test_get_stock_without_api_key(self):
         with patch("app.routers.stock.FMP_API_KEY", ""):
@@ -647,3 +662,91 @@ class TestFullMonteCarloEndpoint:
             assert "valid_simulations" in data
             # Most should be valid for reasonable inputs
             assert data["valid_simulations"] >= 50
+
+
+class TestSensitivityMatrix:
+    """Tests for 2D sensitivity matrix endpoint."""
+    
+    def test_margin_growth_matrix(self):
+        """Should generate margin × growth sensitivity matrix."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/sensitivity-matrix?provider=fmp",
+                json={
+                    "matrix_type": "margin_growth",
+                    "base_growth": 0.10,
+                    "base_margin": 0.20,
+                    "base_discount_rate": 0.10,
+                    "terminal_growth": 0.03,
+                    "projection_years": 5,
+                }
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            # Check structure
+            assert data["matrix_type"] == "margin_growth"
+            assert "margins" in data
+            assert "growth_rates" in data
+            assert "matrix" in data
+            assert "base_values" in data
+            
+            # Should be 5×5 matrix (default steps)
+            assert len(data["margins"]) == 5
+            assert len(data["growth_rates"]) == 5
+            assert len(data["matrix"]) == 5
+            assert len(data["matrix"][0]) == 5
+            
+            # Center cell should exist and be positive
+            center_value = data["matrix"][2][2]  # 0-indexed center of 5×5
+            assert center_value is not None
+            assert center_value > 0
+            
+            # Base values should be recorded
+            assert data["base_values"]["margin"] == 0.20
+            assert data["base_values"]["growth"] == 0.10
+    
+    def test_wacc_terminal_matrix(self):
+        """Should generate WACC × terminal growth sensitivity matrix."""
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/sensitivity-matrix?provider=fmp",
+                json={
+                    "matrix_type": "wacc_terminal",
+                    "base_growth": 0.10,
+                    "base_margin": 0.20,
+                    "base_discount_rate": 0.10,
+                    "terminal_growth": 0.03,
+                }
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            # Check structure
+            assert data["matrix_type"] == "wacc_terminal"
+            assert "discount_rates" in data
+            assert "terminal_growth_rates" in data
+            assert "matrix" in data
+            
+            # Should be 5×5 matrix
+            assert len(data["discount_rates"]) == 5
+            assert len(data["terminal_growth_rates"]) == 5
+            assert len(data["matrix"]) == 5
+            
+            # Higher discount rate should give lower value
+            # (Row 0 is lowest WACC, Row 4 is highest)
+            center_col = 2
+            low_wacc_value = data["matrix"][0][center_col]
+            high_wacc_value = data["matrix"][4][center_col]
+            if low_wacc_value is not None and high_wacc_value is not None:
+                assert low_wacc_value > high_wacc_value

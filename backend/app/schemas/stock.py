@@ -32,6 +32,26 @@ class HistoricalHints(BaseModel):
     wc_ratio: Optional[float]
 
 
+class ProvenanceItem(BaseModel):
+    """Provenance info for a single metric."""
+    source: str  # e.g., "ttm", "fy_average", "fallback"
+    description: str  # Human-readable explanation
+    confidence: str  # "high", "medium", "low"
+
+
+class DataProvenance(BaseModel):
+    """
+    Provenance information for key financial metrics.
+    
+    Institutional-grade transparency: analysts need to know whether
+    data comes from TTM, annual averages, or fallback estimates.
+    """
+    tax_rate: Optional[ProvenanceItem] = None
+    shares_outstanding: Optional[ProvenanceItem] = None
+    revenue_source: Optional[ProvenanceItem] = None
+    cost_of_debt: Optional[ProvenanceItem] = None
+
+
 class StockDataResponse(BaseModel):
     """Response for /api/stock endpoint."""
     symbol: str
@@ -43,6 +63,7 @@ class StockDataResponse(BaseModel):
     hints: HistoricalHints
     validation: ValidationResponse
     is_using_ltm: bool = False  # True if using Last Twelve Months (TTM) data
+    provenance: Optional[DataProvenance] = None  # Source/confidence for key metrics
 
 
 class GrowthStageInput(BaseModel):
@@ -263,3 +284,47 @@ class CapitalEfficiencyRequest(BaseModel):
     invested_capital: float  # Total invested capital
     revenue_growth: float  # Expected growth rate
     wacc: float  # Weighted Average Cost of Capital
+
+
+class SensitivityMatrixRequest(BaseModel):
+    """
+    Request for 2D sensitivity matrix (Growth × Margin or WACC × Terminal Growth).
+    
+    Institutional analysts use these to understand valuation sensitivity
+    to key assumptions and execution risk.
+    """
+    # What type of matrix to generate
+    matrix_type: str = "margin_growth"  # "margin_growth" or "wacc_terminal"
+    
+    # Base assumptions (read from backend for margin_growth)
+    base_growth: Optional[float] = None  # Revenue growth rate
+    base_margin: Optional[float] = None  # Operating margin
+    base_discount_rate: Optional[float] = None  # WACC
+    terminal_growth: float = DEFAULT_TERMINAL_GROWTH
+    projection_years: int = 5
+    
+    # Step sizes (grid will be 5x5 centered on base values)
+    growth_steps: List[float] = [-0.05, -0.025, 0, 0.025, 0.05]
+    margin_steps: List[float] = [-0.05, -0.025, 0, 0.025, 0.05]
+    discount_rate_steps: List[float] = [-0.02, -0.01, 0, 0.01, 0.02]
+    terminal_growth_steps: List[float] = [-0.01, -0.005, 0, 0.005, 0.01]
+    
+    # FCF parameters (for margin_growth matrix)
+    da_ratio: Optional[float] = None
+    capex_ratio: Optional[float] = None
+    wc_ratio: Optional[float] = None
+
+
+class SensitivityMatrixResponse(BaseModel):
+    """Response for sensitivity matrix endpoint."""
+    matrix_type: str
+    # For margin_growth matrix
+    margins: Optional[List[float]] = None
+    growth_rates: Optional[List[float]] = None
+    # For wacc_terminal matrix
+    discount_rates: Optional[List[float]] = None
+    terminal_growth_rates: Optional[List[float]] = None
+    # The 2D matrix of intrinsic values (row × column)
+    matrix: List[List[Optional[float]]]
+    # Base values (center of matrix)
+    base_values: dict

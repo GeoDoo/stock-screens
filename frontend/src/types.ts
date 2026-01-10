@@ -63,6 +63,20 @@ export interface ValidationResult {
   warnings: ValidationIssue[];
 }
 
+// Provenance shows the source/confidence for key metrics
+export interface ProvenanceItem {
+  source: string;  // "ttm", "fy_average", "fallback", etc.
+  description: string;  // Human-readable explanation
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface DataProvenance {
+  tax_rate: ProvenanceItem | null;
+  shares_outstanding: ProvenanceItem | null;
+  revenue_source: ProvenanceItem | null;
+  cost_of_debt: ProvenanceItem | null;
+}
+
 export interface StockDataResponse {
   symbol: string;
   company_name: string | null;
@@ -74,6 +88,7 @@ export interface StockDataResponse {
   hints_ttm: HistoricalHints | null;  // Null if TTM data not available
   is_using_ltm?: boolean;  // True if using Last Twelve Months (more current) data
   validation: ValidationResult;
+  provenance?: DataProvenance;  // Source/confidence for key metrics
 }
 
 export interface GrowthStage {
@@ -280,6 +295,10 @@ export interface TechnicalAnalysisResult {
     rsi_14: IndicatorValue[];
     macd: MACDValue[];
     vwap?: IndicatorValue[];  // Volume Weighted Average Price
+    // NEW: Enhanced volume-weighted indicators
+    vwma_20?: IndicatorValue[];  // Volume Weighted Moving Average
+    obv?: IndicatorValue[];  // On-Balance Volume
+    mfi_14?: IndicatorValue[];  // Money Flow Index (volume-weighted RSI)
   };
   // Volume metrics (institutional-grade)
   volume?: {
@@ -291,7 +310,29 @@ export interface TechnicalAnalysisResult {
     rsi: 'overbought' | 'oversold' | 'neutral';
     macd: 'bullish' | 'bearish' | 'neutral';
     volume_confirmation?: 'confirmed' | 'weak' | 'neutral';  // Volume validates signal
+    mfi?: 'overbought' | 'oversold' | 'neutral';  // MFI signal
+    obv_trend?: 'accumulation' | 'distribution' | 'neutral';  // Smart money flow
   };
+}
+
+// Sensitivity Matrix Types
+export interface SensitivityMatrixRequest {
+  matrix_type: 'margin_growth' | 'wacc_terminal';
+  base_growth?: number;
+  base_margin?: number;
+  base_discount_rate?: number;
+  terminal_growth?: number;
+  projection_years?: number;
+}
+
+export interface SensitivityMatrixResponse {
+  matrix_type: 'margin_growth' | 'wacc_terminal';
+  margins?: number[];  // For margin_growth
+  growth_rates?: number[];  // For margin_growth
+  discount_rates?: number[];  // For wacc_terminal
+  terminal_growth_rates?: number[];  // For wacc_terminal
+  matrix: (number | null)[][];  // 2D matrix of intrinsic values
+  base_values: Record<string, number>;
 }
 
 // Financial Ratios Types (single period)

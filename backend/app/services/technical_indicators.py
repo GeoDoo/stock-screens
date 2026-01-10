@@ -55,6 +55,13 @@ class TechnicalAnalysisResult:
     average_volume: Optional[float] = None  # 20-day average
     relative_volume: Optional[float] = None  # Current vs average (multiplier)
     volume_confirmation: str = "neutral"  # "confirmed", "weak", "neutral"
+    
+    # NEW: Enhanced volume-weighted indicators
+    vwma_20: Optional[List[IndicatorValue]] = None  # Volume-Weighted Moving Average
+    obv: Optional[List[IndicatorValue]] = None  # On-Balance Volume
+    mfi_14: Optional[List[IndicatorValue]] = None  # Money Flow Index
+    mfi_signal: str = "neutral"  # "overbought", "oversold", "neutral"
+    obv_trend: str = "neutral"  # "accumulation", "distribution", "neutral"
 
 
 class TechnicalIndicators:
@@ -373,6 +380,195 @@ class TechnicalIndicators:
             return "confirmed"
         elif rel_vol <= 0.8:
             return "weak"
+        else:
+            return "neutral"
+    
+    @staticmethod
+    def vwma(prices: List[float], volumes: List[float], period: int = 20) -> List[Optional[float]]:
+        """
+        Volume Weighted Moving Average.
+        
+        VWMA = Σ(Price × Volume) / Σ(Volume) over the period.
+        
+        Unlike SMA which treats all prices equally, VWMA gives
+        more weight to prices traded at higher volume.
+        
+        Professional use: VWMA above SMA suggests buyers are more
+        aggressive; VWMA below SMA suggests sellers are dominant.
+        """
+        if not prices or not volumes or len(prices) != len(volumes):
+            return []
+        
+        result = []
+        for i in range(len(prices)):
+            if i < period - 1:
+                result.append(None)
+            else:
+                window_prices = prices[i - period + 1:i + 1]
+                window_volumes = volumes[i - period + 1:i + 1]
+                
+                pv_sum = sum(p * v for p, v in zip(window_prices, window_volumes))
+                v_sum = sum(window_volumes)
+                
+                if v_sum > 0:
+                    result.append(pv_sum / v_sum)
+                else:
+                    result.append(None)
+        
+        return result
+    
+    @staticmethod
+    def obv(prices: List[float], volumes: List[float]) -> List[float]:
+        """
+        On-Balance Volume (OBV).
+        
+        Cumulative sum of volume, adding on up days and subtracting on down days.
+        
+        OBV rising with price = bullish (smart money accumulating)
+        OBV falling with price = bearish (smart money distributing)
+        OBV divergence = potential reversal
+        
+        Created by Joe Granville as "crowd wisdom" indicator.
+        """
+        if not prices or not volumes or len(prices) != len(volumes):
+            return []
+        
+        result = [0.0]  # Start at 0
+        
+        for i in range(1, len(prices)):
+            if prices[i] > prices[i - 1]:
+                # Price up - add volume
+                result.append(result[-1] + volumes[i])
+            elif prices[i] < prices[i - 1]:
+                # Price down - subtract volume
+                result.append(result[-1] - volumes[i])
+            else:
+                # Price unchanged - no change
+                result.append(result[-1])
+        
+        return result
+    
+    @staticmethod
+    def mfi(
+        highs: List[float],
+        lows: List[float],
+        closes: List[float],
+        volumes: List[float],
+        period: int = 14,
+    ) -> List[Optional[float]]:
+        """
+        Money Flow Index (MFI) - Volume-weighted RSI.
+        
+        MFI combines price and volume to measure buying/selling pressure.
+        
+        Typical Price = (High + Low + Close) / 3
+        Money Flow = Typical Price × Volume
+        Money Flow Ratio = Positive MF / Negative MF
+        MFI = 100 - (100 / (1 + Money Flow Ratio))
+        
+        MFI > 80 = overbought (with volume confirmation)
+        MFI < 20 = oversold (with volume confirmation)
+        
+        More reliable than RSI because it includes volume.
+        """
+        if not all([highs, lows, closes, volumes]):
+            return []
+        
+        n = len(closes)
+        if n != len(highs) or n != len(lows) or n != len(volumes):
+            return []
+        
+        if n < period + 1:
+            return [None] * n
+        
+        # Calculate typical prices
+        typical_prices = [(h + l + c) / 3 for h, l, c in zip(highs, lows, closes)]
+        
+        # Calculate raw money flows
+        money_flows = [tp * vol for tp, vol in zip(typical_prices, volumes)]
+        
+        result = [None] * period
+        
+        for i in range(period, n):
+            positive_mf = 0.0
+            negative_mf = 0.0
+            
+            for j in range(i - period + 1, i + 1):
+                if j > 0 and typical_prices[j] > typical_prices[j - 1]:
+                    positive_mf += money_flows[j]
+                elif j > 0 and typical_prices[j] < typical_prices[j - 1]:
+                    negative_mf += money_flows[j]
+            
+            if positive_mf == 0 and negative_mf == 0:
+                # No price movement - neutral
+                result.append(50.0)
+            elif negative_mf == 0:
+                # All positive flow - overbought
+                result.append(100.0)
+            else:
+                mf_ratio = positive_mf / negative_mf
+                result.append(100 - (100 / (1 + mf_ratio)))
+        
+        return result
+    
+    @staticmethod
+    def analyze_mfi(mfi_values: List[Optional[float]]) -> str:
+        """Interpret Money Flow Index signal."""
+        latest_mfi = next((v for v in reversed(mfi_values) if v is not None), None)
+        
+        if latest_mfi is None:
+            return "neutral"
+        elif latest_mfi >= 80:
+            return "overbought"
+        elif latest_mfi <= 20:
+            return "oversold"
+        else:
+            return "neutral"
+    
+    @staticmethod
+    def obv_trend(obv_values: List[float], period: int = 20) -> str:
+        """
+        Analyze OBV trend direction.
+        
+        Returns:
+        - "accumulation": OBV trending up (buyers dominant)
+        - "distribution": OBV trending down (sellers dominant)
+        - "neutral": No clear trend
+        """
+        if len(obv_values) < period:
+            return "neutral"
+        
+        # Compare OBV slope over the period
+        recent = obv_values[-period:]
+        
+        # Simple linear regression slope direction
+        n = len(recent)
+        x_sum = sum(range(n))
+        y_sum = sum(recent)
+        xy_sum = sum(i * v for i, v in enumerate(recent))
+        xx_sum = sum(i * i for i in range(n))
+        
+        denominator = n * xx_sum - x_sum * x_sum
+        if denominator == 0:
+            return "neutral"
+        
+        slope = (n * xy_sum - x_sum * y_sum) / denominator
+        
+        # Normalize slope by OBV RANGE (not mean) to handle zero-crossing
+        # When OBV goes from positive to negative, mean can be ~0 but range captures magnitude
+        obv_range = max(recent) - min(recent)
+        if obv_range == 0:
+            return "neutral"
+        
+        # Slope per period as fraction of total range
+        # slope * period gives total change over the period
+        total_change = slope * (n - 1)
+        normalized_change = total_change / obv_range
+        
+        if normalized_change > 0.3:  # OBV moved >30% of its range upward
+            return "accumulation"
+        elif normalized_change < -0.3:  # OBV moved >30% of its range downward
+            return "distribution"
         else:
             return "neutral"
 

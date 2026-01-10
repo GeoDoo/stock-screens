@@ -13,6 +13,10 @@ from app.schemas.stock import (
     MonteCarloRequest,
     FullMonteCarloRequest,
     CapitalEfficiencyRequest,
+    DataProvenance,
+    ProvenanceItem,
+    SensitivityMatrixRequest,
+    SensitivityMatrixResponse,
 )
 from app.schemas.common import ValidationResponse
 from app.services.stock_data_client import StockDataClient
@@ -36,6 +40,7 @@ from app.services.rate_limiter_sqlite import rate_limiter
 from app.services.monte_carlo import run_monte_carlo_valuation
 from app.services.monte_carlo_full import run_full_monte_carlo
 from app.services.capital_efficiency import analyze_value_creation
+from app.services.sensitivity_calculator import SensitivityCalculator
 
 router = APIRouter(prefix="/api/stock", tags=["stock"])
 
@@ -299,6 +304,9 @@ async def get_stock(symbol: str, provider: str):
         ),
         validation=ValidationResponse(**validation_result.to_dict()),
         is_using_ltm=extractor.is_using_ltm(),
+        provenance=DataProvenance(**{
+            k: ProvenanceItem(**v) for k, v in extractor.get_all_provenance().items()
+        }),
     )
 
 
@@ -1522,3 +1530,124 @@ async def run_full_monte_carlo_endpoint(
             },
         },
     }
+
+
+@router.post("/{symbol}/sensitivity-matrix", response_model=SensitivityMatrixResponse)
+async def get_sensitivity_matrix(
+    symbol: str,
+    provider: str,
+    request: SensitivityMatrixRequest
+):
+    """
+    Generate 2D sensitivity matrix for valuation.
+    
+    Supports two matrix types:
+    
+    1. **margin_growth** (default): Varies operating margin and revenue growth.
+       Shows how intrinsic value changes with execution (margin) and
+       market size (growth) assumptions. Useful for understanding
+       execution risk and upside potential.
+    
+    2. **wacc_terminal**: Varies discount rate (WACC) and terminal growth.
+       Classic DCF sensitivity showing value sensitivity to
+       risk (WACC) and long-term growth assumptions.
+    
+    Each cell shows intrinsic value per share for that parameter combination.
+    Matrix is 5×5 by default, centered on base values.
+    """
+    stock_client = get_client_for_provider(provider)
+    if stock_client is None:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+    
+    stock_data = await stock_client.get_stock_data(symbol)
+    legacy_data = stock_data_to_legacy(stock_data)
+    extractor = DataExtractor(legacy_data)
+    
+    # Get base values from data if not provided
+    fcf_projector = FCFProjector(
+        historical_revenue=extractor.revenue_history() or [0],
+        historical_ebit=extractor.ebit_history() or [0],
+        historical_da=extractor.da_history() or [0],
+        historical_capex=extractor.capex_history() or [0],
+        historical_working_capital=extractor.working_capital_history() or [0],
+    )
+    
+    base_growth = request.base_growth or fcf_projector.revenue_cagr() or 0.05
+    base_margin = request.base_margin or fcf_projector.operating_margin() or 0.15
+    base_discount_rate = request.base_discount_rate or 0.10
+    da_ratio = request.da_ratio or fcf_projector.da_to_revenue_ratio() or 0.03
+    capex_ratio = request.capex_ratio or fcf_projector.capex_to_revenue_ratio() or 0.04
+    wc_ratio = request.wc_ratio or fcf_projector.wc_to_revenue_ratio() or 0.05
+    
+    # Get company data
+    base_revenue = extractor.latest_revenue() or 1_000_000_000
+    shares = extractor.shares_outstanding() or 1_000_000_000
+    total_debt = extractor.total_debt() or 0
+    cash = extractor.cash() or 0
+    
+    # Equity bridge components
+    minority_interest = extractor.minority_interest() or 0
+    preferred_stock = extractor.preferred_stock() or 0
+    deferred_tax_assets = extractor.deferred_tax_assets() or 0
+    pension_liability = extractor.pension_liability() or 0
+    
+    # Project base FCFs for WACC/terminal matrix
+    projections = fcf_projector.project(
+        years=request.projection_years,
+        revenue_growth=base_growth,
+        operating_margin=base_margin,
+        da_ratio=da_ratio,
+        capex_ratio=capex_ratio,
+        wc_ratio=wc_ratio,
+    )
+    base_fcfs = [p["fcf"] for p in projections]
+    
+    calc = SensitivityCalculator(
+        projected_fcfs=base_fcfs,
+        projection_years=request.projection_years,
+        shares_outstanding=shares,
+        total_debt=total_debt,
+        cash=cash,
+        minority_interest=minority_interest,
+        preferred_stock=preferred_stock,
+        deferred_tax_assets=deferred_tax_assets,
+        pension_deficit=pension_liability,
+    )
+    
+    if request.matrix_type == "wacc_terminal":
+        result = calc.generate_matrix(
+            base_discount_rate=base_discount_rate,
+            base_terminal_growth=request.terminal_growth,
+            discount_rate_steps=request.discount_rate_steps,
+            terminal_growth_steps=request.terminal_growth_steps,
+        )
+        return SensitivityMatrixResponse(
+            matrix_type="wacc_terminal",
+            discount_rates=result["discount_rates"],
+            terminal_growth_rates=result["terminal_growth_rates"],
+            matrix=result["matrix"],
+            base_values={
+                "discount_rate": base_discount_rate,
+                "terminal_growth": request.terminal_growth,
+            },
+        )
+    else:  # margin_growth
+        result = calc.generate_margin_growth_matrix(
+            base_revenue=base_revenue,
+            base_margin=base_margin,
+            base_growth=base_growth,
+            discount_rate=base_discount_rate,
+            terminal_growth=request.terminal_growth,
+            margin_steps=request.margin_steps,
+            growth_steps=request.growth_steps,
+        )
+        return SensitivityMatrixResponse(
+            matrix_type="margin_growth",
+            margins=result["margins"],
+            growth_rates=result["growth_rates"],
+            matrix=result["matrix"],
+            base_values={
+                "margin": base_margin,
+                "growth": base_growth,
+            },
+        )
