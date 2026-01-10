@@ -190,19 +190,38 @@ class FCFProjector:
         wc_ratio: Optional[float] = None,
         wc_mode: str = "level",
         growth_schedule: Optional[List[float]] = None,
+        # Economics schedules for multi-stage modeling
+        margin_schedule: Optional[List[float]] = None,
+        da_schedule: Optional[List[float]] = None,
+        capex_schedule: Optional[List[float]] = None,
+        wc_schedule: Optional[List[float]] = None,
     ) -> List[dict]:
         """
         Project FCF for multiple years.
         
         All ratios default to historical averages but can be overridden.
         
+        Schedules take precedence over constant values:
+        - growth_schedule overrides revenue_growth
+        - margin_schedule overrides operating_margin
+        - da_schedule overrides da_ratio
+        - capex_schedule overrides capex_ratio
+        - wc_schedule overrides wc_ratio
+        
+        When a schedule is shorter than the projection period, the last
+        value is repeated for remaining years.
+        
         Args:
             years: Number of years to project (ignored if growth_schedule provided)
             revenue_growth: Constant growth rate for all years (ignored if growth_schedule provided)
             growth_schedule: List of growth rates per year (overrides revenue_growth and years)
+            margin_schedule: List of operating margins per year
+            da_schedule: List of D&A ratios per year
+            capex_schedule: List of CapEx ratios per year
+            wc_schedule: List of WC ratios per year
             wc_mode: "level" (WC = Revenue × Ratio) or "incremental" (ΔWC = ΔRevenue × Intensity)
         """
-        # Use historical averages as defaults
+        # Use historical averages as defaults for constant values
         _revenue_growth = revenue_growth if revenue_growth is not None else self.revenue_cagr()
         _operating_margin = operating_margin if operating_margin is not None else self.operating_margin()
         _da_ratio = da_ratio if da_ratio is not None else self.da_to_revenue_ratio()
@@ -216,20 +235,36 @@ class FCFProjector:
             num_years = years
             growth_schedule = [_revenue_growth] * num_years  # Constant growth
         
+        # Helper to get schedule value with fallback to constant
+        def get_schedule_value(schedule: Optional[List[float]], index: int, constant: float) -> float:
+            if schedule is None:
+                return constant
+            if index < len(schedule):
+                return schedule[index]
+            # Schedule shorter than projection - use last value
+            return schedule[-1] if schedule else constant
+        
         projections = []
         prior_revenue = self.historical_revenue[-1]
         prior_wc = self.historical_working_capital[-1]
         
         for year_idx in range(num_years):
             year_growth = growth_schedule[year_idx]
+            
+            # Get year-specific economics (or constant if no schedule)
+            year_margin = get_schedule_value(margin_schedule, year_idx, _operating_margin)
+            year_da = get_schedule_value(da_schedule, year_idx, _da_ratio)
+            year_capex = get_schedule_value(capex_schedule, year_idx, _capex_ratio)
+            year_wc = get_schedule_value(wc_schedule, year_idx, _wc_ratio)
+            
             year_projection = self.project_fcf_year(
                 prior_revenue=prior_revenue,
                 prior_working_capital=prior_wc,
                 revenue_growth=year_growth,
-                operating_margin=_operating_margin,
-                da_ratio=_da_ratio,
-                capex_ratio=_capex_ratio,
-                wc_ratio=_wc_ratio,
+                operating_margin=year_margin,
+                da_ratio=year_da,
+                capex_ratio=year_capex,
+                wc_ratio=year_wc,
                 wc_mode=wc_mode,
             )
             projections.append(year_projection)
