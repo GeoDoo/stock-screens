@@ -1,11 +1,87 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 from app.services.fmp_client import FMPClient
+from app.services.fmp_provider import FMPProvider
 
 
 @pytest.fixture
 def fmp_client():
     return FMPClient(api_key="test_key")
+
+
+@pytest.fixture
+def fmp_provider():
+    return FMPProvider(api_key="test_key")
+
+
+class TestFMPProviderPeriodMapping:
+    """
+    Tests for period mapping in FMPProvider._merge_financials.
+    
+    This ensures TTM/LTM periods are preserved and not collapsed to "quarterly".
+    """
+    
+    def test_maps_fy_to_annual(self, fmp_provider):
+        """FY (Fiscal Year) should map to 'annual'."""
+        income = [{"date": "2024-09-30", "period": "FY", "revenue": 100_000}]
+        balance = [{"date": "2024-09-30", "totalAssets": 200_000}]
+        cash_flow = [{"date": "2024-09-30", "freeCashFlow": 50_000}]
+        
+        financials = fmp_provider._merge_financials(income, balance, cash_flow)
+        
+        assert len(financials) == 1
+        assert financials[0].period == "annual"
+    
+    def test_maps_quarterly_to_quarterly(self, fmp_provider):
+        """Q1-Q4 should map to 'quarterly'."""
+        for quarter in ["Q1", "Q2", "Q3", "Q4"]:
+            income = [{"date": "2024-09-30", "period": quarter, "revenue": 25_000}]
+            balance = [{"date": "2024-09-30"}]
+            cash_flow = [{"date": "2024-09-30"}]
+            
+            financials = fmp_provider._merge_financials(income, balance, cash_flow)
+            
+            assert financials[0].period == "quarterly", f"{quarter} should map to 'quarterly'"
+    
+    def test_maps_ttm_to_ttm(self, fmp_provider):
+        """
+        TTM should map to 'ttm' - NOT 'quarterly'.
+        
+        This is critical: if TTM is collapsed to 'quarterly', the downstream
+        DataExtractor won't find it when looking for TTM data.
+        """
+        income = [{"date": "2024-09-30", "period": "TTM", "revenue": 100_000}]
+        balance = [{"date": "2024-09-30"}]
+        cash_flow = [{"date": "2024-09-30"}]
+        
+        financials = fmp_provider._merge_financials(income, balance, cash_flow)
+        
+        assert financials[0].period == "ttm", (
+            "TTM period should be preserved, not collapsed to 'quarterly'"
+        )
+    
+    def test_maps_ltm_to_ttm(self, fmp_provider):
+        """LTM (Last Twelve Months) is equivalent to TTM."""
+        income = [{"date": "2024-09-30", "period": "LTM", "revenue": 100_000}]
+        balance = [{"date": "2024-09-30"}]
+        cash_flow = [{"date": "2024-09-30"}]
+        
+        financials = fmp_provider._merge_financials(income, balance, cash_flow)
+        
+        assert financials[0].period == "ttm", (
+            "LTM should be treated the same as TTM"
+        )
+    
+    def test_handles_missing_period(self, fmp_provider):
+        """Missing period should default to 'quarterly' (defensive)."""
+        income = [{"date": "2024-09-30", "revenue": 100_000}]  # No period field
+        balance = [{"date": "2024-09-30"}]
+        cash_flow = [{"date": "2024-09-30"}]
+        
+        financials = fmp_provider._merge_financials(income, balance, cash_flow)
+        
+        # Missing period defaults to quarterly (safest assumption)
+        assert financials[0].period == "quarterly"
 
 
 class TestFMPClient:
