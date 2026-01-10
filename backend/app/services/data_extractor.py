@@ -170,8 +170,14 @@ class DataExtractor:
         return self._get_latest(self.balance_sheet, "pensionLiability")
     
     def latest_revenue(self) -> Optional[float]:
-        """Latest revenue from income statement."""
-        return self._get_latest(self.income_statement, "revenue")
+        """
+        Latest revenue, preferring TTM over annual data.
+        
+        TTM (Trailing Twelve Months) is more current than the last fiscal year,
+        which can be 9+ months stale. This is important for valuation because
+        it gives the most current view of the company's revenue run-rate.
+        """
+        return self._get_ttm(self.income_statement, "revenue")
     
     def latest_working_capital(self) -> Optional[float]:
         """
@@ -225,13 +231,18 @@ class DataExtractor:
                 if 0 <= rate <= 0.50:
                     return rate
         
-        # Fallback to multi-year average
+        # Fallback to multi-year average using ANNUAL data only
         valid_rates = []
+        annual_count = 0
         
-        for statement in self.income_statement[:3]:  # Up to 3 years
-            # Skip TTM record in the averaging (already tried above)
-            if statement.get("period", "").upper() in ("TTM", "LTM"):
+        for statement in self.income_statement:
+            # Skip non-annual periods (TTM, LTM, quarterly)
+            if not self._is_annual_period(statement):
                 continue
+            
+            annual_count += 1
+            if annual_count > 3:  # Limit to 3 years
+                break
                 
             tax_expense = statement.get("incomeTaxExpense")
             income_before_tax = statement.get("incomeBeforeTax")
@@ -374,8 +385,12 @@ class DataExtractor:
         return synthetic_rate
 
     def free_cash_flow(self) -> Optional[float]:
-        """Free cash flow from cash flow statement."""
-        return self._get_latest(self.cash_flow, "freeCashFlow")
+        """
+        Free cash flow, preferring TTM over annual data.
+        
+        TTM FCF is more current than the last fiscal year.
+        """
+        return self._get_ttm(self.cash_flow, "freeCashFlow")
 
     def diluted_shares_outstanding(self) -> Optional[float]:
         """

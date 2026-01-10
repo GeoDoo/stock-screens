@@ -756,6 +756,42 @@ class TestTaxRateAveraging:
         assert tax_rate == pytest.approx(0.225, rel=0.01), (
             "Should exclude loss years from tax rate average"
         )
+    
+    def test_tax_rate_excludes_quarterly_periods(self):
+        """
+        BUG: tax_rate() averaging skips TTM/LTM but NOT quarterly periods.
+        
+        If quarterly statements are present (some providers include them),
+        they would be incorrectly included in the "annual" average, distorting
+        the effective tax rate.
+        
+        Quarterly tax rates can be very different from annual due to:
+        - Seasonality in deferred tax recognition
+        - Discrete items (stock comp, acquisitions) hitting specific quarters
+        """
+        data = {
+            "profile": {},
+            "income_statement": [
+                # Most recent annual
+                {"period": "FY", "incomeTaxExpense": 25_000_000, "incomeBeforeTax": 100_000_000},  # 25%
+                # Quarterly - should NOT be included
+                {"period": "Q1", "incomeTaxExpense": 3_000_000, "incomeBeforeTax": 25_000_000},  # 12% (quarterly)
+                {"period": "Q2", "incomeTaxExpense": 2_000_000, "incomeBeforeTax": 25_000_000},  # 8% (quarterly)
+                # Prior annual
+                {"period": "FY", "incomeTaxExpense": 21_000_000, "incomeBeforeTax": 100_000_000},  # 21%
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Should average only annual: (25% + 21%) / 2 = 23%
+        # If quarterly is wrongly included: would be (25 + 12 + 8 + 21) / 4 = 16.5% WRONG!
+        tax_rate = extractor.tax_rate()
+        
+        assert tax_rate == pytest.approx(0.23, rel=0.02), (
+            f"Tax rate averaging should exclude quarterly periods. Got {tax_rate:.2%}, expected ~23%"
+        )
 
 
 class TestSyntheticCreditRating:
@@ -1087,6 +1123,52 @@ class TestLTMDataMerging:
         # Should use TTM tax rate (25%), not annual (20%)
         tax_rate = extractor.tax_rate()
         assert 0.24 <= tax_rate <= 0.26, f"Expected ~25%, got {tax_rate:.2%}"
+
+    def test_latest_revenue_finds_ttm_regardless_of_order(self):
+        """
+        BUG: latest_revenue() uses _get_latest() which returns statements[0].
+        If TTM is not at index 0 (e.g., provider returns annual first), 
+        TTM data would be ignored despite being more current.
+        
+        This test ensures TTM is EXPLICITLY found, not accidentally returned
+        due to list ordering.
+        """
+        # TTM is NOT at index 0 - this exposes the bug
+        data = {
+            "profile": {},
+            "income_statement": [
+                {"period": "FY", "revenue": 380_000_000_000},     # Annual at index 0
+                {"period": "TTM", "revenue": 400_000_000_000},    # TTM at index 1
+                {"period": "FY", "revenue": 350_000_000_000},     # Older annual
+            ],
+            "balance_sheet": [],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Should find and use TTM (400B), not just return index 0 (380B)
+        assert extractor.latest_revenue() == 400_000_000_000, (
+            "latest_revenue() should explicitly prefer TTM regardless of list order"
+        )
+    
+    def test_free_cash_flow_finds_ttm_regardless_of_order(self):
+        """
+        Same bug for cash flow items - must explicitly find TTM, not rely on ordering.
+        """
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [],
+            "cash_flow": [
+                {"period": "FY", "freeCashFlow": 45_000_000_000},    # Annual at index 0
+                {"period": "TTM", "freeCashFlow": 55_000_000_000},   # TTM at index 1
+            ],
+        }
+        extractor = DataExtractor(data)
+        
+        assert extractor.free_cash_flow() == 55_000_000_000, (
+            "free_cash_flow() should explicitly prefer TTM regardless of list order"
+        )
 
 
 class TestRiskFreeRateConsistency:

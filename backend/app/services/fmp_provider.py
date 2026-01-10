@@ -131,9 +131,20 @@ class FMPProvider(StockDataProvider):
             bal = balance_by_date.get(date, {})
             cf = cash_by_date.get(date, {})
             
+            # Map FMP period to standardized period
+            # FMP typically returns: "FY" (fiscal year), "Q1-Q4" (quarterly)
+            # We handle TTM/LTM explicitly for future-proofing
+            raw_period = (inc.get("period") or "").upper()
+            if raw_period == "FY":
+                period = "annual"
+            elif raw_period in ("TTM", "LTM"):
+                period = "ttm"  # Preserve TTM semantics
+            else:
+                period = "quarterly"
+            
             stmt = FinancialStatement(
                 date=date,
-                period="annual" if inc.get("period") == "FY" else "quarterly",
+                period=period,
                 # Income Statement
                 revenue=inc.get("revenue"),
                 cost_of_revenue=inc.get("costOfRevenue"),
