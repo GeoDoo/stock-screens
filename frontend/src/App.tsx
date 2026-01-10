@@ -18,6 +18,9 @@ import { MemoCreateModal } from './components/MemoCreateModal';
 import { Layout } from './components/Layout';
 import { MonteCarloPanel } from './components/MonteCarloPanel';
 import { MultiStageGrowth } from './components/MultiStageGrowth';
+import { ProvenanceDisplay } from './components/ProvenanceBadge';
+import { SensitivityMatrixPanel } from './components/SensitivityMatrixPanel';
+import { VolumeSignals } from './components/VolumeSignals';
 
 import { API_BASE } from './config';
 
@@ -904,6 +907,13 @@ export default function App() {
                       </tr>
                     </tbody>
                   </table>
+                  
+                  {/* Data Provenance - shows source/confidence for key metrics */}
+                  {stockData.provenance && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      <ProvenanceDisplay provenance={stockData.provenance} />
+                    </div>
+                  )}
                 </div>
 
                 {/* Historical Hints Card */}
@@ -1649,6 +1659,24 @@ export default function App() {
                 </div>
               </div>
               )}
+
+              {/* 2D Sensitivity Matrix - Margin vs Growth / WACC vs Terminal */}
+              <div className="mt-8">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Advanced Sensitivity Matrix</h3>
+                <p className="text-sm text-gray-400 mb-6">Explore how intrinsic value changes with margin/growth assumptions or WACC/terminal growth</p>
+                <SensitivityMatrixPanel
+                  symbol={stockData.symbol}
+                  provider={selectedFundamentalProvider}
+                  baseGrowth={parseFloat(revenueGrowth) / 100 || 0.10}
+                  baseMargin={parseFloat(operatingMargin) / 100 || 0.15}
+                  baseDiscountRate={result?.discount_rate || 0.10}
+                  terminalGrowth={parseFloat(terminalGrowth) / 100 || 0.03}
+                  projectionYears={parseInt(projectionYears) || 10}
+                  daRatio={currentHints?.da_ratio ?? undefined}
+                  capexRatio={currentHints?.capex_ratio ?? undefined}
+                  wcRatio={currentHints?.wc_ratio ?? undefined}
+                />
+              </div>
             </section>
             )}
 
@@ -2194,6 +2222,14 @@ export default function App() {
                     )}
                   </div>
                 </div>
+
+                {/* Volume-Weighted Signals (MFI & OBV) */}
+                {(technicalResult.signals.mfi_signal || technicalResult.signals.obv_trend) && (
+                  <div className="mt-6">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Volume-Weighted Signals</h3>
+                    <VolumeSignals technicalResult={technicalResult} />
+                  </div>
+                )}
 
                 {/* Price Chart */}
                 <div>

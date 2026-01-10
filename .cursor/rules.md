@@ -83,6 +83,9 @@ All bugfixes must add a regression test for the exact failure mode:
   - keep tests at the feature level (don’t over-test helpers).
 
 ## Definition of Done (stock-screens)
+- We deliver features **end-to-end**:
+  - if we add/modify backend capability, we also ship the frontend wiring + UX states (loading/error/empty) and keep types/normalizers/tests aligned in the same PR
+  - we do **not** “start from the backend” and leave features half-integrated.
 - Backend: pytest green (new tests added for new behavior)
 - Frontend: vitest green AND `npm run build` passes (tests alone don’t guarantee ship)
 - No API contract drift: types + normalizers aligned
