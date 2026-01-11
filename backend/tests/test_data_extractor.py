@@ -35,6 +35,50 @@ class TestDataExtractor:
         }
         extractor = DataExtractor(data)
         assert extractor.total_debt() == 100000000000
+    
+    def test_total_debt_includes_operating_leases_asc842(self):
+        """
+        P0 #2 (NOTES2.md): ASC 842 Lease Debt fix.
+        
+        Since ASC 842 (2019), operating lease liabilities are debt-like claims.
+        For retailers, airlines, etc. ignoring leases understates debt by billions.
+        
+        Total debt should include:
+        - totalDebt
+        - capitalLeaseObligations
+        - operatingLeaseObligations
+        """
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{
+                "totalDebt": 50_000_000_000,  # $50B traditional debt
+                "capitalLeaseObligations": 5_000_000_000,  # $5B capital leases
+                "operatingLeaseObligations": 15_000_000_000,  # $15B operating leases
+            }],
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Should sum all: 50B + 5B + 15B = 70B
+        assert extractor.total_debt() == 70_000_000_000, (
+            "total_debt must include operating and capital lease obligations per ASC 842"
+        )
+    
+    def test_total_debt_handles_missing_lease_data(self):
+        """
+        Should gracefully handle missing lease data (fall back to totalDebt only).
+        """
+        data = {
+            "profile": {},
+            "income_statement": [],
+            "balance_sheet": [{"totalDebt": 100_000_000_000}],  # No lease data
+            "cash_flow": [],
+        }
+        extractor = DataExtractor(data)
+        
+        # Should just use totalDebt when leases not available
+        assert extractor.total_debt() == 100_000_000_000
 
     def test_extract_cash(self):
         """Extract cash from balance sheet."""
