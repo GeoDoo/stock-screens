@@ -1712,3 +1712,148 @@ class TestFCFProjectorIntegration:
         assert abs(terminal_margin_from_projector - 0.12) < 0.01, (
             f"FCFProjector terminal margin should be ~12%, got {terminal_margin_from_projector:.1%}"
         )
+
+
+class TestDilutionSupport:
+    """
+    P0.2 Fix: Monte Carlo must support annual_dilution_rate like ValuationService.
+    
+    Problem: Full Monte Carlo uses shares_outstanding directly for per-share
+    calculations, ignoring SBC dilution. For tech companies with 2-3% annual
+    dilution, a 10-year projection would overstate per-share value by 20-30%.
+    
+    Solution: Add annual_dilution_rate parameter and calculate terminal_shares
+    using the same formula as ValuationService:
+    terminal_shares = current_shares * ((1 + annual_dilution_rate) ** projection_years)
+    """
+    
+    def test_mc_accepts_annual_dilution_rate_parameter(self):
+        """
+        Monte Carlo should accept annual_dilution_rate parameter.
+        """
+        hist_revenue = [100e9, 110e9, 121e9]
+        hist_ebit = [15e9, 16.5e9, 18.15e9]
+        hist_da = [5e9, 5.5e9, 6.05e9]
+        hist_capex = [8e9, 8.8e9, 9.68e9]
+        hist_wc = [10e9, 11e9, 12.1e9]
+        
+        # Should not raise TypeError for unknown parameter
+        result = run_full_monte_carlo(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=1e9,
+            total_debt=50e9,
+            cash=20e9,
+            current_price=100.0,
+            base_growth=0.10,
+            base_margin=0.15,
+            base_da_ratio=0.05,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=5,
+            iterations=1,
+            seed=42,
+            # THIS IS THE KEY - should accept dilution parameter
+            annual_dilution_rate=0.03,  # 3% annual dilution
+        )
+        
+        assert result.valid_simulations == 1, (
+            "Monte Carlo should accept annual_dilution_rate parameter"
+        )
+    
+    def test_dilution_reduces_per_share_value(self):
+        """
+        With positive dilution, per-share value should be LOWER than without dilution.
+        
+        At 3% annual dilution over 10 years:
+        terminal_shares = 1e9 * (1.03)^10 = 1.344e9 shares
+        
+        This means ~34% more shares, so per-share value should be ~25% lower.
+        """
+        hist_revenue = [100e9, 110e9, 121e9]
+        hist_ebit = [15e9, 16.5e9, 18.15e9]
+        hist_da = [5e9, 5.5e9, 6.05e9]
+        hist_capex = [8e9, 8.8e9, 9.68e9]
+        hist_wc = [10e9, 11e9, 12.1e9]
+        
+        common_params = dict(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=1e9,
+            total_debt=50e9,
+            cash=20e9,
+            current_price=100.0,
+            base_growth=0.10,
+            base_margin=0.15,
+            base_da_ratio=0.05,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=10,
+            iterations=1,
+            seed=42,
+        )
+        
+        # Run without dilution
+        result_no_dilution = run_full_monte_carlo(
+            **common_params,
+            annual_dilution_rate=0.0,
+        )
+        
+        # Run with 3% annual dilution
+        result_with_dilution = run_full_monte_carlo(
+            **common_params,
+            annual_dilution_rate=0.03,
+        )
+        
+        # Both should produce valid results
+        assert result_no_dilution.valid_simulations == 1
+        assert result_with_dilution.valid_simulations == 1
+        
+        # Get per-share values
+        value_no_dilution = result_no_dilution.mean
+        value_with_dilution = result_with_dilution.mean
+        
+        # Diluted value should be lower
+        assert value_with_dilution < value_no_dilution, (
+            f"Dilution should reduce per-share value. "
+            f"No dilution: ${value_no_dilution:.2f}, With 3% dilution: ${value_with_dilution:.2f}"
+        )
+        
+        # Calculate expected reduction
+        # terminal_shares = 1e9 * (1.03)^10 ≈ 1.344e9
+        # Reduction factor = 1 / 1.344 ≈ 0.744
+        # So diluted value should be ~74% of no-dilution value
+        expected_ratio = 1 / (1.03 ** 10)  # ~0.744
+        actual_ratio = value_with_dilution / value_no_dilution
+        
+        # Allow some tolerance for rounding
+        assert abs(actual_ratio - expected_ratio) < 0.01, (
+            f"Dilution math should match ValuationService. "
+            f"Expected ratio: {expected_ratio:.3f}, Actual: {actual_ratio:.3f}"
+        )
