@@ -1150,8 +1150,17 @@ async def batch_analyze(symbol: str, provider: str):
             if ttm_current_assets is not None and ttm_current_liabilities is not None:
                 ttm_wc = ttm_current_assets - ttm_current_liabilities
             
+            # P0 Fix: Calculate TRUE TTM revenue growth (YoY), not copy annual CAGR
+            # TTM growth = (TTM_revenue / prior_year_revenue) - 1
+            ttm_revenue_growth = None
+            annual_financials = [f for f in stock_data.financials if f.period == "annual"]
+            if ttm_revenue and annual_financials:
+                prior_year_revenue = annual_financials[0].revenue
+                if prior_year_revenue and prior_year_revenue > 0:
+                    ttm_revenue_growth = (ttm_revenue / prior_year_revenue) - 1
+            
             hints_ttm = {
-                "revenue_growth": stock_response["hints_annual"]["revenue_growth"],
+                "revenue_growth": ttm_revenue_growth,
                 "operating_margin": (ttm_operating_income / ttm_revenue) if ttm_revenue and ttm_operating_income else None,
                 "da_ratio": (ttm_da / ttm_revenue) if ttm_revenue and ttm_da else None,
                 "capex_ratio": (abs(ttm_capex) / ttm_revenue) if ttm_revenue and ttm_capex else None,
