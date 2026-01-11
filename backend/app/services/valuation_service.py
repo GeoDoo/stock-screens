@@ -8,6 +8,7 @@ from app.services.wacc_calculator import WACCCalculator
 from app.services.fcf_projector import FCFProjector
 from app.services.dcf_calculator import DCFCalculator
 from app.services.sensitivity_calculator import SensitivityCalculator
+from app.services.capital_efficiency import analyze_value_creation
 
 
 class ValuationService:
@@ -313,6 +314,14 @@ class ValuationService:
             wacc=discount_rate,
         )
 
+        # 9. Capital Efficiency - ROIC, Value Spread, Economic Profit
+        # NOTES4: Add capital efficiency metrics to main valuation response
+        capital_efficiency = self._calculate_capital_efficiency(
+            extractor=extractor,
+            wacc=discount_rate,
+            revenue_growth=effective_revenue_growth,
+        )
+
         return {
             "symbol": symbol,
             "data_provider": stock_data.provider,
@@ -348,6 +357,7 @@ class ValuationService:
             "value_drivers": value_drivers,
             "terminal_value_check": terminal_value_check,
             "business_type_warning": business_type_warning,
+            "capital_efficiency": capital_efficiency,
         }
     
     def _calculate_value_drivers(
@@ -779,5 +789,75 @@ class ValuationService:
             "• Price/Book (P/B) ratio as the primary valuation metric, "
             "• Dividend Discount Model (DDM) for stable dividend payers, "
             "• Excess Returns / Residual Income Model for banks."
+        )
+    
+    def _calculate_capital_efficiency(
+        self,
+        extractor: DataExtractor,
+        wacc: float,
+        revenue_growth: float,
+    ) -> dict:
+        """
+        Calculate capital efficiency metrics for NOTES4 integration.
+        
+        ROIC (Return on Invested Capital) = NOPAT / Invested Capital
+        Value Spread = ROIC - WACC (positive = value creation)
+        Economic Profit = Value Spread × Invested Capital
+        
+        Args:
+            extractor: DataExtractor instance with financial data
+            wacc: Weighted Average Cost of Capital (used as discount rate)
+            revenue_growth: Expected revenue growth rate
+            
+        Returns:
+            Dictionary with:
+            - roic: Return on Invested Capital
+            - value_spread: ROIC - WACC
+            - economic_profit: Dollar value created/destroyed
+            - is_value_creating: Boolean (ROIC > WACC)
+            - invested_capital: Total invested capital
+            - nopat: Net Operating Profit After Tax
+        """
+        # Get operating income (EBIT) and tax rate
+        operating_income = extractor.latest_operating_income()
+        tax_rate = extractor.tax_rate() or 0.25  # Default to 25% if unavailable
+        
+        # Calculate NOPAT = EBIT × (1 - Tax Rate)
+        nopat = None
+        if operating_income is not None:
+            nopat = operating_income * (1 - tax_rate)
+        
+        # Calculate Invested Capital = Equity + Debt - Excess Cash
+        total_equity = extractor.total_equity()
+        total_debt = extractor.total_debt() or 0
+        cash = extractor.cash() or 0
+        revenue = extractor.latest_revenue() or 0
+        
+        # Excess cash = Total Cash - Operating Cash (estimated at 2% of revenue)
+        operating_cash = revenue * 0.02 if revenue > 0 else 0
+        excess_cash = max(0, cash - operating_cash)
+        
+        invested_capital = None
+        if total_equity is not None:
+            invested_capital = total_equity + total_debt - excess_cash
+        
+        # Return early if missing data
+        if nopat is None or invested_capital is None or invested_capital <= 0:
+            return {
+                "roic": None,
+                "value_spread": None,
+                "economic_profit": None,
+                "is_value_creating": None,
+                "invested_capital": invested_capital,
+                "nopat": nopat,
+                "data_issue": "Missing operating income or invested capital data",
+            }
+        
+        # Use the capital efficiency module for calculations
+        return analyze_value_creation(
+            nopat=nopat,
+            invested_capital=invested_capital,
+            revenue_growth=revenue_growth,
+            wacc=wacc,
         )
 

@@ -224,6 +224,14 @@ class DataExtractor:
         """
         return self._get_ttm(self.income_statement, "revenue")
     
+    def latest_operating_income(self) -> Optional[float]:
+        """
+        Latest operating income (EBIT), preferring TTM over annual data.
+        
+        Used for ROIC calculation (NOPAT = EBIT × (1 - Tax Rate)).
+        """
+        return self._get_ttm(self.income_statement, "operatingIncome")
+    
     def latest_working_capital(self) -> Optional[float]:
         """
         Latest Non-Cash Working Capital for DCF analysis.

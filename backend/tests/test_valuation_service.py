@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from app.services.valuation_service import ValuationService
 from app.services.base_provider import StockData, CompanyProfile, FinancialStatement
 
@@ -1471,3 +1471,126 @@ class TestBusinessTypeWarning:
         warning = result.get("business_type_warning", "")
         # Should mention the detected classification
         assert "Financial" in warning or "Bank" in warning
+
+
+class TestCapitalEfficiencyInValuationResponse:
+    """
+    Tests for NOTES4: Capital Efficiency in Main Valuation Response.
+    
+    The /valuation endpoint should include ROIC, value spread, and
+    economic profit metrics so users don't need a separate API call.
+    """
+    
+    @pytest.fixture
+    def mock_stock_data(self):
+        """Stock data with financials for capital efficiency calculation."""
+        return StockData(
+            profile=CompanyProfile(
+                symbol="TEST",
+                name="Test Corp",
+                sector="Technology",
+                industry="Software",
+                market_cap=100_000_000_000,
+                price=100.0,
+                beta=1.2,
+                shares_outstanding=1_000_000_000,
+            ),
+            financials=[
+                FinancialStatement(
+                    date="2024-12-31",
+                    period="annual",
+                    revenue=50_000_000_000,  # 50B revenue
+                    operating_income=15_000_000_000,  # 30% op margin
+                    net_income=12_000_000_000,
+                    income_tax_expense=3_000_000_000,  # 20% tax rate
+                    depreciation_amortization=2_000_000_000,
+                    capital_expenditure=3_000_000_000,
+                    total_assets=80_000_000_000,
+                    total_equity=40_000_000_000,  # 40B equity
+                    total_debt=10_000_000_000,  # 10B debt
+                    cash_and_equivalents=5_000_000_000,  # 5B cash
+                    current_assets=20_000_000_000,
+                    current_liabilities=15_000_000_000,
+                    weighted_avg_shares_diluted=1_050_000_000,
+                )
+            ],
+            provider="test",
+        )
+    
+    @pytest.fixture
+    def mock_client(self, mock_stock_data):
+        """Create a mock StockDataClient that returns our test data."""
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        client.get_treasury_rate = AsyncMock(return_value=0.04)
+        return client
+    
+    @pytest.mark.asyncio
+    async def test_valuation_includes_capital_efficiency(self, mock_client):
+        """
+        Valuation response should include ROIC, value spread, economic profit.
+        """
+        service = ValuationService(client=mock_client)
+        result = await service.value_stock("TEST")
+        
+        # Should have capital_efficiency section
+        assert "capital_efficiency" in result
+        
+        ce = result["capital_efficiency"]
+        assert "roic" in ce
+        assert "value_spread" in ce
+        assert "economic_profit" in ce
+        assert "is_value_creating" in ce
+    
+    @pytest.mark.asyncio
+    async def test_roic_calculated_correctly(self, mock_client):
+        """
+        ROIC = NOPAT / Invested Capital
+        
+        With:
+        - Operating Income: 15B
+        - Tax Rate: 20% (approx from 15B pretax → 12B net)
+        - NOPAT: 15B × 0.8 = 12B
+        - Invested Capital: 40B (equity) + 10B (debt) - 4B (excess cash) = 46B
+          (Excess cash = 5B - 1B operating cash at 2% of 50B revenue)
+        - ROIC: 12B / 46B = 26.1%
+        """
+        service = ValuationService(client=mock_client)
+        result = await service.value_stock("TEST")
+        
+        ce = result["capital_efficiency"]
+        
+        # ROIC should be approximately 26%
+        assert ce["roic"] is not None
+        assert 0.20 < ce["roic"] < 0.35, f"ROIC {ce['roic']:.1%} not in expected range"
+    
+    @pytest.mark.asyncio
+    async def test_value_spread_uses_wacc(self, mock_client):
+        """
+        Value Spread = ROIC - WACC.
+        
+        If ROIC > WACC, company creates value. If ROIC < WACC, destroys value.
+        """
+        service = ValuationService(client=mock_client)
+        result = await service.value_stock("TEST")
+        
+        ce = result["capital_efficiency"]
+        wacc = result["wacc"]
+        
+        # Value spread should be ROIC - WACC
+        if ce["roic"] is not None and wacc is not None:
+            expected_spread = ce["roic"] - wacc
+            assert abs(ce["value_spread"] - expected_spread) < 0.001
+    
+    @pytest.mark.asyncio
+    async def test_is_value_creating_flag(self, mock_client):
+        """
+        is_value_creating should be True when ROIC > WACC.
+        """
+        service = ValuationService(client=mock_client)
+        result = await service.value_stock("TEST")
+        
+        ce = result["capital_efficiency"]
+        
+        # High ROIC company should be value creating
+        assert ce["is_value_creating"] is True

@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-11 22:38
+> Last updated: 2026-01-11 22:52
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -109,6 +109,7 @@ Weighted Average Cost of Capital calculator.
 | `AssumptionHistoryDrawer.tsx` | AssumptionHistoryDrawer |
 | `AssumptionHistoryIndicator.tsx` | AssumptionHistoryIndicator |
 | `CEOEfficiencyWarning.tsx` | CEOEfficiencyWarning |
+| `CapitalEfficiencyPanel.tsx` | CapitalEfficiencyPanel |
 | `DiscountRateModal.tsx` | DiscountRateModal |
 | `FinancialRatiosTable.tsx` | FinancialRatiosTable |
 | `GlossaryPage.tsx` | GlossaryPage |
@@ -156,7 +157,7 @@ Weighted Average Cost of Capital calculator.
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
 | Backend | 32 test files | pytest |
-| Frontend | 22 test files | vitest |
+| Frontend | 23 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)
 
