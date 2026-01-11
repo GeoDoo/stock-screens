@@ -501,18 +501,18 @@ export function MonteCarloPanel({
                         value={inputs.fatTailsDf}
                         onChange={(e) => setInputs(prev => ({ 
                           ...prev, 
-                          fatTailsDf: parseFloat(e.target.value) || 4 
+                          fatTailsDf: Math.max(3, parseFloat(e.target.value) || 4)
                         }))}
                         className="w-16 px-2 py-1 text-sm border rounded"
                         step="1"
-                        min="1"
+                        min="3"
                         max="100"
                       />
                       <span 
                         className="text-xs text-gray-400 cursor-help" 
-                        title="Degrees of freedom. Lower = fatter tails (more extreme events). Recommended: 3-5 for realistic market crashes."
+                        title="Degrees of freedom. Lower = fatter tails (more extreme events). Recommended: 3-4 for realistic market crashes. Must be ≥3 for valid math."
                       >
-                        (1-100)
+                        (3-100)
                       </span>
                     </div>
                   )}

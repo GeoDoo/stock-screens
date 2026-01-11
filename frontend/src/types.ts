@@ -694,7 +694,8 @@ export interface FullMonteCarloRequest {
   growth_margin_correlation?: number;
   growth_capex_correlation?: number;
   // Fat tails (Student's t-distribution)
-  // None = Normal distribution, 3-5 = moderate fat tails (recommended)
+  // None = Normal distribution, 3-4 = fat tails (recommended), 5-10 = moderate
+  // Must be ≥3 for valid variance (math requirement)
   fat_tails_df?: number | null;
 }
 
