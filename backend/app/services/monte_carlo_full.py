@@ -218,6 +218,7 @@ class FullMonteCarloResult:
     
     # Simulation quality metrics
     negative_terminal_fcf_count: int = 0  # How many simulations had negative terminal FCF
+    zero_equity_count: int = 0  # P0.3 Fix: How many simulations resulted in wipe-out (equity <= 0)
     warnings: List[str] = field(default_factory=list)  # Warnings about simulation quality
     
     @classmethod
@@ -227,9 +228,12 @@ class FullMonteCarloResult:
         current_price: float,
         iterations: int,
         negative_terminal_fcf_count: int = 0,
+        zero_equity_count: int = 0,  # P0.3 Fix: Track wipe-out scenarios
     ) -> "FullMonteCarloResult":
         """Create result from list of simulated per-share values."""
-        valid_values = [v for v in values if v is not None and v > 0]
+        # P0.3 Fix: Include zero values as valid outcomes (wipe-out scenarios)
+        # Only exclude None (truly invalid scenarios like discount <= terminal_growth)
+        valid_values = [v for v in values if v is not None]
         
         # Generate warnings based on simulation quality
         warnings = []
@@ -250,6 +254,20 @@ class FullMonteCarloResult:
                     f"Note: {skip_pct:.1f}% of simulations had negative terminal FCF and were excluded."
                 )
         
+        # P0.3 Fix: Warn about wipe-out scenarios (zero equity)
+        if zero_equity_count > 0:
+            wipeout_pct = zero_equity_count / iterations * 100
+            if wipeout_pct > 30:
+                warnings.append(
+                    f"⚠️ WARNING: {wipeout_pct:.0f}% of simulations resulted in zero equity value (wipe-out). "
+                    "This indicates high bankruptcy risk under stress scenarios."
+                )
+            elif wipeout_pct > 10:
+                warnings.append(
+                    f"Note: {wipeout_pct:.1f}% of simulations resulted in zero equity value (wipe-out). "
+                    "These are included in the distribution as $0 outcomes."
+                )
+        
         if not valid_values:
             return cls(
                 iterations=iterations,
@@ -259,7 +277,8 @@ class FullMonteCarloResult:
                 median=0.0,
                 std_dev=0.0,
                 negative_terminal_fcf_count=negative_terminal_fcf_count,
-                warnings=warnings if warnings else ["No valid simulations produced positive values."],
+                zero_equity_count=zero_equity_count,
+                warnings=warnings if warnings else ["No valid simulations produced values."],
             )
         
         sorted_values = sorted(valid_values)
@@ -306,6 +325,7 @@ class FullMonteCarloResult:
             margin_of_safety_mean=statistics.mean(margins),
             margin_of_safety_median=statistics.median(margins),
             negative_terminal_fcf_count=negative_terminal_fcf_count,
+            zero_equity_count=zero_equity_count,
             warnings=warnings,
         )
 
@@ -520,6 +540,7 @@ def run_full_monte_carlo(
     
     per_share_values = []
     negative_terminal_fcf_count = 0  # Track simulations skipped due to negative terminal FCF
+    zero_equity_count = 0  # P0.3 Fix: Track wipe-out scenarios (equity <= 0)
     
     # P0.2 Fix: Calculate terminal shares with dilution (same as ValuationService)
     # Dilution is applied for the ACTUAL projection period, not the original parameter.
@@ -685,7 +706,13 @@ def run_full_monte_carlo(
             terminal_shares = shares_outstanding * ((1 + annual_dilution_rate) ** actual_years)
             per_share = equity_value / terminal_shares if terminal_shares > 0 else 0
             
-            per_share_values.append(per_share if per_share > 0 else None)
+            # P0.3 Fix: Keep negative/zero outcomes as 0 (wipe-out), don't drop them
+            # This prevents upward bias in mean/percentiles and tracks bankruptcy risk
+            if per_share <= 0:
+                zero_equity_count += 1
+                per_share_values.append(0.0)  # Clamp to 0, keep in distribution
+            else:
+                per_share_values.append(per_share)
             
         except Exception:
             per_share_values.append(None)
@@ -695,4 +722,5 @@ def run_full_monte_carlo(
         current_price=current_price,
         iterations=iterations,
         negative_terminal_fcf_count=negative_terminal_fcf_count,
+        zero_equity_count=zero_equity_count,
     )

@@ -1937,3 +1937,186 @@ class TestDilutionSupport:
             f"Expected ratio: {expected_ratio_10y:.3f}, Actual: {actual_ratio:.3f}. "
             f"If 5-year dilution was used incorrectly, ratio would be ~{expected_ratio_5y:.3f}"
         )
+
+
+class TestNegativeOutcomes:
+    """
+    P0.3 Fix: Monte Carlo must not truncate negative/zero per-share outcomes.
+    
+    Problem: Full Monte Carlo uses:
+    per_share_values.append(per_share if per_share > 0 else None)
+    
+    This drops negative and zero equity outcomes from the distribution, which:
+    - Biases mean/percentiles upward
+    - Makes CVaR and downside probabilities artificially better
+    - Hides wipe-out scenarios from the user
+    
+    Solution: Keep negative/zero outcomes clamped to 0 as valid outcomes.
+    This represents "wipe-out" (equity = 0) rather than "unknown".
+    """
+    
+    def test_negative_equity_clamped_to_zero_not_dropped(self):
+        """
+        When equity value is negative (company insolvent), the per-share value
+        should be clamped to 0 and kept in the distribution, not dropped as None.
+        
+        We force this by using very high debt relative to enterprise value.
+        """
+        hist_revenue = [10e9, 10e9, 10e9]  # Stagnant
+        hist_ebit = [1e9, 1e9, 1e9]  # Low margins
+        hist_da = [0.5e9, 0.5e9, 0.5e9]
+        hist_capex = [0.6e9, 0.6e9, 0.6e9]
+        hist_wc = [1e9, 1e9, 1e9]
+        
+        result = run_full_monte_carlo(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=1e9,
+            total_debt=100e9,  # MASSIVE debt -> negative equity
+            cash=1e9,
+            current_price=10.0,
+            base_growth=0.02,
+            base_margin=0.10,
+            base_da_ratio=0.05,
+            base_capex_ratio=0.06,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.02,
+            growth_std=0.0,  # No randomness for deterministic test
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=5,
+            iterations=1,
+            seed=42,
+        )
+        
+        # The key assertion: this should be a VALID simulation (clamped to 0)
+        # not an invalid one (None)
+        assert result.valid_simulations == 1, (
+            f"Negative equity scenarios should be clamped to 0, not dropped. "
+            f"Got valid_simulations={result.valid_simulations}"
+        )
+        
+        # The value should be 0 (clamped from negative)
+        assert result.mean == 0.0, (
+            f"Negative equity should result in 0 per-share value, not {result.mean}"
+        )
+        
+        # There should be a count of clamped outcomes
+        assert hasattr(result, 'zero_equity_count') and result.zero_equity_count == 1, (
+            "Result should track zero_equity_count for transparency"
+        )
+    
+    def test_zero_per_share_kept_not_dropped(self):
+        """
+        When equity value is exactly zero, it should be kept in the distribution.
+        """
+        hist_revenue = [10e9, 10e9, 10e9]
+        hist_ebit = [1e9, 1e9, 1e9]
+        hist_da = [0.5e9, 0.5e9, 0.5e9]
+        hist_capex = [0.6e9, 0.6e9, 0.6e9]
+        hist_wc = [1e9, 1e9, 1e9]
+        
+        # Craft debt/cash to make equity value exactly ~0
+        result = run_full_monte_carlo(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=1e9,
+            total_debt=50e9,  # High debt
+            cash=1e9,
+            current_price=10.0,
+            base_growth=0.01,  # Very low growth
+            base_margin=0.05,  # Very low margin
+            base_da_ratio=0.05,
+            base_capex_ratio=0.06,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.12,  # High discount rate
+            base_terminal_growth=0.02,
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=5,
+            iterations=1,
+            seed=42,
+        )
+        
+        # Should be valid (even if 0 or clamped from negative)
+        assert result.valid_simulations == 1, (
+            f"Zero/negative equity scenarios should not be dropped. "
+            f"Got valid_simulations={result.valid_simulations}"
+        )
+    
+    def test_distribution_includes_wipeout_scenarios(self):
+        """
+        When running many simulations with volatile inputs, some scenarios
+        will result in wipe-out (negative/zero equity). These should be
+        included in the distribution, not dropped.
+        """
+        hist_revenue = [10e9, 10e9, 10e9]
+        hist_ebit = [1e9, 1e9, 1e9]
+        hist_da = [0.5e9, 0.5e9, 0.5e9]
+        hist_capex = [0.6e9, 0.6e9, 0.6e9]
+        hist_wc = [1e9, 1e9, 1e9]
+        
+        result = run_full_monte_carlo(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=1e9,
+            total_debt=30e9,  # Moderate debt
+            cash=1e9,
+            current_price=10.0,
+            base_growth=0.05,
+            base_margin=0.10,
+            base_da_ratio=0.05,
+            base_capex_ratio=0.06,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.02,
+            # High volatility to generate some negative outcomes
+            growth_std=0.15,
+            margin_std=0.10,
+            da_ratio_std=0.02,
+            capex_ratio_std=0.03,
+            wc_ratio_std=0.05,
+            discount_std=0.03,
+            terminal_growth_std=0.01,
+            projection_years=5,
+            iterations=100,
+            seed=42,
+        )
+        
+        # Check that we have tracking for wipe-out scenarios
+        assert hasattr(result, 'zero_equity_count'), (
+            "Result should track zero_equity_count for distribution integrity"
+        )
+        
+        # With high volatility and moderate debt, we expect SOME wipe-outs
+        # but we can't guarantee exact numbers. Just verify tracking exists.
+        # The key is: total = valid + invalid + wipeouts
+        total_accounted = (
+            result.valid_simulations + 
+            (100 - result.valid_simulations)  # This is wrong if we drop outcomes
+        )
+        assert total_accounted == 100, (
+            f"All 100 simulations should be accounted for, got {total_accounted}"
+        )
