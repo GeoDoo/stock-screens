@@ -141,8 +141,21 @@ class TestHistoricalValuation:
         assert result.avg_ev_ebitda_5yr is not None
 
     def test_premium_discount_calculation(self, analyzer, sample_financials, sample_profile):
-        """Calculate premium/discount vs historical."""
-        result = analyzer.analyze(sample_financials, sample_profile)
+        """Calculate premium/discount vs historical (requires historical prices)."""
+        # Must provide historical prices to enable comparison
+        # (NOTES2.md P0.2: comparison disabled without true historical prices)
+        historical_prices = {
+            2024: 150.0,
+            2023: 130.0,
+            2022: 120.0,
+            2021: 110.0,
+            2020: 100.0,
+        }
+        result = analyzer.analyze(
+            sample_financials, 
+            sample_profile,
+            historical_prices=historical_prices,
+        )
         
         # premium_discount_pe = (current_pe - avg_pe) / avg_pe
         assert result.premium_discount_pe is not None
@@ -160,8 +173,21 @@ class TestHistoricalValuation:
             assert ym.pe is not None or ym.net_income is None  # PE can be None if no earnings
 
     def test_valuation_assessment(self, analyzer, sample_financials, sample_profile):
-        """Generate valuation assessment."""
-        result = analyzer.analyze(sample_financials, sample_profile)
+        """Generate valuation assessment (requires historical prices)."""
+        # Must provide historical prices to enable comparison
+        # (NOTES2.md P0.2: comparison disabled without true historical prices)
+        historical_prices = {
+            2024: 150.0,
+            2023: 130.0,
+            2022: 120.0,
+            2021: 110.0,
+            2020: 100.0,
+        }
+        result = analyzer.analyze(
+            sample_financials, 
+            sample_profile,
+            historical_prices=historical_prices,
+        )
         
         # Should have assessment strings
         assert result.pe_assessment in ["cheap", "fair", "expensive"]
@@ -436,3 +462,142 @@ class TestTrueHistoricalValuation:
         assert year_2023.pe is not None
         assert year_2021.pe is not None
 
+
+
+class TestStaticPriceBiasWarning:
+    """
+    Tests for NOTES2.md P0.2: Static Price Look-ahead Bias
+    
+    When true historical prices are unavailable and current market cap
+    is used as a proxy, the premium/discount comparisons are meaningless
+    because they compare current vs current (always ~0%).
+    
+    The system should:
+    1. Set premium/discount to None when using proxy prices
+    2. Add a comparison_disabled warning explaining why
+    """
+    
+    @pytest.fixture
+    def analyzer(self):
+        return HistoricalValuationAnalyzer()
+    
+    @pytest.fixture
+    def sample_financials(self):
+        """Company with significant earnings growth."""
+        return [
+            {
+                "date": "2024-12-31",
+                "revenue": 100_000_000_000,
+                "net_income": 25_000_000_000,  # 25% margin now
+                "operating_income": 30_000_000_000,
+                "total_equity": 40_000_000_000,
+                "total_debt": 10_000_000_000,
+                "cash_and_equivalents": 5_000_000_000,
+            },
+            {
+                "date": "2023-12-31",
+                "revenue": 80_000_000_000,
+                "net_income": 16_000_000_000,  # 20% margin
+                "operating_income": 20_000_000_000,
+                "total_equity": 30_000_000_000,
+                "total_debt": 12_000_000_000,
+                "cash_and_equivalents": 4_000_000_000,
+            },
+            {
+                "date": "2022-12-31",
+                "revenue": 60_000_000_000,
+                "net_income": 10_000_000_000,  # 16.7% margin
+                "operating_income": 12_000_000_000,
+                "total_equity": 25_000_000_000,
+                "total_debt": 14_000_000_000,
+                "cash_and_equivalents": 3_000_000_000,
+            },
+        ]
+    
+    @pytest.fixture
+    def sample_profile(self):
+        return {
+            "price": 100.0,
+            "marketCap": 500_000_000_000,  # 500B
+            "sharesOutstanding": 5_000_000_000,
+        }
+    
+    def test_proxy_prices_disable_premium_discount(self, analyzer, sample_financials, sample_profile):
+        """
+        When using proxy prices (no historical_prices), premium/discount
+        should be None because the comparison is meaningless.
+        """
+        result = analyzer.analyze(sample_financials, sample_profile)
+        
+        # Confirm proxy mode
+        assert result.uses_true_historical_prices is False
+        
+        # Premium/discount should be None (comparison disabled)
+        assert result.premium_discount_pe is None
+        assert result.premium_discount_ps is None
+        assert result.premium_discount_pb is None
+        assert result.premium_discount_ev_ebitda is None
+    
+    def test_proxy_prices_add_warning(self, analyzer, sample_financials, sample_profile):
+        """
+        Should include a warning explaining why comparison is disabled.
+        """
+        result = analyzer.analyze(sample_financials, sample_profile)
+        
+        assert result.comparison_disabled_reason is not None
+        assert "proxy" in result.comparison_disabled_reason.lower() or \
+               "historical" in result.comparison_disabled_reason.lower()
+    
+    def test_true_prices_enable_premium_discount(self, analyzer, sample_financials, sample_profile):
+        """
+        When true historical prices are available, premium/discount
+        should be calculated normally.
+        """
+        historical_prices = {
+            2024: 100.0,
+            2023: 80.0,  # Stock was 20% cheaper
+            2022: 60.0,  # Stock was 40% cheaper
+        }
+        
+        result = analyzer.analyze(
+            sample_financials, 
+            sample_profile,
+            historical_prices=historical_prices,
+        )
+        
+        # Confirm true historical mode
+        assert result.uses_true_historical_prices is True
+        
+        # Premium/discount should be calculated
+        assert result.premium_discount_pe is not None or result.avg_pe_5yr is None
+        
+        # No warning needed
+        assert result.comparison_disabled_reason is None
+    
+    def test_proxy_still_calculates_current_multiples(self, analyzer, sample_financials, sample_profile):
+        """
+        Even in proxy mode, current multiples should still be calculated.
+        Only the historical comparison is disabled.
+        """
+        result = analyzer.analyze(sample_financials, sample_profile)
+        
+        # Current multiples should exist
+        assert result.current_pe is not None
+        assert result.current_ps is not None
+        
+        # 5-year averages should still be calculated (for reference)
+        # but premium/discount comparison is meaningless
+        assert result.avg_pe_5yr is not None
+    
+    def test_assessments_disabled_in_proxy_mode(self, analyzer, sample_financials, sample_profile):
+        """
+        Assessment labels (cheap/fair/expensive) should be 'unavailable'
+        when comparison is disabled.
+        """
+        result = analyzer.analyze(sample_financials, sample_profile)
+        
+        # Assessments should indicate comparison unavailable
+        assert result.pe_assessment == "unavailable"
+        assert result.ps_assessment == "unavailable"
+        assert result.pb_assessment == "unavailable"
+        assert result.ev_ebitda_assessment == "unavailable"

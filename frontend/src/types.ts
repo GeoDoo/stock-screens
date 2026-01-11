@@ -541,6 +541,8 @@ export interface YearlyMetrics {
 export interface HistoricalValuationResult {
   symbol: string;
   uses_true_historical_prices: boolean;  // P1.7: True if actual historical prices used, false if proxy (current market cap)
+  // NOTES2.md P0.2: Static price bias warning - when proxy used, comparison is disabled
+  comparison_disabled_reason: string | null;
   current: {
     pe: number | null;
     ps: number | null;
@@ -560,10 +562,10 @@ export interface HistoricalValuationResult {
     ev_ebitda: number | null;
   };
   assessment: {
-    pe: 'cheap' | 'fair' | 'expensive';
-    ps: 'cheap' | 'fair' | 'expensive';
-    pb: 'cheap' | 'fair' | 'expensive';
-    ev_ebitda: 'cheap' | 'fair' | 'expensive';
+    pe: 'cheap' | 'fair' | 'expensive' | 'unavailable';
+    ps: 'cheap' | 'fair' | 'expensive' | 'unavailable';
+    pb: 'cheap' | 'fair' | 'expensive' | 'unavailable';
+    ev_ebitda: 'cheap' | 'fair' | 'expensive' | 'unavailable';
   };
   yearly_metrics: YearlyMetrics[];
 }

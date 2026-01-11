@@ -55,6 +55,12 @@ class HistoricalValuation:
     
     # Methodology transparency
     uses_true_historical_prices: bool = False  # True if actual historical prices used
+    
+    # NOTES2.md P0.2: Static Price Bias Warning
+    # When using proxy (current market cap) for historical multiples, the comparison
+    # is meaningless because we're comparing current vs current (always ~0% premium).
+    # This creates a false "cheap" signal for growing companies.
+    comparison_disabled_reason: Optional[str] = None  # Warning when proxy used
 
 
 class HistoricalValuationAnalyzer:
@@ -168,7 +174,28 @@ class HistoricalValuationAnalyzer:
             if len(ev_ebitda_values) >= 2:
                 result.avg_ev_ebitda_5yr = mean(ev_ebitda_values)
         
-        # Calculate premium/discount
+        # NOTES2.md P0.2: Static Price Bias Protection
+        # When using proxy prices (current market cap for historical years),
+        # the premium/discount comparison is mathematically meaningless because
+        # we're comparing current multiples to historical fundamentals valued
+        # at current prices. This creates a false "cheap" signal for growing
+        # companies and should be disabled.
+        if not result.uses_true_historical_prices:
+            # Disable premium/discount (comparison is invalid)
+            result.comparison_disabled_reason = (
+                "Historical comparison unavailable: Using current market cap as proxy "
+                "for historical prices creates look-ahead bias. Premium/discount metrics "
+                "are disabled to prevent false buy signals."
+            )
+            # Set all assessments to unavailable
+            result.pe_assessment = "unavailable"
+            result.ps_assessment = "unavailable"
+            result.pb_assessment = "unavailable"
+            result.ev_ebitda_assessment = "unavailable"
+            # Leave premium_discount fields as None (default)
+            return result
+        
+        # Calculate premium/discount (only when true historical prices available)
         if result.current_pe and result.avg_pe_5yr:
             result.premium_discount_pe = (result.current_pe - result.avg_pe_5yr) / result.avg_pe_5yr
             result.pe_assessment = self._assess(result.premium_discount_pe)

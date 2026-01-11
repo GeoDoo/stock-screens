@@ -1183,8 +1183,23 @@ export default function App() {
                 </div>
                 <p className="text-sm text-gray-400 mb-4">Current multiples vs. 5-year averages</p>
                 
-                {/* P1.7: Detailed warning for proxy mode */}
-                {!historicalValuation.uses_true_historical_prices && (
+                {/* NOTES2.md P0.2: Static Price Bias Warning - comparison disabled when using proxy */}
+                {historicalValuation.comparison_disabled_reason && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <span className="text-red-600 text-lg">🚫</span>
+                      <div>
+                        <p className="text-sm font-semibold text-red-700">Historical Comparison Disabled</p>
+                        <p className="text-xs text-red-600 mt-1">
+                          {historicalValuation.comparison_disabled_reason}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* P1.7: Legacy warning for proxy mode (when comparison still enabled) */}
+                {!historicalValuation.uses_true_historical_prices && !historicalValuation.comparison_disabled_reason && (
                   <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
                     <span className="font-semibold">⚠️ Proxy Mode:</span>
                     <span className="ml-1">
@@ -1201,7 +1216,7 @@ export default function App() {
                     { label: 'P/B Ratio', glossaryId: 'pb-ratio', current: historicalValuation.current.pb, avg: historicalValuation.average_5yr.pb, premium: historicalValuation.premium_discount.pb, assessment: historicalValuation.assessment.pb },
                     { label: 'EV/EBITDA', glossaryId: 'ev-ebitda', current: historicalValuation.current.ev_ebitda, avg: historicalValuation.average_5yr.ev_ebitda, premium: historicalValuation.premium_discount.ev_ebitda, assessment: historicalValuation.assessment.ev_ebitda },
                   ].map(({ label, glossaryId, current, avg, premium, assessment }) => (
-                    <div key={label} className="border border-gray-200 rounded-lg p-4">
+                    <div key={label} className={`border border-gray-200 rounded-lg p-4 ${assessment === 'unavailable' ? 'opacity-50' : ''}`}>
                       <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">{label}<GlossaryRef id={glossaryId} /></p>
                       <div className="space-y-2">
                         <div className="flex justify-between">
@@ -1214,13 +1229,19 @@ export default function App() {
                         </div>
                         <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                           <span className="text-sm text-gray-500">vs. Avg</span>
-                          <span className={`text-sm font-medium px-2 py-0.5 rounded ${
-                            assessment === 'cheap' ? 'bg-emerald-100 text-emerald-700' :
-                            assessment === 'expensive' ? 'bg-red-100 text-red-700' :
-                            'bg-gray-100 text-gray-600'
-                          }`}>
-                            {premium !== null ? `${premium > 0 ? '+' : ''}${(premium * 100).toFixed(2)}%` : '—'} ({assessment})
-                          </span>
+                          {assessment === 'unavailable' ? (
+                            <span className="text-sm font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-400" title="Comparison disabled - using proxy prices">
+                              N/A
+                            </span>
+                          ) : (
+                            <span className={`text-sm font-medium px-2 py-0.5 rounded ${
+                              assessment === 'cheap' ? 'bg-emerald-100 text-emerald-700' :
+                              assessment === 'expensive' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {premium !== null ? `${premium > 0 ? '+' : ''}${(premium * 100).toFixed(2)}%` : '—'} ({assessment})
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
