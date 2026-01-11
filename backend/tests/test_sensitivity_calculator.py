@@ -577,7 +577,7 @@ class TestFCFCalculationConsistency:
             capex_ratio=0.08,
             wc_ratio=0.10,
             tax_rate=0.25,
-            wc_mode="incremental",  # Should be supported
+            wc_mode="incremental",  # Explicitly test incremental mode
         )
         
         result = calc.generate_margin_growth_matrix(
@@ -592,3 +592,36 @@ class TestFCFCalculationConsistency:
         
         # Should not crash and should produce a value
         assert result["matrix"][0][0] is not None
+    
+    def test_wc_mode_default_matches_fcf_projector(self):
+        """
+        REGRESSION: SensitivityCalculator default wc_mode must match FCFProjector.
+        
+        Bug: SensitivityCalculator defaulted to "incremental" while FCFProjector
+        defaults to "level", causing margin/growth matrix to use a different
+        WC model than the base FCF projections.
+        """
+        from app.services.fcf_projector import FCFProjector
+        
+        # Verify defaults match
+        calc = SensitivityCalculator(
+            projected_fcfs=[100],
+            projection_years=5,
+            shares_outstanding=1000,
+            total_debt=0,
+            cash=0,
+        )
+        
+        # FCFProjector default is "level"
+        projector = FCFProjector(
+            historical_revenue=[1000],
+            historical_ebit=[100],
+            historical_da=[30],
+            historical_capex=[50],
+            historical_working_capital=[100],
+        )
+        
+        assert calc.wc_mode == projector.wc_mode, (
+            f"SensitivityCalculator.wc_mode ({calc.wc_mode}) must match "
+            f"FCFProjector.wc_mode ({projector.wc_mode}) for consistency"
+        )
