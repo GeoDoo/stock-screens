@@ -251,10 +251,9 @@ export function FinancialRatiosTable({ ratios }: Props) {
             </tbody>
           </table>
           {ratios.sbc.is_defensive_buyback && (
-            <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
-              ⚠️ <strong>Defensive Buyback Warning:</strong> SBC exceeds buyback spending. 
-              Buybacks are just offsetting employee dilution, not returning value to shareholders.
-            </div>
+            <p className="mt-2 text-xs text-red-600">
+              ⚠️ SBC exceeds buyback spending — buybacks just offset dilution.
+            </p>
           )}
         </div>
       )}
