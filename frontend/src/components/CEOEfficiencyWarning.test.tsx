@@ -13,7 +13,7 @@ describe('CEOEfficiencyWarning', () => {
     
     expect(screen.getByText('VALUE CREATOR')).toBeInTheDocument();
     expect(screen.getByText('Management earns above cost of capital on new investments')).toBeInTheDocument();
-    expect(screen.getByText('+5.0%')).toBeInTheDocument();  // Spread
+    expect(screen.getByText('+5.00%')).toBeInTheDocument();  // Spread
   });
   
   it('shows VALUE DESTROYER when Inc. ROIC significantly below WACC', () => {
@@ -26,7 +26,7 @@ describe('CEOEfficiencyWarning', () => {
     
     expect(screen.getByText('VALUE DESTROYER')).toBeInTheDocument();
     expect(screen.getByText('Growth is destroying value — each new $ invested loses money')).toBeInTheDocument();
-    expect(screen.getByText('-4.0%')).toBeInTheDocument();  // Spread
+    expect(screen.getByText('-4.00%')).toBeInTheDocument();  // Spread
   });
   
   it('shows VALUE NEUTRAL when Inc. ROIC approximately equals WACC', () => {
@@ -71,9 +71,9 @@ describe('CEOEfficiencyWarning', () => {
       />
     );
     
-    expect(screen.getByText('12.5%')).toBeInTheDocument();
-    expect(screen.getByText('8.5%')).toBeInTheDocument();
-    expect(screen.getByText('+4.0%')).toBeInTheDocument();
+    expect(screen.getByText('12.50%')).toBeInTheDocument();
+    expect(screen.getByText('8.50%')).toBeInTheDocument();
+    expect(screen.getByText('+4.00%')).toBeInTheDocument();
   });
   
   it('shows distortion warning when Inc. ROIC exceeds 100%', () => {
@@ -84,7 +84,7 @@ describe('CEOEfficiencyWarning', () => {
       />
     );
     
-    expect(screen.getByText('267.6%')).toBeInTheDocument();
+    expect(screen.getByText('267.60%')).toBeInTheDocument();
     expect(screen.getByText(/Potentially misleading/)).toBeInTheDocument();
     expect(screen.getByText(/buybacks/)).toBeInTheDocument();
   });

@@ -96,10 +96,10 @@ describe('MultiStageGrowth', () => {
       const inputs = screen.getAllByRole('spinbutton');
       const values = inputs.map(input => (input as HTMLInputElement).value);
       
-      // Should include economics values (15, 10, 12)
-      expect(values).toContain('15');
-      expect(values).toContain('10');
-      expect(values).toContain('12');
+      // Should include economics values (15.00, 10.00, 12.00)
+      expect(values).toContain('15.00');
+      expect(values).toContain('10.00');
+      expect(values).toContain('12.00');
     });
 
     it('updates operating margin when changed', () => {
@@ -108,8 +108,8 @@ describe('MultiStageGrowth', () => {
       
       // Find the first economics input (operating margin start value)
       const inputs = screen.getAllByRole('spinbutton');
-      // The margin input should have value "15" (15%)
-      const marginInput = inputs.find(i => (i as HTMLInputElement).value === '15');
+      // The margin input should have value "15.00" (15%)
+      const marginInput = inputs.find(i => (i as HTMLInputElement).value === '15.00');
       expect(marginInput).toBeTruthy();
       
       fireEvent.change(marginInput!, { target: { value: '20' } });
@@ -177,8 +177,8 @@ describe('MultiStageGrowth', () => {
       // Should see both start (10%) and end (20%) margin values
       const inputs = screen.getAllByRole('spinbutton');
       const values = inputs.map(i => (i as HTMLInputElement).value);
-      expect(values).toContain('10');
-      expect(values).toContain('20');
+      expect(values).toContain('10.00');
+      expect(values).toContain('20.00');
     });
 
     it('clears end value when empty string entered', () => {
@@ -194,9 +194,9 @@ describe('MultiStageGrowth', () => {
       render(<MultiStageGrowth {...defaultProps} stages={fadingStages} />);
       fireEvent.click(screen.getByText(/Econ/));
       
-      // Find end_capex_ratio input (value "5")
+      // Find end_capex_ratio input (value "5.00")
       const inputs = screen.getAllByRole('spinbutton');
-      const endCapexInput = inputs.find(i => (i as HTMLInputElement).value === '5');
+      const endCapexInput = inputs.find(i => (i as HTMLInputElement).value === '5.00');
       expect(endCapexInput).toBeTruthy();
       
       fireEvent.change(endCapexInput!, { target: { value: '' } });

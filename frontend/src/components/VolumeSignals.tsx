@@ -39,10 +39,10 @@ export function VolumeSignals({ technicalResult }: VolumeSignalsProps) {
   const formatObv = (value: number | null): string => {
     if (value === null) return '—';
     const absValue = Math.abs(value);
-    if (absValue >= 1e9) return `${(value / 1e9).toFixed(1)}B`;
-    if (absValue >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
-    if (absValue >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
-    return value.toFixed(0);
+    if (absValue >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+    if (absValue >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+    if (absValue >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
+    return value.toFixed(2);
   };
 
   return (
@@ -58,7 +58,7 @@ export function VolumeSignals({ technicalResult }: VolumeSignalsProps) {
         </div>
         {currentMfi !== null && (
           <div className="text-xs text-gray-400 mt-1">
-            Value: {currentMfi.toFixed(0)}
+            Value: {currentMfi.toFixed(2)}
           </div>
         )}
       </div>

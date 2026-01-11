@@ -194,7 +194,7 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                         <input
                           type="number"
                           step="1"
-                          value={(stage.growth_rate * 100).toFixed(0)}
+                          value={(stage.growth_rate * 100).toFixed(2)}
                           onChange={(e) => updateStage(index, { growth_rate: parseFloat(e.target.value) / 100 || 0 })}
                           className="w-14 text-sm border border-gray-200 rounded px-2 py-1 bg-white text-center"
                           disabled={disabled}
@@ -210,7 +210,7 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                         <input
                           type="number"
                           step="1"
-                          value={stage.end_growth_rate != null ? (stage.end_growth_rate * 100).toFixed(0) : ''}
+                          value={stage.end_growth_rate != null ? (stage.end_growth_rate * 100).toFixed(2) : ''}
                           onChange={(e) => {
                             const val = e.target.value;
                             updateStage(index, { 
@@ -261,7 +261,7 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                           <input
                             type="number"
                             step="1"
-                            value={stage.operating_margin != null ? (stage.operating_margin * 100).toFixed(0) : ''}
+                            value={stage.operating_margin != null ? (stage.operating_margin * 100).toFixed(2) : ''}
                             onChange={(e) => {
                               const val = e.target.value;
                               updateStage(index, { operating_margin: val ? parseFloat(val) / 100 : null });
@@ -277,7 +277,7 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                           <input
                             type="number"
                             step="1"
-                            value={stage.end_operating_margin != null ? (stage.end_operating_margin * 100).toFixed(0) : ''}
+                            value={stage.end_operating_margin != null ? (stage.end_operating_margin * 100).toFixed(2) : ''}
                             onChange={(e) => {
                               const val = e.target.value;
                               updateStage(index, { end_operating_margin: val ? parseFloat(val) / 100 : null });
@@ -297,7 +297,7 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                           <input
                             type="number"
                             step="1"
-                            value={stage.capex_ratio != null ? (stage.capex_ratio * 100).toFixed(0) : ''}
+                            value={stage.capex_ratio != null ? (stage.capex_ratio * 100).toFixed(2) : ''}
                             onChange={(e) => {
                               const val = e.target.value;
                               updateStage(index, { capex_ratio: val ? parseFloat(val) / 100 : null });
@@ -313,7 +313,7 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                           <input
                             type="number"
                             step="1"
-                            value={stage.end_capex_ratio != null ? (stage.end_capex_ratio * 100).toFixed(0) : ''}
+                            value={stage.end_capex_ratio != null ? (stage.end_capex_ratio * 100).toFixed(2) : ''}
                             onChange={(e) => {
                               const val = e.target.value;
                               updateStage(index, { end_capex_ratio: val ? parseFloat(val) / 100 : null });
@@ -333,7 +333,7 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                           <input
                             type="number"
                             step="1"
-                            value={stage.wc_ratio != null ? (stage.wc_ratio * 100).toFixed(0) : ''}
+                            value={stage.wc_ratio != null ? (stage.wc_ratio * 100).toFixed(2) : ''}
                             onChange={(e) => {
                               const val = e.target.value;
                               updateStage(index, { wc_ratio: val ? parseFloat(val) / 100 : null });
@@ -349,7 +349,7 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                           <input
                             type="number"
                             step="1"
-                            value={stage.end_wc_ratio != null ? (stage.end_wc_ratio * 100).toFixed(0) : ''}
+                            value={stage.end_wc_ratio != null ? (stage.end_wc_ratio * 100).toFixed(2) : ''}
                             onChange={(e) => {
                               const val = e.target.value;
                               updateStage(index, { end_wc_ratio: val ? parseFloat(val) / 100 : null });
@@ -400,7 +400,7 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                         style={{ height: `${height}%` }}
                       />
                       <div className="absolute -top-5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
-                        Y{i + 1}: {(rate * 100).toFixed(0)}%
+                        Y{i + 1}: {(rate * 100).toFixed(2)}%
                       </div>
                     </div>
                   );
@@ -412,7 +412,7 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                     style={{ height: `${Math.max(10, Math.min(100, (terminalGrowth + 0.1) * 200))}%` }}
                   />
                   <div className="absolute -top-5 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
-                    Terminal: {(terminalGrowth * 100).toFixed(0)}%
+                    Terminal: {(terminalGrowth * 100).toFixed(2)}%
                   </div>
                 </div>
               </div>

@@ -185,7 +185,7 @@ export function SensitivityMatrixPanel({
                     i === baseColIdx ? 'text-gray-900 bg-gray-50' : 'text-gray-500'
                   }`}
                 >
-                  {(col * 100).toFixed(1)}%
+                  {(col * 100).toFixed(2)}%
                 </th>
               ))}
             </tr>
@@ -198,7 +198,7 @@ export function SensitivityMatrixPanel({
                     rowIdx === baseRowIdx ? 'text-gray-900 bg-gray-50' : 'text-gray-500'
                   }`}
                 >
-                  {(row * 100).toFixed(1)}%
+                  {(row * 100).toFixed(2)}%
                 </td>
                 {data.matrix[rowIdx].map((value, colIdx) => {
                   const isBaseCase = rowIdx === baseRowIdx && colIdx === baseColIdx;

@@ -186,8 +186,8 @@ export default function App() {
       const diff = Math.abs(annual.operating_margin - ttm.operating_margin);
       // If difference is more than 50 percentage points OR sign changed
       if (diff > 0.5 || (annual.operating_margin < 0 !== ttm.operating_margin < 0)) {
-        const annualPct = (annual.operating_margin * 100).toFixed(1);
-        const ttmPct = (ttm.operating_margin * 100).toFixed(1);
+        const annualPct = (annual.operating_margin * 100).toFixed(2);
+        const ttmPct = (ttm.operating_margin * 100).toFixed(2);
         warnings.push(`Operating margin changed dramatically: Annual avg ${annualPct}% → TTM ${ttmPct}%`);
       }
     }
@@ -255,7 +255,7 @@ export default function App() {
           setPendingAnalysis(stockResponse);
           setShowDiscountModal(true);
         } else if (hasExtremeInputs) {
-          setFallbackNotice(`Historical operating margin (${(opMargin! * 100).toFixed(0)}%) is extreme. Please adjust assumptions before running DCF valuation.`);
+          setFallbackNotice(`Historical operating margin (${(opMargin! * 100).toFixed(2)}%) is extreme. Please adjust assumptions before running DCF valuation.`);
         }
       },
     );
@@ -1185,7 +1185,7 @@ export default function App() {
                             assessment === 'expensive' ? 'bg-red-100 text-red-700' :
                             'bg-gray-100 text-gray-600'
                           }`}>
-                            {premium !== null ? `${premium > 0 ? '+' : ''}${(premium * 100).toFixed(0)}%` : '—'} ({assessment})
+                            {premium !== null ? `${premium > 0 ? '+' : ''}${(premium * 100).toFixed(2)}%` : '—'} ({assessment})
                           </span>
                         </div>
                       </div>
@@ -1256,7 +1256,7 @@ export default function App() {
                         step="0.1"
                         value={customDiscountRate}
                         onChange={(e) => setCustomDiscountRate(e.target.value)}
-                        placeholder={stockData.data.wacc !== null ? `WACC: ${(stockData.data.wacc * 100).toFixed(1)}` : 'e.g., 12'}
+                        placeholder={stockData.data.wacc !== null ? `WACC: ${(stockData.data.wacc * 100).toFixed(2)}` : 'e.g., 12'}
                         className="px-3 py-2.5 text-base font-mono bg-white border-2 border-emerald-200 rounded-md outline-none transition-colors focus:border-emerald-400"
                       />
       </div>
@@ -1371,11 +1371,11 @@ export default function App() {
                           <div className="grid grid-cols-2 gap-4 text-xs">
                             <div>
                               <span className="text-gray-500">Actual WC/Revenue:</span>
-                              <span className="ml-2 font-mono font-medium">{(actualRatio * 100).toFixed(1)}%</span>
+                              <span className="ml-2 font-mono font-medium">{(actualRatio * 100).toFixed(2)}%</span>
                             </div>
                             <div>
                               <span className="text-gray-500">Input Ratio:</span>
-                              <span className="ml-2 font-mono font-medium">{(inputRatio * 100).toFixed(1)}%</span>
+                              <span className="ml-2 font-mono font-medium">{(inputRatio * 100).toFixed(2)}%</span>
                             </div>
                           </div>
                           
@@ -1487,7 +1487,7 @@ export default function App() {
                           ? 'text-emerald-600 bg-emerald-50' 
                           : 'text-red-600 bg-red-50'
                       }`}>
-                        {upside >= 0 ? `+${upside.toFixed(1)}% undervalued` : `${Math.abs(upside).toFixed(1)}% overvalued`}
+                        {upside >= 0 ? `+${upside.toFixed(2)}% undervalued` : `${Math.abs(upside).toFixed(2)}% overvalued`}
                       </span>
                     );
                   })()}
@@ -1651,7 +1651,7 @@ export default function App() {
                     </div>
                     <div>
                       <span className="text-gray-500">Terminal Growth</span>
-                      <p className="font-mono font-medium">{((result.inputs as Record<string, number>)?.terminal_growth_rate * 100 || 2.5).toFixed(1)}%</p>
+                      <p className="font-mono font-medium">{((result.inputs as Record<string, number>)?.terminal_growth_rate * 100 || 2.5).toFixed(2)}%</p>
                     </div>
                     <div>
                       <span className="text-gray-500">Terminal Value<GlossaryRef id="terminal-value" /></span>
@@ -1673,7 +1673,7 @@ export default function App() {
                         <div className="text-xs p-3 bg-white rounded border border-gray-200">
                           <div className="flex justify-between items-center mb-2">
                             <span className="font-semibold text-gray-600">Exit Multiple Cross-Check</span>
-                            <span className="text-gray-400">{result.terminal_value_check.sector_ev_ebitda_multiple?.toFixed(1)}× EV/EBITDA</span>
+                            <span className="text-gray-400">{result.terminal_value_check.sector_ev_ebitda_multiple?.toFixed(2)}× EV/EBITDA</span>
                           </div>
                           <div className="grid grid-cols-2 gap-4 text-gray-500">
                             <div>
@@ -1693,7 +1693,7 @@ export default function App() {
                                   ? 'text-amber-600' 
                                   : 'text-emerald-600'
                               }`}>
-                                {(result.terminal_value_check.method_divergence_pct * 100).toFixed(1)}%
+                                {(result.terminal_value_check.method_divergence_pct * 100).toFixed(2)}%
                               </span>
                             </div>
                           )}
@@ -1704,7 +1704,7 @@ export default function App() {
                       {result.terminal_value_check.implied_exit_multiple && (
                         <div className="text-xs text-gray-500">
                           <span>Implied Exit Multiple: </span>
-                          <span className="font-mono font-medium">{result.terminal_value_check.implied_exit_multiple.toFixed(1)}× EV/EBITDA</span>
+                          <span className="font-mono font-medium">{result.terminal_value_check.implied_exit_multiple.toFixed(2)}× EV/EBITDA</span>
                           <span className="text-gray-400 ml-2">(Terminal EBITDA: {formatCurrency(result.terminal_value_check.terminal_ebitda)})</span>
                         </div>
                       )}
@@ -1718,7 +1718,7 @@ export default function App() {
                               ? 'text-amber-600' 
                               : 'text-gray-600'
                           }`}>
-                            {(result.terminal_value_check.terminal_value_pct * 100).toFixed(0)}%
+                            {(result.terminal_value_check.terminal_value_pct * 100).toFixed(2)}%
                           </span>
                         </div>
                       )}
@@ -1780,7 +1780,7 @@ export default function App() {
                                 : 'text-gray-400'
                             }`}
                           >
-                            {(tg * 100).toFixed(1)}%
+                            {(tg * 100).toFixed(2)}%
                           </th>
                         ))}
                       </tr>
@@ -1801,7 +1801,7 @@ export default function App() {
                             <td className={`py-2 px-3 text-xs font-medium ${
                               isBaseRow ? 'text-emerald-600 bg-emerald-50' : 'text-gray-500'
                             }`}>
-                              {(dr * 100).toFixed(1)}%
+                              {(dr * 100).toFixed(2)}%
                             </td>
                             {row.map((value, colIdx) => {
                               const tg = result.sensitivity.terminal_growth_rates[colIdx];
@@ -1893,7 +1893,7 @@ export default function App() {
                     const diff = ((fair - current) / current) * 100;
                     return (
                       <span className={`text-sm font-medium ${diff >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {diff >= 0 ? '+' : ''}{diff.toFixed(0)}%
+                        {diff >= 0 ? '+' : ''}{diff.toFixed(2)}%
                       </span>
                     );
                   })()}
@@ -1922,17 +1922,17 @@ export default function App() {
                             : 'text-red-600'
                         }`}>
                           {scenario.upside_percent !== null 
-                            ? `${scenario.upside_percent >= 0 ? '+' : ''}${scenario.upside_percent.toFixed(0)}%`
+                            ? `${scenario.upside_percent >= 0 ? '+' : ''}${scenario.upside_percent.toFixed(2)}%`
                             : '—'}
                         </td>
                         <td className="py-3 text-right font-mono text-sm text-gray-500">
-                          {(scenario.assumptions.revenue_growth * 100).toFixed(1)}%
+                          {(scenario.assumptions.revenue_growth * 100).toFixed(2)}%
                         </td>
                         <td className="py-3 text-right font-mono text-sm text-gray-500">
-                          {(scenario.assumptions.operating_margin * 100).toFixed(1)}%
+                          {(scenario.assumptions.operating_margin * 100).toFixed(2)}%
                         </td>
                         <td className="py-3 text-right font-mono text-sm text-gray-400">
-                          {(scenario.probability * 100).toFixed(0)}%
+                          {(scenario.probability * 100).toFixed(2)}%
                         </td>
                       </tr>
                     ))}
@@ -2000,7 +2000,7 @@ export default function App() {
                       <p className={`text-sm font-medium ${assessmentColor}`}>{assessment}</p>
                       <p className="text-xs text-gray-500 mt-1">
                         {roic !== null && (
-                          <>ROIC ({(roic * 100).toFixed(1)}%) {roic > wacc ? '>' : '<'} WACC ({(wacc * 100).toFixed(1)}%)</>
+                          <>ROIC ({(roic * 100).toFixed(2)}%) {roic > wacc ? '>' : '<'} WACC ({(wacc * 100).toFixed(2)}%)</>
                         )}
                       </p>
                     </div>
@@ -2012,7 +2012,7 @@ export default function App() {
                           ROIC<GlossaryRef id="roic" />
                         </p>
                         <p className="text-xl font-mono font-medium">
-                          {roic !== null ? `${(roic * 100).toFixed(1)}%` : '—'}
+                          {roic !== null ? `${(roic * 100).toFixed(2)}%` : '—'}
                         </p>
                         <p className="text-xs text-gray-400 mt-1">Return on Invested Capital</p>
                       </div>
@@ -2022,7 +2022,7 @@ export default function App() {
                           Value Spread<GlossaryRef id="value-spread" />
                         </p>
                         <p className={`text-xl font-mono font-medium ${valueSpread !== null ? (valueSpread > 0 ? 'text-emerald-600' : valueSpread < -0.02 ? 'text-red-600' : 'text-amber-600') : ''}`}>
-                          {valueSpread !== null ? `${valueSpread > 0 ? '+' : ''}${(valueSpread * 100).toFixed(1)}%` : '—'}
+                          {valueSpread !== null ? `${valueSpread > 0 ? '+' : ''}${(valueSpread * 100).toFixed(2)}%` : '—'}
                         </p>
                         <p className="text-xs text-gray-400 mt-1">ROIC minus WACC</p>
                       </div>
@@ -2042,7 +2042,7 @@ export default function App() {
                           Reinvestment Rate<GlossaryRef id="reinvestment-rate" />
                         </p>
                         <p className="text-xl font-mono font-medium">
-                          {reinvestmentRate !== null ? `${(reinvestmentRate * 100).toFixed(0)}%` : '—'}
+                          {reinvestmentRate !== null ? `${(reinvestmentRate * 100).toFixed(2)}%` : '—'}
                         </p>
                         <p className="text-xs text-gray-400 mt-1">Earnings needed for growth</p>
                       </div>
@@ -2132,7 +2132,7 @@ export default function App() {
                       comparableResult.summary.average_upside_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
                     }`}>
                       {comparableResult.summary.average_upside_percent >= 0 ? '+' : ''}
-                      {comparableResult.summary.average_upside_percent.toFixed(0)}%
+                      {comparableResult.summary.average_upside_percent.toFixed(2)}%
                     </span>
                   )}
                 </div>
@@ -2172,10 +2172,10 @@ export default function App() {
                         <tr key={iv.metric} className="border-b border-gray-100">
                           <td className="py-3 text-sm font-medium">{iv.metric}</td>
                           <td className="py-3 text-right font-mono text-sm">
-                            {iv.company_value !== null ? iv.company_value.toFixed(1) + 'x' : '—'}
+                            {iv.company_value !== null ? iv.company_value.toFixed(2) + 'x' : '—'}
                           </td>
                           <td className="py-3 text-right font-mono text-sm text-gray-500">
-                            {iv.peer_median !== null ? iv.peer_median.toFixed(1) + 'x' : '—'}
+                            {iv.peer_median !== null ? iv.peer_median.toFixed(2) + 'x' : '—'}
                           </td>
                           <td className="py-3 text-right font-mono text-sm font-medium">
                             {iv.implied_price !== null ? '$' + iv.implied_price.toFixed(2) : '—'}
@@ -2186,7 +2186,7 @@ export default function App() {
                               : 'text-red-600'
                           }`}>
                             {iv.upside_percent !== null 
-                              ? `${iv.upside_percent >= 0 ? '+' : ''}${iv.upside_percent.toFixed(0)}%`
+                              ? `${iv.upside_percent >= 0 ? '+' : ''}${iv.upside_percent.toFixed(2)}%`
                               : '—'}
                           </td>
                         </tr>
@@ -2414,14 +2414,14 @@ export default function App() {
                         technicalResult.volume.relative_volume >= 1.2 ? 'text-emerald-600' :
                         technicalResult.volume.relative_volume <= 0.8 ? 'text-amber-500' : 'text-gray-600'
                       }`}>
-                        {technicalResult.volume.relative_volume.toFixed(1)}x
+                        {technicalResult.volume.relative_volume.toFixed(2)}x
                       </div>
                     ) : (
                       <div className="text-lg font-medium text-gray-400">—</div>
                     )}
                     {technicalResult.volume?.average_volume != null && (
                       <div className="text-xs text-gray-400 mt-1">
-                        Avg: {(technicalResult.volume.average_volume / 1e6).toFixed(1)}M
+                        Avg: {(technicalResult.volume.average_volume / 1e6).toFixed(2)}M
                       </div>
                     )}
                   </div>
@@ -2538,10 +2538,10 @@ export default function App() {
                             
                             {/* Price labels */}
                             <text x={padding - 5} y={padding + 5} textAnchor="end" fontSize="10" fill="#9ca3af">
-                              ${maxPrice.toFixed(0)}
+                              ${maxPrice.toFixed(2)}
                             </text>
                             <text x={padding - 5} y={padding + chartHeight} textAnchor="end" fontSize="10" fill="#9ca3af">
-                              ${minPrice.toFixed(0)}
+                              ${minPrice.toFixed(2)}
                             </text>
                           </>
                         );

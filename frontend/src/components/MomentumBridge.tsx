@@ -123,7 +123,7 @@ export function MomentumBridge({
   
   // Calculate margin for display
   const margin = intrinsicValue && currentPrice > 0 
-    ? ((intrinsicValue - currentPrice) / currentPrice * 100).toFixed(1)
+    ? ((intrinsicValue - currentPrice) / currentPrice * 100).toFixed(2)
     : null;
   
   return (
