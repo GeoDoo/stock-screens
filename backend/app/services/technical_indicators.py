@@ -65,7 +65,7 @@ class TechnicalAnalysisResult:
     
     # NEW: Momentum Bridge (Value + Momentum convergence)
     vwma_200: Optional[List[IndicatorValue]] = None  # 200-day VWMA for long-term trend
-    vwma_trend: str = "flat"  # "uptrend", "downtrend", "flat"
+    vwma_trend: Optional[str] = None  # "uptrend", "downtrend", "flat", or None if insufficient data
 
 
 class TechnicalIndicators:

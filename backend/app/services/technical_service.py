@@ -118,7 +118,9 @@ class TechnicalService:
         
         # NEW: Momentum Bridge - 200-day VWMA for long-term trend
         # Only calculate if we have enough data (200+ days)
-        vwma_200_values = TechnicalIndicators.vwma(closes, volumes, period=200) if len(closes) >= 200 else []
+        # Set to None (not empty list) when insufficient data to avoid false signals
+        has_enough_for_vwma_200 = len(closes) >= 200
+        vwma_200_values = TechnicalIndicators.vwma(closes, volumes, period=200) if has_enough_for_vwma_200 else None
         
         # Analyze signals
         trend = TechnicalIndicators.analyze_trend(sma_20_values, sma_50_values, closes)
@@ -130,8 +132,8 @@ class TechnicalService:
         mfi_signal = TechnicalIndicators.analyze_mfi(mfi_14_values)
         obv_trend_signal = TechnicalIndicators.obv_trend(obv_values, period=20)
         
-        # NEW: Momentum Bridge trend analysis
-        vwma_trend_signal = TechnicalIndicators.analyze_vwma_trend(vwma_200_values, period=200)
+        # NEW: Momentum Bridge trend analysis - only when we have real 200-day data
+        vwma_trend_signal = TechnicalIndicators.analyze_vwma_trend(vwma_200_values, period=200) if vwma_200_values else None
         
         return TechnicalAnalysisResult(
             symbol=symbol.upper(),
@@ -159,6 +161,7 @@ class TechnicalService:
             mfi_signal=mfi_signal,
             obv_trend=obv_trend_signal,
             # NEW: Momentum Bridge (Value + Momentum convergence)
+            # Only populated when 200+ days of data available
             vwma_200=to_indicator_values(vwma_200_values, bars) if vwma_200_values else None,
-            vwma_trend=vwma_trend_signal,
+            vwma_trend=vwma_trend_signal,  # None if insufficient data
         )
