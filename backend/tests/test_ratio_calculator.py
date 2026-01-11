@@ -1785,6 +1785,34 @@ class TestIncrementalROIC:
         # ΔIC is negative (capital returned via buybacks)
         # Should return None, not a misleading negative percentage
         assert ratios.profitability.incremental_roic is None
+        # Should explicitly indicate WHY it's None (not just missing data)
+        assert ratios.profitability.incremental_roic_unavailable_reason == "capital_returned"
+    
+    def test_incremental_roic_no_reason_when_missing_data(self, calculator):
+        """
+        When Inc. ROIC is None due to missing data (not capital returned),
+        the reason should be None to distinguish from the buyback case.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [
+                # Only current year, no prior data
+                {"revenue": 100_000_000_000, "operatingIncome": 30_000_000_000, 
+                 "incomeBeforeTax": 28_000_000_000, "netIncome": 21_000_000_000},
+            ],
+            "balance_sheet": [
+                {"totalStockholdersEquity": 100_000_000_000, "totalDebt": 50_000_000_000, 
+                 "cashAndCashEquivalents": 10_000_000_000},
+            ],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Should be None due to missing prior year data
+        assert ratios.profitability.incremental_roic is None
+        # Reason should be None (not "capital_returned") - this is missing data
+        assert ratios.profitability.incremental_roic_unavailable_reason is None
 
     def test_incremental_roic_falls_back_to_1yr_without_3yr_data(self, calculator):
         """

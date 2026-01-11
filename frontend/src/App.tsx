@@ -1012,9 +1012,9 @@ export default function App() {
                     ? ratiosResult.ttm 
                     : ratiosResult.annual || ratiosResult.ttm;
                   const incRoic = currentRatios?.profitability?.incremental_roic;
-                  // Inc. ROIC is null when capital was returned (buybacks), not invested
-                  // Show explanatory message in that case
-                  const capitalReturned = incRoic == null && result.wacc != null;
+                  // Only show "capital returned" explanation when backend explicitly says so
+                  // Don't assume - it could also be missing data
+                  const capitalReturned = currentRatios?.profitability?.incremental_roic_unavailable_reason === 'capital_returned';
                   
                   if (incRoic != null || capitalReturned) {
                     return (
