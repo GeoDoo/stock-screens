@@ -41,15 +41,40 @@ describe('CEOEfficiencyWarning', () => {
     expect(screen.getByText('New investments roughly break even vs cost of capital')).toBeInTheDocument();
   });
   
-  it('returns null when incrementalRoic is null', () => {
+  it('returns null when incrementalRoic is null and capitalReturned is false', () => {
     const { container } = render(
       <CEOEfficiencyWarning
         incrementalRoic={null}
         wacc={0.10}
+        capitalReturned={false}
       />
     );
     
     expect(container.firstChild).toBeNull();
+  });
+  
+  it('shows capital returned explanation when capitalReturned is true', () => {
+    render(
+      <CEOEfficiencyWarning
+        incrementalRoic={null}
+        wacc={0.109}  // 10.9%
+        capitalReturned={true}
+      />
+    );
+    
+    // Should show the N/A status
+    expect(screen.getByText('N/A — CAPITAL RETURNED')).toBeInTheDocument();
+    
+    // Should show explanatory text
+    expect(screen.getByText(/Cannot measure return on/)).toBeInTheDocument();
+    expect(screen.getByText(/invested capital/i)).toBeInTheDocument();
+    
+    // Should still show WACC
+    expect(screen.getByText('10.90%')).toBeInTheDocument();
+    
+    // Should show detailed explanation
+    expect(screen.getByText(/share buybacks/i)).toBeInTheDocument();
+    expect(screen.getByText(/Total Shareholder Yield/)).toBeInTheDocument();
   });
   
   it('returns null when wacc is null', () => {

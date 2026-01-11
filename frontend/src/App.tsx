@@ -1012,13 +1012,17 @@ export default function App() {
                     ? ratiosResult.ttm 
                     : ratiosResult.annual || ratiosResult.ttm;
                   const incRoic = currentRatios?.profitability?.incremental_roic;
-                  // Use != null to handle WACC = 0 (falsy but valid)
-                  if (incRoic != null && result.wacc != null) {
+                  // Inc. ROIC is null when capital was returned (buybacks), not invested
+                  // Show explanatory message in that case
+                  const capitalReturned = incRoic == null && result.wacc != null;
+                  
+                  if (incRoic != null || capitalReturned) {
                     return (
                       <div className="mt-6">
                         <CEOEfficiencyWarning 
                           incrementalRoic={incRoic}
                           wacc={result.wacc}
+                          capitalReturned={capitalReturned}
                         />
                       </div>
                     );
