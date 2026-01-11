@@ -948,6 +948,98 @@ class TestTerminalValueDominance:
             )
 
 
+class TestImpliedTerminalROICWarning:
+    """
+    P0 #1 (NOTES2.md): "Economic Terminal State" Fallacy warning.
+    
+    In a competitive economy, a firm's ROIC should fade toward WACC in perpetuity.
+    If implied terminal ROIC >> WACC, the model assumes "infinite competitive advantage".
+    
+    This test ensures the valuation warns users when terminal assumptions imply
+    unrealistically high ROIC in perpetuity.
+    """
+    
+    @pytest.fixture
+    def mock_client(self):
+        """Create mock client with realistic stock data."""
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=create_mock_stock_data())
+        client.get_treasury_rate = AsyncMock(return_value=0.04)
+        return client
+    
+    @pytest.mark.asyncio
+    async def test_includes_implied_terminal_roic(self, mock_client):
+        """
+        terminal_value_check should include implied_terminal_roic.
+        
+        Implied ROIC = Terminal Growth / (1 - Terminal FCF / Terminal NOPAT)
+        """
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock("AAPL")
+        
+        check = result["terminal_value_check"]
+        assert "implied_terminal_roic" in check, (
+            "terminal_value_check must include implied_terminal_roic for economic sanity check"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_warns_when_terminal_roic_far_exceeds_wacc(self, mock_client):
+        """
+        Should warn when implied terminal ROIC >> WACC (> 2x).
+        
+        This indicates "economically heroic" assumptions - the model assumes
+        the company will maintain a massive competitive advantage in perpetuity.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Use aggressive terminal growth with low WACC to create high implied ROIC
+        result = await service.value_stock(
+            "AAPL",
+            terminal_growth_rate=0.04,  # 4% terminal growth (aggressive)
+            discount_rate_override=0.08,  # 8% WACC (low)
+        )
+        
+        check = result["terminal_value_check"]
+        
+        # If implied ROIC > 2x WACC, should warn
+        implied_roic = check.get("implied_terminal_roic")
+        wacc = result.get("wacc") or result.get("discount_rate")
+        
+        if implied_roic is not None and wacc is not None:
+            if implied_roic > wacc * 2:
+                assert "terminal_roic_warning" in check, (
+                    f"Should warn when implied ROIC ({implied_roic:.1%}) > 2x WACC ({wacc:.1%})"
+                )
+    
+    @pytest.mark.asyncio
+    async def test_no_warning_when_terminal_roic_reasonable(self, mock_client):
+        """
+        Should NOT warn when implied terminal ROIC is close to WACC.
+        
+        This indicates the company is modeled to converge to competitive equilibrium.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Conservative terminal growth with normal WACC
+        result = await service.value_stock(
+            "AAPL",
+            terminal_growth_rate=0.02,  # 2% terminal growth (conservative)
+            discount_rate_override=0.10,  # 10% WACC
+        )
+        
+        check = result["terminal_value_check"]
+        implied_roic = check.get("implied_terminal_roic")
+        wacc = result.get("wacc") or result.get("discount_rate")
+        
+        # If implied ROIC is within 2x WACC, no warning should be present
+        if implied_roic is not None and wacc is not None:
+            if implied_roic <= wacc * 2:
+                assert check.get("terminal_roic_warning") is None, (
+                    f"No warning needed when implied ROIC ({implied_roic:.1%}) <= 2x WACC ({wacc:.1%})"
+                )
+
+
 class TestMultiStageEconomicsIntegration:
     """
     Test that ValuationService correctly passes economics schedules

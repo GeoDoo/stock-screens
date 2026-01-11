@@ -282,12 +282,15 @@ class ValuationService:
         # 8. Terminal Value sanity check via Exit Multiple AND dominance warning
         # Professional valuation cross-checks Gordon Growth with implied EV/EBITDA
         # Also warns if terminal value dominates (>70% of EV)
+        # P0 Fix: Also checks implied terminal ROIC vs WACC for economic sanity
         terminal_value_check = self._calculate_terminal_value_check(
             terminal_value=terminal_value,
             terminal_year_projection=projections[-1],
             pv_terminal=pv_terminal,
             enterprise_value=enterprise_value,
             sector_ev_ebitda_multiple=sector_ev_ebitda_multiple,
+            terminal_growth_rate=terminal_growth_rate,
+            wacc=discount_rate,
         )
 
         return {
@@ -521,6 +524,8 @@ class ValuationService:
         pv_terminal: float,
         enterprise_value: float,
         sector_ev_ebitda_multiple: Optional[float] = None,
+        terminal_growth_rate: float = 0.03,
+        wacc: Optional[float] = None,
     ) -> Dict:
         """
         Calculate implied exit multiple and terminal dominance as sanity checks.
@@ -537,6 +542,11 @@ class ValuationService:
         Also checks if terminal value dominates enterprise value (>70%),
         indicating the DCF is essentially a terminal value guess.
         
+        P0 Fix: Also calculates implied terminal ROIC and warns if >> WACC.
+        In perpetuity, growth requires reinvestment: g = Reinvestment Rate × ROIC.
+        Implied ROIC = g / (1 - FCF/NOPAT). If implied ROIC >> WACC, the model
+        assumes "infinite competitive advantage" which is economically heroic.
+        
         Returns dict with:
         - terminal_ebitda: EBIT + D&A in terminal year
         - implied_exit_multiple: Terminal Value / Terminal EBITDA
@@ -544,9 +554,11 @@ class ValuationService:
         - gordon_growth_tv: Terminal value via Gordon Growth (for transparency)
         - exit_multiple_tv: Terminal value via Exit Multiple (if sector multiple provided)
         - method_divergence_pct: Divergence between methods (if both available)
+        - implied_terminal_roic: Implied ROIC in perpetuity
         - warning: Optional warning if multiple seems unrealistic
         - dominance_warning: Optional warning if TV dominates EV
         - method_divergence_warning: Optional warning if methods diverge >20%
+        - terminal_roic_warning: Optional warning if implied ROIC >> WACC
         """
         # Terminal year EBITDA = EBIT + D&A
         terminal_ebit = terminal_year_projection.get("ebit", 0)
@@ -627,6 +639,50 @@ class ValuationService:
                 "(2) using revenue/EBITDA multiples instead, or "
                 "(3) validating terminal assumptions carefully."
             )
+        
+        # P0 Fix: Calculate implied terminal ROIC and warn if >> WACC
+        # In perpetuity: g = Reinvestment Rate × ROIC
+        # Reinvestment Rate = 1 - (FCF / NOPAT)
+        # Therefore: Implied ROIC = g / (1 - FCF/NOPAT)
+        terminal_nopat = terminal_year_projection.get("nopat", 0)
+        terminal_fcf = terminal_year_projection.get("fcf", 0)
+        
+        implied_roic = None
+        if terminal_nopat > 0 and terminal_growth_rate > 0:
+            # FCF/NOPAT ratio - if FCF >= NOPAT, no reinvestment needed (unrealistic in perpetuity)
+            fcf_nopat_ratio = terminal_fcf / terminal_nopat
+            reinvestment_rate = 1 - fcf_nopat_ratio
+            
+            if reinvestment_rate > 0.01:  # Need at least some reinvestment
+                implied_roic = terminal_growth_rate / reinvestment_rate
+                result["implied_terminal_roic"] = implied_roic
+                
+                # Warn if implied ROIC >> WACC (more than 2x)
+                # This indicates "economically heroic" assumptions
+                if wacc is not None and implied_roic > wacc * 2:
+                    result["terminal_roic_warning"] = (
+                        f"Implied terminal ROIC ({implied_roic:.0%}) is {implied_roic/wacc:.1f}x WACC ({wacc:.0%}). "
+                        "In a competitive economy, ROIC should fade toward WACC in perpetuity. "
+                        "This assumption implies an 'infinite competitive advantage'. Consider: "
+                        "(1) reducing terminal growth rate, "
+                        "(2) increasing terminal reinvestment (lower FCF/NOPAT ratio), or "
+                        "(3) validating the company's sustainable competitive moat."
+                    )
+            else:
+                # Reinvestment rate near zero implies infinite ROIC (unsustainable)
+                result["implied_terminal_roic"] = None
+                if wacc is not None:
+                    result["terminal_roic_warning"] = (
+                        "Terminal FCF equals or exceeds NOPAT (no reinvestment). "
+                        "With positive terminal growth, this implies infinite ROIC - "
+                        "perpetual growth without capital investment. This is economically impossible."
+                    )
+        elif terminal_growth_rate > 0:
+            # Terminal NOPAT <= 0 but positive growth - economically inconsistent
+            result["implied_terminal_roic"] = None
+        else:
+            # No terminal growth (g=0) - ROIC calculation not applicable
+            result["implied_terminal_roic"] = None
         
         return result
 
