@@ -454,6 +454,8 @@ export interface FinancialRatiosPeriod {
     roic: number | null;
     rotic: number | null;  // Return on Tangible Invested Capital
     incremental_roic: number | null;  // ΔNOPAT / ΔInvested Capital
+    // Why incremental_roic is null: "capital_returned" = buybacks reduced capital base
+    incremental_roic_unavailable_reason?: 'capital_returned' | null;
   };
   liquidity: {
     current_ratio: number | null;

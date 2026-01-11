@@ -40,6 +40,10 @@ class ProfitabilityRatios:
     roic: Optional[float] = None
     rotic: Optional[float] = None  # Return on Tangible Invested Capital
     incremental_roic: Optional[float] = None  # ΔNOPAT / ΔInvested Capital
+    # Reason why incremental_roic is None (when applicable)
+    # "capital_returned" = ΔIC < 0 (buybacks reduced capital base)
+    # None = insufficient data or other reason
+    incremental_roic_unavailable_reason: Optional[str] = None
 
 
 @dataclass
@@ -426,6 +430,9 @@ class RatioCalculator:
             # Negative ΔIC means capital was returned (buybacks), not invested
             if delta_ic > 0:
                 ratios.incremental_roic = delta_nopat / delta_ic
+            elif delta_ic <= 0:
+                # Explicitly track that capital was returned (not just missing data)
+                ratios.incremental_roic_unavailable_reason = "capital_returned"
         
         return ratios
     
