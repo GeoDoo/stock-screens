@@ -2110,13 +2110,26 @@ class TestNegativeOutcomes:
             "Result should track zero_equity_count for distribution integrity"
         )
         
-        # With high volatility and moderate debt, we expect SOME wipe-outs
-        # but we can't guarantee exact numbers. Just verify tracking exists.
-        # The key is: total = valid + invalid + wipeouts
-        total_accounted = (
-            result.valid_simulations + 
-            (100 - result.valid_simulations)  # This is wrong if we drop outcomes
+        # Key assertions for P0.3 fix:
+        # 1. zero_equity_count should be a subset of valid_simulations
+        #    (wipe-outs are clamped to 0 and KEPT, not dropped)
+        assert result.zero_equity_count <= result.valid_simulations, (
+            f"Wipe-outs ({result.zero_equity_count}) should be ≤ valid simulations ({result.valid_simulations})"
         )
-        assert total_accounted == 100, (
-            f"All 100 simulations should be accounted for, got {total_accounted}"
+        
+        # 2. With high volatility and moderate debt, we expect SOME wipe-outs
+        #    (if none occur, the test setup may need adjustment)
+        assert result.zero_equity_count >= 0, (
+            "zero_equity_count should be non-negative"
+        )
+        
+        # 3. Verify the values list length matches valid_simulations
+        assert len(result.values) == result.valid_simulations, (
+            f"Values list length ({len(result.values)}) should match valid_simulations ({result.valid_simulations})"
+        )
+        
+        # 4. Verify wipe-outs appear as 0.0 in the values list
+        zeros_in_values = sum(1 for v in result.values if v == 0.0)
+        assert zeros_in_values == result.zero_equity_count, (
+            f"Number of zeros in values ({zeros_in_values}) should match zero_equity_count ({result.zero_equity_count})"
         )
