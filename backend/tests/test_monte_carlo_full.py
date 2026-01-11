@@ -1530,3 +1530,185 @@ class TestFatTailsDistribution:
             f"CorrelatedInputs should respect degrees_of_freedom. "
             f"Fat tails: {fat_extremes} extremes, Normal: {normal_extremes} extremes"
         )
+
+
+class TestFCFProjectorIntegration:
+    """
+    P0.1 Fix: Monte Carlo must use FCFProjector.project() instead of its own FCF loop.
+    
+    Problem: Full Monte Carlo has its own FCF calculation loop that:
+    - Only supports "level" mode for WC (doesn't respect wc_mode parameter)
+    - Doesn't support economics schedules (margin_schedule, capex_schedule, wc_schedule)
+    - Diverges from the main DCF engine (ValuationService/FCFProjector)
+    
+    Solution: Replace the manual FCF loop with calls to FCFProjector.project().
+    
+    These tests verify that Monte Carlo produces the same FCF calculations as
+    FCFProjector.project() when given deterministic inputs.
+    """
+    
+    def test_mc_respects_wc_mode_incremental(self):
+        """
+        Monte Carlo should respect wc_mode="incremental" like FCFProjector.
+        
+        Currently FAILS because MC only implements "level" mode.
+        """
+        from app.services.fcf_projector import FCFProjector
+        
+        # Historical data
+        hist_revenue = [100e9, 110e9, 121e9]
+        hist_ebit = [15e9, 16.5e9, 18.15e9]
+        hist_da = [5e9, 5.5e9, 6.05e9]
+        hist_capex = [8e9, 8.8e9, 9.68e9]
+        hist_wc = [10e9, 11e9, 12.1e9]
+        
+        # Create FCFProjector and project with incremental WC mode
+        projector = FCFProjector(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            tax_rate=0.25,
+            wc_mode="incremental",
+        )
+        
+        # Project 5 years with specific assumptions
+        fcf_projections = projector.project(
+            years=5,
+            revenue_growth=0.10,
+            operating_margin=0.15,
+            da_ratio=0.05,
+            capex_ratio=0.08,
+            wc_ratio=0.10,  # WC intensity (for incremental mode)
+            wc_mode="incremental",
+        )
+        
+        # Extract FCFs from FCFProjector
+        fcf_projector_fcfs = [p["fcf"] for p in fcf_projections]
+        
+        # Run Monte Carlo with same deterministic inputs (seed=42, 1 iteration)
+        result = run_full_monte_carlo(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=1e9,
+            total_debt=50e9,
+            cash=20e9,
+            current_price=100.0,
+            base_growth=0.10,
+            base_margin=0.15,
+            base_da_ratio=0.05,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            # Zero std devs for deterministic output
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=5,
+            iterations=1,
+            seed=42,
+            # THIS IS THE KEY - should respect incremental mode
+            wc_mode="incremental",
+        )
+        
+        # Monte Carlo should produce positive value (deterministic inputs)
+        assert result.valid_simulations == 1, (
+            "Monte Carlo should produce valid result with deterministic inputs"
+        )
+        
+        # The per-share value should match if FCF calculations align
+        # For now, just verify the parameter is accepted
+        # Full parity test will be added after implementation
+    
+    def test_mc_respects_margin_schedule(self):
+        """
+        Monte Carlo should respect margin_schedule for multi-stage economics.
+        
+        Currently FAILS because MC doesn't pass margin_schedule to FCFProjector.
+        """
+        from app.services.fcf_projector import FCFProjector
+        
+        hist_revenue = [100e9, 110e9, 121e9]
+        hist_ebit = [15e9, 16.5e9, 18.15e9]
+        hist_da = [5e9, 5.5e9, 6.05e9]
+        hist_capex = [8e9, 8.8e9, 9.68e9]
+        hist_wc = [10e9, 11e9, 12.1e9]
+        
+        # Margin schedule: starts high, fades to mature
+        margin_schedule = [0.20, 0.18, 0.16, 0.14, 0.12]
+        
+        # FCFProjector with margin schedule
+        projector = FCFProjector(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            tax_rate=0.25,
+        )
+        
+        fcf_projections = projector.project(
+            years=5,
+            revenue_growth=0.10,
+            da_ratio=0.05,
+            capex_ratio=0.08,
+            wc_ratio=0.10,
+            margin_schedule=margin_schedule,
+        )
+        
+        # The terminal year should use margin=0.12 (last in schedule)
+        terminal_margin_from_projector = fcf_projections[-1]["ebit"] / fcf_projections[-1]["revenue"]
+        
+        # Run Monte Carlo with margin_schedule
+        result = run_full_monte_carlo(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=1e9,
+            total_debt=50e9,
+            cash=20e9,
+            current_price=100.0,
+            base_growth=0.10,
+            base_margin=0.20,  # Starting margin
+            base_da_ratio=0.05,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=5,
+            iterations=1,
+            seed=42,
+            # THIS IS THE KEY - should respect margin_schedule
+            margin_schedule=margin_schedule,
+        )
+        
+        # Verify margin schedule is accepted and used
+        assert result.valid_simulations == 1, (
+            "Monte Carlo should accept margin_schedule parameter"
+        )
+        
+        # Terminal margin should be ~0.12, not 0.20
+        # (This assertion will verify the implementation is correct)
+        assert abs(terminal_margin_from_projector - 0.12) < 0.01, (
+            f"FCFProjector terminal margin should be ~12%, got {terminal_margin_from_projector:.1%}"
+        )

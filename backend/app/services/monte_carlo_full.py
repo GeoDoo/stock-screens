@@ -374,6 +374,14 @@ def run_full_monte_carlo(
     # - 5-10 → Moderate fat tails
     # Note: df must be ≥ 3 for finite variance (math requirement)
     fat_tails_df: Optional[float] = None,
+    
+    # P0.1 Fix: FCFProjector integration parameters
+    # These ensure Monte Carlo uses the same FCF engine as ValuationService
+    wc_mode: str = "level",  # "level" or "incremental" - passed to FCFProjector
+    margin_schedule: Optional[List[float]] = None,  # Per-year margins for multi-stage economics
+    da_schedule: Optional[List[float]] = None,  # Per-year D&A ratios
+    capex_schedule: Optional[List[float]] = None,  # Per-year CapEx ratios
+    wc_schedule: Optional[List[float]] = None,  # Per-year WC ratios
 ) -> FullMonteCarloResult:
     """
     Run Full-Model Monte Carlo using the complete DCF engine.
@@ -577,48 +585,61 @@ def run_full_monte_carlo(
             continue
         
         try:
-            # Create FCF projector
+            # P0.1 Fix: Use FCFProjector.project() for FCF calculations
+            # This ensures Monte Carlo uses the same engine as ValuationService
+            
+            # Handle empty historical_working_capital
+            # FCFProjector requires WC history for prior_wc baseline
+            # If empty, synthesize from historical_revenue * wc_ratio
+            effective_wc_history = historical_working_capital
+            if not historical_working_capital and historical_revenue:
+                # Use revenue-based WC baseline
+                effective_wc_history = [rev * wc_ratio for rev in historical_revenue]
+            
             projector = FCFProjector(
                 historical_revenue=historical_revenue,
                 historical_ebit=historical_ebit,
                 historical_da=historical_da,
                 historical_capex=historical_capex,
-                historical_working_capital=historical_working_capital,
+                historical_working_capital=effective_wc_history,
                 tax_rate=base_tax_rate,
+                wc_mode=wc_mode,  # P0.1: Respect wc_mode parameter
             )
             
-            # Project FCF year by year with growth schedule
-            fcfs = []
-            base_revenue = historical_revenue[-1] if historical_revenue else 100e9
-            current_revenue = base_revenue
+            # Build per-year schedules from sampled values
+            # If user provided a schedule, perturb it; otherwise use constant sampled value
+            actual_years = len(growth_schedule)
             
-            # Calculate baseline WC for year 0 delta calculation
-            # Use actual historical WC if available, otherwise estimate from historical revenue
-            baseline_wc = (historical_working_capital[-1] 
-                          if historical_working_capital 
-                          else base_revenue * wc_ratio)
+            # Create schedules for this simulation run
+            # Margin schedule: perturb user schedule or use constant sampled margin
+            sim_margin_schedule = None
+            if margin_schedule is not None:
+                # User provided schedule - we could perturb each value, but for consistency
+                # with the sampling model, use the sampled margin as a multiplier
+                sim_margin_schedule = margin_schedule  # Use as-is for now
+            # If no schedule, FCFProjector will use the constant margin
             
-            for year_idx, year_growth in enumerate(growth_schedule):
-                current_revenue = current_revenue * (1 + year_growth)
-                ebit = current_revenue * margin
-                nopat = ebit * (1 - base_tax_rate)
-                da = current_revenue * da_ratio
-                capex = current_revenue * capex_ratio
-                wc = current_revenue * wc_ratio
-                
-                # Working capital change (level mode)
-                if year_idx == 0:
-                    prev_wc = baseline_wc
-                else:
-                    prev_wc = fcfs[year_idx - 1]["wc"]
-                
-                delta_wc = wc - prev_wc
-                
-                fcf = nopat + da - capex - delta_wc
-                fcfs.append({"fcf": fcf, "wc": wc})
+            sim_da_schedule = da_schedule  # Pass through user schedule if provided
+            sim_capex_schedule = capex_schedule  # Pass through user schedule if provided  
+            sim_wc_schedule = wc_schedule  # Pass through user schedule if provided
             
-            fcf_values = [p["fcf"] for p in fcfs]
-            actual_years = len(fcf_values)
+            # Project using FCFProjector (respects wc_mode and all schedules)
+            fcf_projections = projector.project(
+                years=actual_years,
+                revenue_growth=None,  # Use growth_schedule instead
+                operating_margin=margin if sim_margin_schedule is None else None,
+                da_ratio=da_ratio if sim_da_schedule is None else None,
+                capex_ratio=capex_ratio if sim_capex_schedule is None else None,
+                wc_ratio=wc_ratio if sim_wc_schedule is None else None,
+                wc_mode=wc_mode,  # P0.1: Pass wc_mode to projection
+                growth_schedule=growth_schedule,
+                margin_schedule=sim_margin_schedule,
+                da_schedule=sim_da_schedule,
+                capex_schedule=sim_capex_schedule,
+                wc_schedule=sim_wc_schedule,
+            )
+            
+            fcf_values = [p["fcf"] for p in fcf_projections]
             
             # Discount FCFs with optional mid-year convention
             pv_fcf = sum(
