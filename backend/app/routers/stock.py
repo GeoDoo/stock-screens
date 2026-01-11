@@ -1591,6 +1591,8 @@ async def run_full_monte_carlo_endpoint(
         preferred_stock=preferred_stock,
         deferred_tax_assets=deferred_tax_assets,
         pension_deficit=pension_deficit,
+        # Fat tails (Student's t-distribution for modeling market crashes)
+        fat_tails_df=request.fat_tails_df,
     )
     
     return {

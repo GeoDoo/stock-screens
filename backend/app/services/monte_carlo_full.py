@@ -31,24 +31,63 @@ class BoundedInput:
     """
     Input parameter with bounded distribution.
     
-    Uses truncated normal distribution - samples from normal but rejects
-    values outside [min_val, max_val]. More realistic than unbounded normal.
+    Uses truncated distribution - samples from normal or Student's t,
+    but rejects values outside [min_val, max_val].
+    
+    Fat tails (degrees_of_freedom):
+    - None or very high → Normal distribution
+    - 3-5 → Moderate fat tails (recommended for finance)
+    - 1-2 → Very fat tails (extreme events more likely)
+    
+    Student's t-distribution better models real market behavior where
+    "1-in-100 year" crashes happen more often than Normal predicts.
     """
     name: str
     mean: float
     std_dev: float
     min_val: float
     max_val: float
+    degrees_of_freedom: Optional[float] = None  # None = Normal distribution
+    
+    def _sample_raw(self) -> float:
+        """Sample from the underlying distribution (Normal or Student's t)."""
+        if self.degrees_of_freedom is None or self.degrees_of_freedom > 100:
+            # Normal distribution (or t with very high df ≈ Normal)
+            return random.gauss(self.mean, self.std_dev)
+        else:
+            # Student's t-distribution with fat tails
+            # t-distribution has variance = df/(df-2) for df > 2
+            # We need to scale to get our target std_dev
+            df = self.degrees_of_freedom
+            
+            # Generate standard t random variable using the ratio method
+            # t = Z / sqrt(V/df) where Z ~ N(0,1) and V ~ chi-squared(df)
+            z = random.gauss(0, 1)
+            # Chi-squared(df) = sum of df squared standard normals
+            v = sum(random.gauss(0, 1) ** 2 for _ in range(int(df)))
+            t_sample = z / math.sqrt(v / df) if v > 0 else z
+            
+            # Scale to match desired std_dev
+            # Standard t has variance df/(df-2), so std = sqrt(df/(df-2))
+            # We want our target std_dev, so scale by std_dev / sqrt(df/(df-2))
+            if df > 2:
+                scale = self.std_dev / math.sqrt(df / (df - 2))
+            else:
+                # For df <= 2, variance is undefined/infinite
+                # Use std_dev directly as scale (will have very fat tails)
+                scale = self.std_dev
+            
+            return self.mean + scale * t_sample
     
     def sample(self) -> float:
-        """Sample from truncated normal distribution."""
-        # Rejection sampling for truncated normal
+        """Sample from truncated distribution (Normal or Student's t)."""
+        # Rejection sampling for truncated distribution
         for _ in range(100):  # Max attempts to avoid infinite loop
-            value = random.gauss(self.mean, self.std_dev)
+            value = self._sample_raw()
             if self.min_val <= value <= self.max_val:
                 return value
         # Fallback: clamp to bounds
-        return max(self.min_val, min(self.max_val, random.gauss(self.mean, self.std_dev)))
+        return max(self.min_val, min(self.max_val, self._sample_raw()))
 
 
 @dataclass 
@@ -294,6 +333,13 @@ def run_full_monte_carlo(
     preferred_stock: float = 0.0,
     deferred_tax_assets: float = 0.0,  # NOLs - adds to equity
     pension_deficit: float = 0.0,
+    
+    # NEW: Fat tails (Student's t-distribution)
+    # Markets don't follow Normal distribution - extreme events happen more often
+    # - None → Normal distribution (traditional MC)
+    # - 3-5 → Moderate fat tails (recommended for finance)
+    # - 1-2 → Very fat tails (models rare crashes)
+    fat_tails_df: Optional[float] = None,
 ) -> FullMonteCarloResult:
     """
     Run Full-Model Monte Carlo using the complete DCF engine.
@@ -379,22 +425,22 @@ def run_full_monte_carlo(
     
     # Define bounded inputs for non-WACC, non-growth params
     core_inputs = [
-        BoundedInput("margin", base_margin, margin_std, -0.20, 0.50),  # -20% to +50%
-        BoundedInput("da_ratio", base_da_ratio, da_ratio_std, 0.0, 0.15),  # 0% to 15%
-        BoundedInput("capex_ratio", base_capex_ratio, capex_ratio_std, 0.0, 0.25),  # 0% to 25%
-        BoundedInput("wc_ratio", base_wc_ratio, wc_ratio_std, -0.15, 0.30),  # -15% to +30%
-        BoundedInput("terminal_growth", base_terminal_growth, terminal_growth_std, 0.01, 0.05),  # 1% to 5%
+        BoundedInput("margin", base_margin, margin_std, -0.20, 0.50, fat_tails_df),  # -20% to +50%
+        BoundedInput("da_ratio", base_da_ratio, da_ratio_std, 0.0, 0.15, fat_tails_df),  # 0% to 15%
+        BoundedInput("capex_ratio", base_capex_ratio, capex_ratio_std, 0.0, 0.25, fat_tails_df),  # 0% to 25%
+        BoundedInput("wc_ratio", base_wc_ratio, wc_ratio_std, -0.15, 0.30, fat_tails_df),  # -15% to +30%
+        BoundedInput("terminal_growth", base_terminal_growth, terminal_growth_std, 0.01, 0.05, fat_tails_df),  # 1% to 5%
     ]
     
     # Add growth input only if NOT using multi-stage
     if not use_multi_stage:
-        core_inputs.insert(0, BoundedInput("growth", effective_base_growth, growth_std, -0.10, 0.50))
+        core_inputs.insert(0, BoundedInput("growth", effective_base_growth, growth_std, -0.10, 0.50, fat_tails_df))
     
     # Add discount input only if NOT using WACC components at all.
     # When WACC components are provided (even without sampling std devs),
     # use the computed WACC directly, don't sample discount rate.
     if not wacc_sampling_enabled:
-        core_inputs.append(BoundedInput("discount", effective_discount_rate, discount_std, 0.04, 0.25))
+        core_inputs.append(BoundedInput("discount", effective_discount_rate, discount_std, 0.04, 0.25, fat_tails_df))
     
     # Build correlation matrix for core inputs
     n = len(core_inputs)

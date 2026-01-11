@@ -288,6 +288,13 @@ class FullMonteCarloRequest(BaseModel):
     
     # NEW: Mid-year discounting
     use_mid_year_discounting: bool = False
+    
+    # NEW: Fat tails (Student's t-distribution)
+    # Markets don't follow Normal distribution - extreme events happen more often
+    # - None → Normal distribution (traditional Monte Carlo)
+    # - 3-5 → Moderate fat tails (recommended for finance)
+    # - 1-2 → Very fat tails (models rare crashes)
+    fat_tails_df: Optional[float] = Field(default=None, ge=1.0, le=100.0)
 
 
 class CapitalEfficiencyRequest(BaseModel):
