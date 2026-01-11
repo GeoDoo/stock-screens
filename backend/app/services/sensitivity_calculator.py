@@ -12,6 +12,10 @@ class SensitivityCalculator:
     
     Uses the full institutional equity bridge for consistency with
     the main valuation service.
+    
+    P0 Fix: Now uses actual FCF component ratios (da_ratio, capex_ratio, wc_ratio)
+    instead of hardcoded 0.80 conversion factor, ensuring mathematical parity
+    with FCFProjector used in main valuation.
     """
     projected_fcfs: List[float]
     projection_years: int
@@ -23,6 +27,12 @@ class SensitivityCalculator:
     preferred_stock: float = 0.0
     deferred_tax_assets: float = 0.0
     pension_deficit: float = 0.0
+    # FCF component ratios (for margin/growth matrix - matches FCFProjector)
+    da_ratio: float = 0.05       # D&A as % of revenue
+    capex_ratio: float = 0.08    # CapEx as % of revenue
+    wc_ratio: float = 0.10       # Working capital as % of revenue
+    tax_rate: float = 0.25       # Corporate tax rate
+    wc_mode: str = "incremental" # "level" or "incremental"
     
     def calculate_intrinsic_value(
         self, 
@@ -174,33 +184,56 @@ class SensitivityCalculator:
         """
         Calculate intrinsic value for a specific margin/growth combination.
         
-        Projects FCF based on revenue growth and operating margin,
-        then runs DCF to get equity value per share.
+        Projects FCF using the same formula as FCFProjector:
+        FCF = NOPAT + D&A - CapEx - ΔWC
+        
+        This ensures mathematical parity with the main valuation engine.
         """
         if discount_rate <= terminal_growth:
             return None
         
-        # Project revenues
+        # Project revenues year by year
         revenues = []
         revenue = base_revenue
         for _ in range(self.projection_years):
             revenue = revenue * (1 + growth)
             revenues.append(revenue)
         
-        # Calculate FCF from margin
-        # Simplified: FCF ≈ Revenue × Operating Margin × (1 - Tax Rate) × FCF Conversion
-        # Using typical assumptions: 25% tax, 80% FCF conversion from NOPAT
-        tax_rate = 0.25
-        fcf_conversion = 0.80  # Accounts for CapEx, WC changes
+        # Calculate FCF using actual component ratios (matches FCFProjector)
+        # FCF = NOPAT + D&A - CapEx - ΔWC
+        projected_fcfs = []
+        prev_wc = base_revenue * self.wc_ratio  # Starting working capital
         
-        projected_fcfs = [
-            rev * margin * (1 - tax_rate) * fcf_conversion
-            for rev in revenues
-        ]
+        for i, rev in enumerate(revenues):
+            # NOPAT = Revenue × Margin × (1 - Tax)
+            nopat = rev * margin * (1 - self.tax_rate)
+            
+            # D&A as % of revenue
+            da = rev * self.da_ratio
+            
+            # CapEx as % of revenue
+            capex = rev * self.capex_ratio
+            
+            # Working capital change
+            if self.wc_mode == "level":
+                # Level: WC = Revenue × ratio, ΔWC = WC[t] - WC[t-1]
+                current_wc = rev * self.wc_ratio
+                delta_wc = current_wc - prev_wc
+                prev_wc = current_wc
+            else:
+                # Incremental: ΔWC = ΔRevenue × ratio
+                if i == 0:
+                    delta_rev = rev - base_revenue
+                else:
+                    delta_rev = rev - revenues[i - 1]
+                delta_wc = delta_rev * self.wc_ratio
+            
+            # FCF = NOPAT + D&A - CapEx - ΔWC
+            fcf = nopat + da - capex - delta_wc
+            projected_fcfs.append(fcf)
         
-        if not projected_fcfs or all(fcf <= 0 for fcf in projected_fcfs):
-            # Still calculate even with negative FCF
-            pass
+        if not projected_fcfs:
+            return None
         
         # PV of projected FCFs
         pv_fcf = sum(
@@ -208,7 +241,7 @@ class SensitivityCalculator:
             for year, fcf in enumerate(projected_fcfs, start=1)
         )
         
-        # Terminal value
+        # Terminal value (Gordon Growth Model)
         final_fcf = projected_fcfs[-1]
         terminal_value = final_fcf * (1 + terminal_growth) / (discount_rate - terminal_growth)
         pv_terminal = terminal_value / ((1 + discount_rate) ** self.projection_years)
