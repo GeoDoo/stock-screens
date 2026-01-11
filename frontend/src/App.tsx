@@ -84,6 +84,18 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get('symbol')?.toUpperCase() || '';
   });
+  
+  // P2 Fix: Update URL when ticker changes (matches pattern for fundamentalPeriod)
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (ticker) {
+      url.searchParams.set('symbol', ticker);
+    } else {
+      url.searchParams.delete('symbol'); // Don't clutter URL with empty symbol
+    }
+    window.history.replaceState({}, '', url.toString());
+  }, [ticker]);
+  
   const [result, setResult] = useState<ValuationResult | null>(null);
   
   // User inputs
@@ -212,11 +224,6 @@ export default function App() {
         if (actualProvider !== selectedFundamentalProvider) {
           setSelectedFundamentalProvider(actualProvider);
         }
-        
-        // P2 Fix: Update URL with symbol for shareable links
-        const url = new URL(window.location.href);
-        url.searchParams.set('symbol', symbol);
-        window.history.replaceState({}, '', url.toString());
         
         // Pre-fill inputs with hints (prefer TTM if available, else annual)
         const hintsToUse = stockResponse.hints_ttm || stockResponse.hints_annual;
