@@ -153,6 +153,13 @@ export interface TerminalValueCheck {
   method_divergence_warning?: string;  // Gordon vs Exit Multiple divergence warning
 }
 
+// Value driver impact - shows which inputs have the largest effect on intrinsic value
+export interface ValueDriver {
+  input: 'discount_rate' | 'terminal_growth' | 'revenue_growth' | 'operating_margin';
+  impact_percent: number;  // Percentage change in value from ±10% input change
+  description: string;     // Human-readable description of the sensitivity
+}
+
 export interface ValuationResult {
   symbol: string;
   intrinsic_value_per_share: number;
@@ -178,6 +185,7 @@ export interface ValuationResult {
   inputs: Record<string, unknown>;
   sensitivity: SensitivityMatrix;
   terminal_value_check?: TerminalValueCheck;  // Exit Multiple cross-check and dominance warnings
+  value_drivers?: ValueDriver[];  // Ranked list of inputs by impact on valuation
 }
 
 // Scenario Analysis Types
