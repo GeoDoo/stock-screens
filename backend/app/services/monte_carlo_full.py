@@ -391,14 +391,16 @@ def run_full_monte_carlo(
                 "beta",
                 wacc_components["beta"],
                 beta_std,
-                0.2, 3.0  # Reasonable beta range
+                0.2, 3.0,  # Reasonable beta range
+                fat_tails_df,  # Consistent with other inputs
             )
         if mrp_std > 0:
             wacc_inputs["mrp"] = BoundedInput(
                 "mrp",
                 wacc_components["market_risk_premium"],
                 mrp_std,
-                0.03, 0.10  # 3% to 10% MRP range
+                0.03, 0.10,  # 3% to 10% MRP range
+                fat_tails_df,  # Consistent with other inputs
             )
     
     if effective_discount_rate is None:
