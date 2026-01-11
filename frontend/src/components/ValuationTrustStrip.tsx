@@ -59,15 +59,23 @@ export function ValuationTrustStrip({ result, period, provenance }: ValuationTru
   if (dilutionApplied) {
     sharesValue += ` +${(dilutionRate * 100).toFixed(1)}%/yr`;
   }
+  // Determine tooltip based on shares type (handle unknown case explicitly)
+  let sharesTooltip: string;
+  if (sharesType === 'basic') {
+    sharesTooltip = 'Using basic shares (diluted not available) - may overstate per-share value';
+  } else if (sharesType === 'diluted') {
+    sharesTooltip = dilutionApplied 
+      ? `Using diluted shares with ${(dilutionRate * 100).toFixed(1)}% annual SBC dilution`
+      : 'Using fully diluted shares outstanding';
+  } else {
+    sharesTooltip = 'Shares type unknown - verify data source';
+  }
+  
   items.push({
     label: 'Shares',
     value: sharesValue,
-    type: sharesType === 'basic' ? 'warning' : 'info',
-    tooltip: sharesType === 'basic' 
-      ? 'Using basic shares (diluted not available) - may overstate per-share value'
-      : dilutionApplied 
-        ? `Using diluted shares with ${(dilutionRate * 100).toFixed(1)}% annual SBC dilution`
-        : 'Using fully diluted shares outstanding',
+    type: sharesType === 'basic' || sharesType === 'unknown' ? 'warning' : 'info',
+    tooltip: sharesTooltip,
   });
   
   // 4. Terminal value dominance

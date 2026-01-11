@@ -159,4 +159,15 @@ describe('ValuationTrustStrip', () => {
     );
     expect(screen.queryByText('Has Fallbacks')).not.toBeInTheDocument();
   });
+
+  it('shows unknown shares type with warning styling when shares_type is undefined', () => {
+    const result = createMockResult();
+    result.inputs.shares_type = undefined;
+    result.inputs.annual_dilution_rate = 0;
+    render(<ValuationTrustStrip result={result} period="ttm" />);
+    expect(screen.getByText('Unknown')).toBeInTheDocument();
+    // Should have warning styling (amber) since type is unknown
+    const sharesBadge = screen.getByText('Unknown').closest('span');
+    expect(sharesBadge?.className).toContain('amber');
+  });
 });
