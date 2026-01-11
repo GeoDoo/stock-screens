@@ -1089,6 +1089,14 @@ async def batch_analyze(symbol: str, provider: str):
                     "totalCurrentAssets": ttm_financials.current_assets,
                     "totalCurrentLiabilities": ttm_financials.current_liabilities,
                 }],
+                # P0 Fix: Include cash_flow for accurate EBITDA and SBC metrics
+                "cash_flow": [{
+                    "depreciationAndAmortization": ttm_financials.depreciation_amortization,
+                    "operatingCashFlow": ttm_financials.operating_cash_flow,
+                    "freeCashFlow": ttm_financials.free_cash_flow,
+                    "stockBasedCompensation": ttm_financials.stock_based_compensation,
+                    "dividendsPaid": ttm_financials.dividends_paid,
+                }],
             }
             ttm_ratios = ratio_calculator.calculate(ttm_data)
             
