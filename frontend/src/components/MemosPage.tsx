@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { InvestmentMemo } from '../types';
 import { Layout } from './Layout';
-
-import { API_BASE } from '../config';
+import { fetchMemos as fetchMemosApi } from '../api';
 
 export function MemosPage() {
   const [memos, setMemos] = useState<InvestmentMemo[]>([]);
@@ -11,11 +10,10 @@ export function MemosPage() {
   const [filter, setFilter] = useState<'all' | 'active' | 'closed'>('all');
 
   useEffect(() => {
-    const fetchMemos = async () => {
+    const loadMemos = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/memos`);
-        if (!response.ok) throw new Error('Failed to fetch memos');
-        const data = await response.json();
+        // P2 Fix: Use centralized API instead of raw fetch
+        const data = await fetchMemosApi();
         setMemos(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error loading memos');
@@ -23,7 +21,7 @@ export function MemosPage() {
         setLoading(false);
       }
     };
-    fetchMemos();
+    loadMemos();
   }, []);
 
   const filteredMemos = memos.filter(memo => {

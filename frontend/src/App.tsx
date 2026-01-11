@@ -24,6 +24,7 @@ import { ValueDrivers } from './components/ValueDrivers';
 import { VolumeSignals } from './components/VolumeSignals';
 
 import { API_BASE } from './config';
+import { createMemo } from './api';
 
 // Format seconds into human-readable time (e.g., "5m 30s" or "2h 15m")
 function formatResetTime(seconds: number | null): string {
@@ -437,17 +438,9 @@ export default function App() {
   };
 
   // Memo handlers
-  const handleSaveMemo = async (memo: CreateMemoRequest) => {
-    const res = await fetch(`${API_BASE}/api/memos`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(memo),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Failed to save memo');
-    }
-    return res.json();
+  // P2 Fix: Use centralized API instead of raw fetch
+  const handleSaveMemo = async (memo: CreateMemoRequest): Promise<void> => {
+    await createMemo(memo);
   };
 
   // Auto-run technical analysis when switching to Technical tab or changing provider
