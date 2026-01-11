@@ -146,32 +146,43 @@ export function FinancialRatiosTable({ ratios }: Props) {
       </div>
 
       {/* Risk Metrics (institutional-grade) */}
-      {ratios.risk && (ratios.risk.altman_z_score != null || ratios.risk.beneish_m_score != null || ratios.risk.accrual_ratio != null) && (
+      {/* P1.2: Show "N/A (Financial)" for financial companies where Z-Score/M-Score don't apply */}
+      {ratios.risk && (ratios.risk.altman_z_score != null || ratios.risk.beneish_m_score != null || ratios.risk.accrual_ratio != null || ratios.risk.z_score_zone === 'not_applicable') && (
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-600 mb-4">Risk Analysis</h3>
           <table className="w-full">
             <tbody>
-              {ratios.risk.altman_z_score != null && (
+              {/* Z-Score: Show value or N/A for financials */}
+              {(ratios.risk.altman_z_score != null || ratios.risk.z_score_zone === 'not_applicable') && (
                 <tr className="border-b border-gray-100">
                   <td className="py-2 text-sm text-gray-500">Altman Z-Score<GlossaryRef id="altman-z-score" /></td>
                   <td className="py-2 text-sm font-mono font-medium text-right">
-                    <span className={
-                      ratios.risk.z_score_zone === 'safe' ? 'text-green-600' :
-                      ratios.risk.z_score_zone === 'distress' ? 'text-red-600' :
-                      'text-amber-600'
-                    }>
-                      {formatNumber(ratios.risk.altman_z_score)}
-                    </span>
+                    {ratios.risk.z_score_zone === 'not_applicable' ? (
+                      <span className="text-gray-400" title="Z-Score not applicable to financial companies (banks, insurers)">N/A (Financial)</span>
+                    ) : (
+                      <span className={
+                        ratios.risk.z_score_zone === 'safe' ? 'text-green-600' :
+                        ratios.risk.z_score_zone === 'distress' ? 'text-red-600' :
+                        'text-amber-600'
+                      }>
+                        {formatNumber(ratios.risk.altman_z_score)}
+                      </span>
+                    )}
                   </td>
                 </tr>
               )}
-              {ratios.risk.beneish_m_score != null && (
+              {/* M-Score: Show value or N/A for financials */}
+              {(ratios.risk.beneish_m_score != null || ratios.risk.m_score_zone === 'not_applicable') && (
                 <tr className="border-b border-gray-100">
                   <td className="py-2 text-sm text-gray-500">Beneish M-Score<GlossaryRef id="beneish-m-score" /></td>
                   <td className="py-2 text-sm font-mono font-medium text-right">
-                    <span className={ratios.risk.m_score_zone === 'high_risk' ? 'text-red-600' : 'text-green-600'}>
-                      {formatNumber(ratios.risk.beneish_m_score)}
-                    </span>
+                    {ratios.risk.m_score_zone === 'not_applicable' ? (
+                      <span className="text-gray-400" title="M-Score not applicable to financial companies (banks, insurers)">N/A (Financial)</span>
+                    ) : (
+                      <span className={ratios.risk.m_score_zone === 'high_risk' ? 'text-red-600' : 'text-green-600'}>
+                        {formatNumber(ratios.risk.beneish_m_score)}
+                      </span>
+                    )}
                   </td>
                 </tr>
               )}

@@ -2003,3 +2003,209 @@ class TestTotalShareholderYield:
         # (dividend_yield is calculated from price * shares, not market_cap)
         assert ratios.dividend.total_shareholder_yield is not None
 
+
+class TestRiskMetricsGating:
+    """
+    P1.2 (NOTES.md): Risk metrics applicability gating.
+    
+    Altman Z-Score and Beneish M-Score are not applicable to financial companies
+    (banks, insurers, REITs) because:
+    - Z-Score: Financial companies have different asset structures (no inventory, 
+      different WC concepts, leverage is core business)
+    - M-Score: Revenue recognition differs (interest income vs product sales)
+    
+    For these sectors, return "not_applicable" instead of computing misleading values.
+    """
+    
+    @pytest.fixture
+    def bank_data(self):
+        """Bank with Financial Services sector."""
+        return {
+            "profile": {
+                "price": 50.0,
+                "marketCap": 200_000_000_000,
+                "sharesOutstanding": 4_000_000_000,
+                "sector": "Financial Services",
+                "industry": "Banks—Regional",
+            },
+            "income_statement": [{
+                "revenue": 50_000_000_000,
+                "grossProfit": 30_000_000_000,
+                "operatingIncome": 15_000_000_000,
+                "netIncome": 12_000_000_000,
+                "incomeBeforeTax": 15_000_000_000,
+            }, {
+                "revenue": 45_000_000_000,
+                "grossProfit": 27_000_000_000,
+                "operatingIncome": 13_000_000_000,
+                "netIncome": 10_000_000_000,
+                "incomeBeforeTax": 13_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalAssets": 500_000_000_000,
+                "totalCurrentAssets": 100_000_000_000,
+                "totalCurrentLiabilities": 400_000_000_000,
+                "totalLiabilities": 450_000_000_000,
+                "totalStockholdersEquity": 50_000_000_000,
+                "retainedEarnings": 30_000_000_000,
+            }, {
+                "totalAssets": 480_000_000_000,
+                "totalCurrentAssets": 95_000_000_000,
+                "totalCurrentLiabilities": 385_000_000_000,
+                "totalLiabilities": 435_000_000_000,
+                "totalStockholdersEquity": 45_000_000_000,
+            }],
+            "cash_flow": [{
+                "operatingCashFlow": 20_000_000_000,
+                "depreciationAndAmortization": 2_000_000_000,
+            }],
+        }
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_z_score_not_applicable_for_banks(self, calculator, bank_data):
+        """
+        Altman Z-Score should return 'not_applicable' for banks.
+        
+        Banks have fundamentally different capital structures:
+        - High leverage is normal (10:1 to 20:1)
+        - Working capital concepts don't apply
+        - No inventory
+        """
+        ratios = calculator.calculate(bank_data)
+        
+        assert ratios.risk.z_score_zone == "not_applicable", (
+            "Z-Score zone should be 'not_applicable' for Financial Services sector"
+        )
+        # Z-Score value itself should be None (not calculated)
+        assert ratios.risk.altman_z_score is None, (
+            "Z-Score should not be calculated for banks - it would be misleading"
+        )
+    
+    def test_m_score_not_applicable_for_banks(self, calculator, bank_data):
+        """
+        Beneish M-Score should return 'not_applicable' for banks.
+        
+        Revenue recognition for banks differs fundamentally:
+        - Interest income vs product sales
+        - Different accrual patterns
+        """
+        ratios = calculator.calculate(bank_data)
+        
+        assert ratios.risk.manipulation_risk == "not_applicable", (
+            "M-Score risk should be 'not_applicable' for Financial Services sector"
+        )
+        assert ratios.risk.beneish_m_score is None, (
+            "M-Score should not be calculated for banks"
+        )
+    
+    def test_accrual_ratio_still_calculated_for_banks(self, calculator, bank_data):
+        """
+        Accrual Ratio CAN still be calculated for banks.
+        
+        Net Income vs Operating Cash Flow comparison is valid across sectors.
+        """
+        ratios = calculator.calculate(bank_data)
+        
+        # Accrual ratio should still be calculated
+        assert ratios.risk.accrual_ratio is not None, (
+            "Accrual ratio is valid for all sectors including financials"
+        )
+        assert ratios.risk.accrual_quality is not None
+    
+    def test_non_financial_sector_gets_z_score(self, calculator):
+        """
+        Non-financial sectors should still get Z-Score calculated.
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,
+                "sharesOutstanding": 1_000_000_000,
+                "sector": "Technology",  # Non-financial
+                "industry": "Software—Application",
+            },
+            "income_statement": [{
+                "revenue": 50_000_000_000,
+                "operatingIncome": 15_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalAssets": 80_000_000_000,
+                "totalCurrentAssets": 40_000_000_000,
+                "totalCurrentLiabilities": 20_000_000_000,
+                "totalLiabilities": 30_000_000_000,
+                "totalStockholdersEquity": 50_000_000_000,
+                "retainedEarnings": 30_000_000_000,
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Z-Score should be calculated for tech companies
+        assert ratios.risk.altman_z_score is not None
+        assert ratios.risk.z_score_zone in ["safe", "grey", "distress"]
+    
+    def test_insurance_sector_also_gated(self, calculator):
+        """
+        Insurance companies (Financial Services) should also be gated.
+        """
+        data = {
+            "profile": {
+                "price": 80.0,
+                "marketCap": 150_000_000_000,
+                "sector": "Financial Services",
+                "industry": "Insurance—Life",
+            },
+            "income_statement": [{
+                "revenue": 40_000_000_000,
+                "operatingIncome": 8_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalAssets": 300_000_000_000,
+                "totalCurrentAssets": 50_000_000_000,
+                "totalCurrentLiabilities": 200_000_000_000,
+                "totalLiabilities": 270_000_000_000,
+                "totalStockholdersEquity": 30_000_000_000,
+                "retainedEarnings": 15_000_000_000,
+            }],
+            "cash_flow": [{
+                "operatingCashFlow": 10_000_000_000,
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.risk.z_score_zone == "not_applicable"
+        assert ratios.risk.manipulation_risk == "not_applicable"
+    
+    def test_missing_sector_defaults_to_calculating(self, calculator):
+        """
+        If sector is not provided, calculate metrics normally.
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,
+                # No sector specified
+            },
+            "income_statement": [{
+                "revenue": 50_000_000_000,
+                "operatingIncome": 15_000_000_000,
+            }],
+            "balance_sheet": [{
+                "totalAssets": 80_000_000_000,
+                "totalCurrentAssets": 40_000_000_000,
+                "totalCurrentLiabilities": 20_000_000_000,
+                "totalLiabilities": 30_000_000_000,
+                "retainedEarnings": 20_000_000_000,
+            }],
+            "cash_flow": [{}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Should calculate Z-Score (sector unknown, default to calculating)
+        assert ratios.risk.altman_z_score is not None
