@@ -115,7 +115,8 @@ export function ValuationTrustStrip({
   }
   
   // 6. Data freshness (NOTES2.md enhancement)
-  if (dataFreshnessDays !== undefined) {
+  // Use != null to check for both null and undefined (backend may return null for unparseable dates)
+  if (dataFreshnessDays != null) {
     const freshValue = dataIsStale 
       ? `${dataFreshnessDays}d old ⚠️` 
       : `${dataFreshnessDays}d ago`;
