@@ -108,7 +108,8 @@ class TestStockEndpoint:
             assert "industry" in result
             assert "sector" in result
             assert "data" in result
-            assert "hints" in result
+            assert "hints_annual" in result  # P0 Fix: use hints_annual not hints
+            assert "hints_ttm" in result  # P0 Fix: include hints_ttm for consistency
             assert "validation" in result
             
             # Check data (read-only from provider)
@@ -120,9 +121,9 @@ class TestStockEndpoint:
             assert result["data"]["market_cap"] == 3000000000000
             assert result["data"]["risk_free_rate"] == 0.045
             
-            # Check hints (calculated from historical)
-            assert "revenue_growth" in result["hints"]
-            assert "operating_margin" in result["hints"]
+            # Check hints_annual (calculated from historical)
+            assert "revenue_growth" in result["hints_annual"]
+            assert "operating_margin" in result["hints_annual"]
             
             # Check validation
             assert "has_errors" in result["validation"]
