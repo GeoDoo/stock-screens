@@ -518,6 +518,12 @@ export interface FinancialRatiosPeriod {
     fcf_adjusted: number | null;
     sbc_percent_revenue: number | null;
     sbc_level: 'normal' | 'elevated' | 'high' | null;
+    // NOTES2.md P0: Net Buyback Efficiency (Defensive Buyback Detection)
+    // Ratio = SBC Expense / Cash Spent on Buybacks
+    // > 1.0: Dilutive (SBC exceeds buybacks - value trap)
+    // < 1.0: Accretive (buybacks exceed SBC - genuine value return)
+    net_buyback_efficiency?: number | null;
+    is_defensive_buyback?: boolean | null;
   };
 }
 
