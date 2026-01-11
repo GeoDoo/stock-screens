@@ -20,6 +20,7 @@ import { MonteCarloPanel } from './components/MonteCarloPanel';
 import { MultiStageGrowth } from './components/MultiStageGrowth';
 import { ProvenanceDisplay } from './components/ProvenanceBadge';
 import { SensitivityMatrixPanel } from './components/SensitivityMatrixPanel';
+import { ValueDrivers } from './components/ValueDrivers';
 import { VolumeSignals } from './components/VolumeSignals';
 
 import { API_BASE } from './config';
@@ -1694,6 +1695,13 @@ export default function App() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Value Drivers - Key Sensitivity Summary */}
+            {result.value_drivers && result.value_drivers.length > 0 && (
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
+                <ValueDrivers drivers={result.value_drivers} />
               </div>
             )}
 
