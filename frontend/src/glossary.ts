@@ -562,6 +562,13 @@ export const glossaryTerms: GlossaryTerm[] = [
     definition: "The sum of Dividend Yield and Buyback Yield. Captures the true 'cash return' to shareholders. Many modern companies return more via buybacks than dividends, making dividend yield alone misleading. A TSY > 4% often indicates strong shareholder returns.",
     investopediaUrl: "https://www.investopedia.com/terms/s/shareholderyield.asp",
   },
+  {
+    id: "ceo-efficiency",
+    term: "CEO Efficiency",
+    fullName: "Incremental ROIC vs WACC Spread",
+    definition: "Compares Incremental Return on Invested Capital to Weighted Average Cost of Capital. If Inc. ROIC > WACC, management creates value with new investments. If Inc. ROIC < WACC, growth destroys value — every dollar of new capital earns less than its cost. A negative spread means the CEO is actively burning shareholder capital by pursuing growth.",
+    investopediaUrl: "https://www.investopedia.com/terms/r/returnoninvestmentcapital.asp",
+  },
 ];
 
 // Create a lookup map for quick access by ID
