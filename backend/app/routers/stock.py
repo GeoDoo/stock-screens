@@ -634,6 +634,8 @@ async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
         ] if result.currency_conversions else None,
         # P1.3: Top-level warning if any FX rates were approximate
         "fx_rates_approximate": result.fx_rates_approximate,
+        # P2 #8: Business-type valuation notes for financials/cyclicals
+        "valuation_notes": result.valuation_notes,
     }
 
 

@@ -68,6 +68,12 @@ class ComparableResult:
     currency_conversions: Optional[List[CurrencyConversion]] = None  # Peers that needed conversion
     # P1.3: Warn if any FX rates were approximate
     fx_rates_approximate: bool = False  # True if any peer used approximate FX rates
+    # P2 #8: Business-type valuation notes for financials/cyclicals
+    valuation_notes: List[str] = None  # type: ignore  # Notes about metric applicability
+    
+    def __post_init__(self):
+        if self.valuation_notes is None:
+            self.valuation_notes = []
 
 
 class ComparableAnalyzer:
@@ -300,6 +306,9 @@ class ComparableAnalyzer:
         if average_implied and target.price:
             average_upside = ((average_implied - target.price) / target.price) * 100
         
+        # P2 #8: Get business-type specific valuation notes
+        valuation_notes = self._get_valuation_notes(sector, industry)
+        
         return ComparableResult(
             target=target,
             peers=peers,
@@ -313,6 +322,8 @@ class ComparableAnalyzer:
             currency_conversions=currency_conversions if currency_conversions else None,
             # P1.3: Mark if any conversions used approximate rates
             fx_rates_approximate=any(c.is_approximate for c in currency_conversions) if currency_conversions else False,
+            # P2 #8: Business-type valuation notes
+            valuation_notes=valuation_notes,
         )
     
     async def _get_exchange_rates(self, currencies: List[str]) -> dict:
@@ -592,6 +603,78 @@ class ComparableAnalyzer:
             "price_to_book": safe_median([p.price_to_book for p in peers]),
             "ev_to_revenue": safe_median([p.ev_to_revenue for p in peers]),
         }
+    
+    # P2 #8: Financial sectors/industries where EV/EBITDA is less meaningful
+    FINANCIAL_SECTORS = {"Financial Services", "Financials", "Financial"}
+    FINANCIAL_INDUSTRIES = {
+        "Banks—Regional", "Banks—Diversified", "Banks - Regional", "Banks - Diversified",
+        "Insurance—Life", "Insurance—Property & Casualty", "Insurance—Diversified",
+        "Insurance - Life", "Insurance - Property & Casualty", "Insurance - Diversified",
+        "Insurance—Reinsurance", "Insurance - Reinsurance",
+        "Asset Management", "Capital Markets",
+        "Credit Services", "Mortgage Finance",
+    }
+    
+    # P2 #8: Cyclical sectors/industries where current multiples may be misleading
+    CYCLICAL_SECTORS = {"Energy", "Basic Materials"}
+    CYCLICAL_INDUSTRIES = {
+        "Oil & Gas E&P", "Oil & Gas Integrated", "Oil & Gas Midstream",
+        "Oil & Gas Refining & Marketing", "Oil & Gas Equipment & Services",
+        "Gold", "Silver", "Copper", "Steel", "Aluminum",
+        "Coal", "Uranium", "Industrial Metals & Minerals",
+        "Agricultural Inputs", "Lumber & Wood Production",
+    }
+    
+    def _get_valuation_notes(self, sector: str, industry: str) -> List[str]:
+        """
+        Get business-type specific notes about valuation metrics.
+        
+        P2 #8: For financial and cyclical companies, certain valuation
+        metrics may be less meaningful or require special interpretation.
+        
+        Args:
+            sector: Company sector
+            industry: Company industry
+            
+        Returns:
+            List of valuation notes/warnings
+        """
+        notes = []
+        
+        # Normalize industry name (hyphen vs em-dash)
+        normalized_industry = industry.replace("-", "—") if industry else ""
+        
+        # Financial company check
+        is_financial = (
+            (sector and sector in self.FINANCIAL_SECTORS) or
+            (industry and (industry in self.FINANCIAL_INDUSTRIES or 
+                          normalized_industry in self.FINANCIAL_INDUSTRIES))
+        )
+        
+        if is_financial:
+            notes.append(
+                "Financial services company: EV/EBITDA is less meaningful because "
+                "the balance sheet IS the product. Price/Book (P/B) is the primary "
+                "valuation metric for banks and insurers. Consider using Dividend "
+                "Discount Model or Residual Income Model for DCF."
+            )
+        
+        # Cyclical company check
+        is_cyclical = (
+            (sector and sector in self.CYCLICAL_SECTORS) or
+            (industry and (industry in self.CYCLICAL_INDUSTRIES or
+                          normalized_industry in self.CYCLICAL_INDUSTRIES))
+        )
+        
+        if is_cyclical:
+            notes.append(
+                "Cyclical industry detected: Current multiples may be at cycle "
+                "peaks (low P/E due to high earnings) or troughs (high P/E due to "
+                "depressed earnings). Consider using mid-cycle normalized earnings "
+                "or 5-year average margins for more accurate valuation."
+            )
+        
+        return notes
     
     def _calculate_implied_valuations(
         self, 

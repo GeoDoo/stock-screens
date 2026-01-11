@@ -598,3 +598,111 @@ class TestCurrencyNormalization:
         assert result.fx_rates_approximate is True, (
             "ComparableResult should have fx_rates_approximate=True when any conversion is approximate"
         )
+
+
+class TestBusinessTypeGating:
+    """
+    P2 #8: Business-type gating for comparable analysis.
+    
+    For financial companies:
+    - EV/EBITDA is less meaningful (balance sheet IS the product)
+    - Price/Book should be the primary valuation metric
+    
+    For cyclical companies:
+    - Current multiples may be at cycle peaks/troughs
+    - Should note need for mid-cycle normalization
+    """
+    
+    def test_financial_company_adds_valuation_note(self):
+        """
+        Financial sector companies should get a note about P/B being preferred.
+        """
+        from app.services.comparable_analyzer import ComparableResult, CompanyMetrics
+        
+        # ComparableResult should have a valuation_notes field
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        # Create a mock target in Financial Services sector
+        target = CompanyMetrics(
+            symbol="JPM",
+            name="JPMorgan Chase",
+            price=180.0,
+            market_cap=500_000_000_000,
+            ev_to_ebitda=None,  # Often not meaningful for banks
+            price_to_book=1.5,
+            currency="USD",
+        )
+        
+        # Get valuation notes for a financial company
+        notes = analyzer._get_valuation_notes(
+            sector="Financial Services",
+            industry="Banks—Diversified"
+        )
+        
+        assert len(notes) >= 1, "Financial companies should have valuation notes"
+        assert any("P/B" in note or "Price/Book" in note for note in notes), (
+            "Financial companies should have a note recommending P/B as primary metric"
+        )
+        assert any("EV/EBITDA" in note or "enterprise value" in note.lower() for note in notes), (
+            "Financial companies should have a note about EV/EBITDA being less meaningful"
+        )
+    
+    def test_cyclical_company_adds_valuation_note(self):
+        """
+        Cyclical sector companies should get a note about mid-cycle normalization.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        notes = analyzer._get_valuation_notes(
+            sector="Energy",
+            industry="Oil & Gas E&P"
+        )
+        
+        assert len(notes) >= 1, "Cyclical companies should have valuation notes"
+        assert any("cycle" in note.lower() or "cyclical" in note.lower() for note in notes), (
+            "Cyclical companies should have a note about cycle-adjusted multiples"
+        )
+    
+    def test_normal_company_no_special_notes(self):
+        """
+        Non-financial, non-cyclical companies should have no special valuation notes.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        notes = analyzer._get_valuation_notes(
+            sector="Technology",
+            industry="Software—Application"
+        )
+        
+        # Tech company should not have financial or cyclical warnings
+        assert not any("P/B" in note and "financial" in note.lower() for note in notes), (
+            "Tech companies should not get financial sector notes"
+        )
+        assert not any("cyclical" in note.lower() for note in notes), (
+            "Software companies should not get cyclical notes"
+        )
+    
+    def test_comparable_result_includes_valuation_notes(self):
+        """
+        ComparableResult should include valuation_notes field.
+        """
+        from app.services.comparable_analyzer import ComparableResult
+        
+        # Verify the field exists
+        result = ComparableResult(
+            target=None,  # type: ignore
+            peers=[],
+            sector="Financial Services",
+            industry="Banks—Diversified",
+            peer_medians={},
+            implied_valuations=[],
+            average_implied_price=None,
+            average_upside=None,
+            valuation_notes=["P/B is preferred for financial companies"],
+        )
+        
+        assert hasattr(result, "valuation_notes"), "ComparableResult should have valuation_notes field"
+        assert len(result.valuation_notes) > 0, "Financial sector should have notes"

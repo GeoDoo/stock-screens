@@ -317,6 +317,8 @@ export interface ComparableResult {
   base_currency?: string;  // Currency all values are normalized to (target's currency)
   currency_conversions?: CurrencyConversion[] | null;  // Peers that required currency conversion
   fx_rates_approximate?: boolean;  // P1.3: True if any FX rates were approximate
+  // P2 #8: Business-type valuation notes for financials/cyclicals
+  valuation_notes?: string[];  // Notes about metric applicability for this business type
 }
 
 // Technical Analysis Types
