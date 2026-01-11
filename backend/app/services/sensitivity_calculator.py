@@ -32,7 +32,7 @@ class SensitivityCalculator:
     capex_ratio: float = 0.08    # CapEx as % of revenue
     wc_ratio: float = 0.10       # Working capital as % of revenue
     tax_rate: float = 0.25       # Corporate tax rate
-    wc_mode: str = "incremental" # "level" or "incremental"
+    wc_mode: str = "level"       # "level" or "incremental" (matches FCFProjector default)
     
     def calculate_intrinsic_value(
         self, 
