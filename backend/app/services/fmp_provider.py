@@ -49,10 +49,20 @@ class FMPProvider(StockDataProvider):
         # NOTES2.md IV.1: Use shared client if available, else create per-request
         if self._client is not None:
             response = await self._client.get(url, params=params)
+            return self._process_response(response)
         else:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, params=params)
+                # Process response INSIDE context to avoid accessing closed connection
+                return self._process_response(response)
+    
+    def _process_response(self, response: httpx.Response) -> Any:
+        """
+        Process HTTP response: check for errors and parse JSON.
         
+        Must be called while the client connection is still open
+        (inside async with block for per-request clients).
+        """
         # Check for subscription/premium-only responses (FMP returns 200 with text)
         content_type = response.headers.get("content-type", "")
         if response.status_code == 200 and "application/json" not in content_type:
