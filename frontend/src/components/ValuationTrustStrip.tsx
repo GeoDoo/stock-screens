@@ -9,6 +9,7 @@
  * - Shares basis (Diluted vs Basic, plus dilution rate if applied)
  * - Terminal value dominance (% of EV from terminal value)
  * - Provenance flags (any fallback/synthetic data sources)
+ * - Data freshness (NOTES2.md: flag stale data >120 days)
  */
 
 import type { ValuationResult, DataProvenance } from '../types';
@@ -17,6 +18,9 @@ interface ValuationTrustStripProps {
   result: ValuationResult;
   period: 'ttm' | 'annual';
   provenance?: DataProvenance;
+  dataFreshnessDays?: number;
+  dataIsStale?: boolean;
+  latestStatementDate?: string;
 }
 
 interface TrustItem {
@@ -26,7 +30,14 @@ interface TrustItem {
   tooltip?: string;
 }
 
-export function ValuationTrustStrip({ result, period, provenance }: ValuationTrustStripProps) {
+export function ValuationTrustStrip({ 
+  result, 
+  period, 
+  provenance,
+  dataFreshnessDays,
+  dataIsStale,
+  latestStatementDate,
+}: ValuationTrustStripProps) {
   const items: TrustItem[] = [];
   
   // 1. Period used
@@ -100,6 +111,21 @@ export function ValuationTrustStrip({ result, period, provenance }: ValuationTru
       value: 'Has Fallbacks',
       type: 'warning',
       tooltip: 'Some metrics use fallback values - check provenance details below',
+    });
+  }
+  
+  // 6. Data freshness (NOTES2.md enhancement)
+  if (dataFreshnessDays !== undefined) {
+    const freshValue = dataIsStale 
+      ? `${dataFreshnessDays}d old ⚠️` 
+      : `${dataFreshnessDays}d ago`;
+    items.push({
+      label: 'Data Age',
+      value: freshValue,
+      type: dataIsStale ? 'warning' : 'info',
+      tooltip: dataIsStale 
+        ? `Data is ${dataFreshnessDays} days old (last: ${latestStatementDate}). Post-earnings update may be required for accurate valuation.`
+        : `Latest financial statement from ${latestStatementDate} (${dataFreshnessDays} days ago)`,
     });
   }
   

@@ -641,7 +641,10 @@ GET /api/stock/{symbol}
       "description": "string",
       "confidence": "string"
     }
-  }
+  },
+  "latest_statement_date": "string",
+  "data_freshness_days": 0,
+  "data_is_stale": true
 }
 ```
 
