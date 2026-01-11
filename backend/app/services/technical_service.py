@@ -116,6 +116,10 @@ class TechnicalService:
         obv_values = TechnicalIndicators.obv(closes, volumes)
         mfi_14_values = TechnicalIndicators.mfi(highs, lows, closes, volumes, period=14)
         
+        # NEW: Momentum Bridge - 200-day VWMA for long-term trend
+        # Only calculate if we have enough data (200+ days)
+        vwma_200_values = TechnicalIndicators.vwma(closes, volumes, period=200) if len(closes) >= 200 else []
+        
         # Analyze signals
         trend = TechnicalIndicators.analyze_trend(sma_20_values, sma_50_values, closes)
         rsi_signal = TechnicalIndicators.analyze_rsi(rsi_14_values)
@@ -125,6 +129,9 @@ class TechnicalService:
         # NEW: Enhanced volume signals
         mfi_signal = TechnicalIndicators.analyze_mfi(mfi_14_values)
         obv_trend_signal = TechnicalIndicators.obv_trend(obv_values, period=20)
+        
+        # NEW: Momentum Bridge trend analysis
+        vwma_trend_signal = TechnicalIndicators.analyze_vwma_trend(vwma_200_values, period=200)
         
         return TechnicalAnalysisResult(
             symbol=symbol.upper(),
@@ -151,4 +158,7 @@ class TechnicalService:
             mfi_14=to_indicator_values(mfi_14_values, bars),
             mfi_signal=mfi_signal,
             obv_trend=obv_trend_signal,
+            # NEW: Momentum Bridge (Value + Momentum convergence)
+            vwma_200=to_indicator_values(vwma_200_values, bars) if vwma_200_values else None,
+            vwma_trend=vwma_trend_signal,
         )
