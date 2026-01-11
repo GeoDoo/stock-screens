@@ -162,8 +162,32 @@ class DataExtractor:
         return self.profile.get("industry")
 
     def total_debt(self) -> Optional[float]:
-        """Total debt from balance sheet."""
-        return self._get_latest(self.balance_sheet, "totalDebt")
+        """
+        Total debt-like claims from balance sheet.
+        
+        P0 Fix (ASC 842): Since ASC 842 (2019), operating lease liabilities
+        are recognized on balance sheet as debt-like claims. For retailers,
+        airlines, etc. ignoring leases can understate debt by billions.
+        
+        Includes:
+        - totalDebt (traditional bank debt, bonds)
+        - capitalLeaseObligations (finance leases)
+        - operatingLeaseObligations (ASC 842 lease liabilities)
+        """
+        traditional_debt = self._get_latest(self.balance_sheet, "totalDebt") or 0
+        capital_leases = self._get_latest(self.balance_sheet, "capitalLeaseObligations") or 0
+        operating_leases = self._get_latest(self.balance_sheet, "operatingLeaseObligations") or 0
+        
+        total = traditional_debt + capital_leases + operating_leases
+        
+        # Return None only if we had no debt data at all
+        if traditional_debt == 0 and capital_leases == 0 and operating_leases == 0:
+            # Check if totalDebt was actually None vs 0
+            raw_debt = self._get_latest(self.balance_sheet, "totalDebt")
+            if raw_debt is None:
+                return None
+        
+        return total
 
     def total_equity(self) -> Optional[float]:
         """Total stockholders equity from balance sheet."""
