@@ -36,8 +36,9 @@ class BoundedInput:
     
     Fat tails (degrees_of_freedom):
     - None or very high → Normal distribution
-    - 3-5 → Moderate fat tails (recommended for finance)
-    - 1-2 → Very fat tails (extreme events more likely)
+    - 3-4 → Fat tails (recommended for finance - models crashes)
+    - 5-10 → Moderate fat tails
+    Note: df must be ≥ 3 for finite variance (math requirement)
     
     Student's t-distribution better models real market behavior where
     "1-in-100 year" crashes happen more often than Normal predicts.
@@ -70,12 +71,13 @@ class BoundedInput:
             # Scale to match desired std_dev
             # Standard t has variance df/(df-2), so std = sqrt(df/(df-2))
             # We want our target std_dev, so scale by std_dev / sqrt(df/(df-2))
+            # Note: df must be > 2 for finite variance (validated in schema)
             if df > 2:
                 scale = self.std_dev / math.sqrt(df / (df - 2))
             else:
-                # For df <= 2, variance is undefined/infinite
-                # Use std_dev directly as scale (will have very fat tails)
-                scale = self.std_dev
+                # Fallback for invalid df (should not happen with schema validation)
+                # Use Normal distribution as safe default
+                return random.gauss(self.mean, self.std_dev)
             
             return self.mean + scale * t_sample
     
@@ -337,8 +339,9 @@ def run_full_monte_carlo(
     # NEW: Fat tails (Student's t-distribution)
     # Markets don't follow Normal distribution - extreme events happen more often
     # - None → Normal distribution (traditional MC)
-    # - 3-5 → Moderate fat tails (recommended for finance)
-    # - 1-2 → Very fat tails (models rare crashes)
+    # - 3-4 → Fat tails (recommended for finance - models crashes)
+    # - 5-10 → Moderate fat tails
+    # Note: df must be ≥ 3 for finite variance (math requirement)
     fat_tails_df: Optional[float] = None,
 ) -> FullMonteCarloResult:
     """
