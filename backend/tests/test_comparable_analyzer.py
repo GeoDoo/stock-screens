@@ -1002,6 +1002,58 @@ class TestDynamicPeerDiscovery:
         assert peers == ["MSFT", "GOOGL"]
     
     @pytest.mark.asyncio
+    async def test_falls_back_when_api_returns_only_target(self):
+        """
+        Regression test: When FMP returns only the target symbol, fall back to hardcoded.
+        
+        Bug: Code checked `if peers:` before filtering, so ["AAPL"] passed the check,
+        was filtered to [], and returned empty instead of falling back.
+        """
+        mock_client = MagicMock()
+        # FMP returns only the target symbol (self-referencing)
+        mock_client.get_stock_peers = AsyncMock(return_value=["AAPL"])
+        
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        peers = await analyzer._get_peers_dynamic(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        
+        # Should fall back to hardcoded industry peers, NOT return empty
+        hardcoded = analyzer.INDUSTRY_PEERS.get("Consumer Electronics", [])
+        expected = [p for p in hardcoded if p != "AAPL"]
+        assert peers == expected, (
+            f"When FMP returns only target, should fall back to hardcoded. "
+            f"Got {peers}, expected {expected}"
+        )
+        assert len(peers) > 0, "Should have peers from fallback"
+    
+    @pytest.mark.asyncio
+    async def test_peer_selection_info_falls_back_when_only_target(self):
+        """
+        Regression test: _get_peers_with_source should also fall back when
+        API returns only the target symbol.
+        """
+        mock_client = MagicMock()
+        mock_client.get_stock_peers = AsyncMock(return_value=["AAPL"])
+        
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        peers, source = await analyzer._get_peers_with_source(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        
+        # Should fall back to industry, NOT return empty with "fmp_dynamic"
+        assert source == "industry", (
+            f"Source should be 'industry' (fallback), not '{source}'"
+        )
+        assert len(peers) > 0, "Should have peers from fallback"
+    
+    @pytest.mark.asyncio
     async def test_peer_selection_info_shows_dynamic_source(self):
         """
         When dynamic peers are used, peer_selection_info should indicate this.

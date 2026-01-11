@@ -478,8 +478,12 @@ class ComparableAnalyzer:
             try:
                 peers = await self.client.get_stock_peers(symbol_upper)
                 if peers:
-                    # Exclude target and return
-                    return [p for p in peers if p.upper() != symbol_upper]
+                    # Exclude target from peers list
+                    filtered = [p for p in peers if p.upper() != symbol_upper]
+                    # Only return if we have actual peers after filtering
+                    # (FMP sometimes returns only the target symbol)
+                    if filtered:
+                        return filtered
             except Exception:
                 pass  # Fall through to hardcoded
         
@@ -507,7 +511,10 @@ class ComparableAnalyzer:
                 peers = await self.client.get_stock_peers(symbol_upper)
                 if peers:
                     filtered = [p for p in peers if p.upper() != symbol_upper]
-                    return (filtered, "fmp_dynamic")
+                    # Only return if we have actual peers after filtering
+                    # (FMP sometimes returns only the target symbol)
+                    if filtered:
+                        return (filtered, "fmp_dynamic")
             except Exception:
                 pass
         
