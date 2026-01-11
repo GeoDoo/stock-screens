@@ -548,6 +548,20 @@ export const glossaryTerms: GlossaryTerm[] = [
     definition: "Combines intrinsic value (DCF) with momentum (200-day VWMA trend) for entry timing. A cheap stock in a downtrend is a 'falling knife' that often becomes 'dead money'. The bridge signals BUY only when value and momentum align: undervalued + (uptrend or flat). Signals WAIT when cheap but still falling.",
     investopediaUrl: "https://www.investopedia.com/articles/active-trading/052014/how-use-moving-average-buy-stocks.asp",
   },
+  {
+    id: "buyback-yield",
+    term: "Buyback Yield",
+    fullName: "Share Repurchase Yield",
+    definition: "Annual share repurchases divided by market cap. Represents capital returned to shareholders via stock buybacks. Positive = company buying back shares (reduces float, boosts EPS). Negative = company issuing shares (dilution). Modern tech companies often prefer buybacks over dividends for tax efficiency.",
+    investopediaUrl: "https://www.investopedia.com/terms/b/buyback.asp",
+  },
+  {
+    id: "total-shareholder-yield",
+    term: "Total Shareholder Yield",
+    fullName: "Dividend + Buyback Yield",
+    definition: "The sum of Dividend Yield and Buyback Yield. Captures the true 'cash return' to shareholders. Many modern companies return more via buybacks than dividends, making dividend yield alone misleading. A TSY > 4% often indicates strong shareholder returns.",
+    investopediaUrl: "https://www.investopedia.com/terms/s/shareholderyield.asp",
+  },
 ];
 
 // Create a lookup map for quick access by ID

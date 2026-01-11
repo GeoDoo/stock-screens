@@ -67,6 +67,7 @@ class FinancialStatement:
     depreciation_amortization: Optional[float] = None
     dividends_paid: Optional[float] = None
     stock_based_compensation: Optional[float] = None  # For SBC-adjusted FCF
+    share_repurchases: Optional[float] = None  # For Total Shareholder Yield (negative = buybacks)
 
 
 @dataclass

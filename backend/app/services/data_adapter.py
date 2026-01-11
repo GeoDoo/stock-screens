@@ -93,6 +93,7 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
             "depreciationAndAmortization": fin.depreciation_amortization,
             "dividendsPaid": fin.dividends_paid,
             "stockBasedCompensation": fin.stock_based_compensation,
+            "shareRepurchases": fin.share_repurchases,  # For Total Shareholder Yield
         })
     
     return {

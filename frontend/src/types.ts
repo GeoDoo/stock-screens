@@ -405,6 +405,9 @@ export interface FinancialRatiosPeriod {
   dividend?: {
     dividend_yield: number | null;
     payout_ratio: number | null;
+    // NEW: Total Shareholder Yield (Alpha Layer)
+    buyback_yield: number | null;  // Share Repurchases / Market Cap
+    total_shareholder_yield: number | null;  // Dividend Yield + Buyback Yield
   };
   profitability: {
     gross_margin: number | null;

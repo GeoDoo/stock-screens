@@ -151,6 +151,7 @@ class YahooProvider(StockDataProvider):
                     depreciation_amortization=get_val(cash_df, "Depreciation And Amortization"),
                     dividends_paid=get_val(cash_df, "Cash Dividends Paid", "Common Stock Dividend Paid"),
                     stock_based_compensation=get_val(cash_df, "Stock Based Compensation"),
+                    share_repurchases=get_val(cash_df, "Repurchase Of Capital Stock", "Common Stock Payments", "Repurchase Of Common Stock"),
                 )
                 financials.append(stmt)
                 
@@ -274,6 +275,8 @@ class YahooProvider(StockDataProvider):
                 dividends_paid=sum_quarters(q_cash, "Cash Dividends Paid", "Common Stock Dividend Paid"),
                 # P0 Fix: Include SBC for accurate SBC metrics in TTM ratios
                 stock_based_compensation=sum_quarters(q_cash, "Stock Based Compensation"),
+                # Alpha: Share repurchases for Total Shareholder Yield
+                share_repurchases=sum_quarters(q_cash, "Repurchase Of Capital Stock", "Common Stock Payments", "Repurchase Of Common Stock"),
             )
         except Exception as e:
             logger.warning(f"Failed to calculate TTM financials: {e}")
