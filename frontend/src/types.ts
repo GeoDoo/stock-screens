@@ -89,6 +89,10 @@ export interface StockDataResponse {
   is_using_ltm?: boolean;  // True if using Last Twelve Months (more current) data
   validation: ValidationResult;
   provenance?: DataProvenance;  // Source/confidence for key metrics
+  // Data freshness indicator (NOTES2.md enhancement)
+  latest_statement_date?: string;  // Date of most recent financial statement (YYYY-MM-DD)
+  data_freshness_days?: number;  // Days since latest statement
+  data_is_stale?: boolean;  // True if >120 days old (post-earnings update required)
 }
 
 export interface GrowthStage {

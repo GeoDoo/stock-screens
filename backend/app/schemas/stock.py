@@ -66,6 +66,10 @@ class StockDataResponse(BaseModel):
     validation: ValidationResponse
     is_using_ltm: bool = False  # True if using Last Twelve Months (TTM) data
     provenance: Optional[DataProvenance] = None  # Source/confidence for key metrics
+    # Data freshness (NOTES2.md: flag stale data)
+    latest_statement_date: Optional[str] = None  # Date of most recent financial statement
+    data_freshness_days: Optional[int] = None  # Days since latest statement
+    data_is_stale: bool = False  # True if >120 days old (post-earnings update required)
 
 
 class GrowthStageInput(BaseModel):

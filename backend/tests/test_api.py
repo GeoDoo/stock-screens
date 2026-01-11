@@ -217,6 +217,45 @@ class TestStockEndpoint:
         assert response.status_code == 400
         assert "Unknown provider" in response.json()["detail"]
 
+    def test_get_stock_returns_data_freshness_info(self):
+        """
+        Enhancement (NOTES2.md): Data freshness indicator.
+        
+        Response should include:
+        - latest_statement_date: Date of most recent financial statement
+        - data_freshness_days: Days since that statement
+        - data_is_stale: True if >120 days old
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            response = client.get("/api/stock/AAPL?provider=fmp")
+
+        assert response.status_code == 200
+        result = response.json()
+        
+        # Should have data freshness fields
+        assert "latest_statement_date" in result, (
+            "Response should include 'latest_statement_date' for data freshness transparency"
+        )
+        assert "data_freshness_days" in result, (
+            "Response should include 'data_freshness_days' showing age of data"
+        )
+        assert "data_is_stale" in result, (
+            "Response should include 'data_is_stale' flag for >120 day old data"
+        )
+        
+        # The mock data has date="2024-01-01" which is > 120 days old
+        # So data_is_stale should be True
+        assert result["latest_statement_date"] == "2024-01-01"
+        assert result["data_freshness_days"] is not None
+        assert isinstance(result["data_freshness_days"], int)
+        # Since 2024-01-01 is well over 120 days ago in 2026, it should be stale
+        assert result["data_is_stale"] is True
+
 
 class TestValuationEndpoint:
     @pytest.fixture

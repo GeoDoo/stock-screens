@@ -1,5 +1,6 @@
 """Stock data and valuation endpoints."""
 import os
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 
 from app.constants import DEFAULT_TAX_RATE, DEFAULT_MARKET_RISK_PREMIUM, DEFAULT_TREASURY_RATE
@@ -275,6 +276,40 @@ async def get_stock(symbol: str, provider: str):
         )
         wacc = wacc_calculator.calculate()
 
+    # Data freshness indicator (NOTES2.md: flag stale data)
+    # Find the most recent financial statement date
+    latest_statement_date = None
+    data_freshness_days = None
+    data_is_stale = False
+    STALE_THRESHOLD_DAYS = 120  # Flag data older than 120 days as stale
+    
+    if stock_data.financials:
+        # Get the most recent statement (financials are typically ordered most recent first)
+        # Filter to non-TTM statements for accurate date
+        dated_statements = [
+            f for f in stock_data.financials 
+            if f.date and not f.date.startswith("TTM")
+        ]
+        if dated_statements:
+            # Parse dates and find the most recent
+            latest_date = None
+            for stmt in dated_statements:
+                try:
+                    # Handle various date formats (YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, etc.)
+                    date_str = stmt.date.split(" ")[0]  # Take date part only
+                    stmt_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                    if latest_date is None or stmt_date > latest_date:
+                        latest_date = stmt_date
+                        latest_statement_date = date_str
+                except ValueError:
+                    continue  # Skip unparseable dates
+            
+            if latest_date:
+                now = datetime.now(timezone.utc)
+                delta = now - latest_date
+                data_freshness_days = delta.days
+                data_is_stale = data_freshness_days > STALE_THRESHOLD_DAYS
+
     return StockDataResponse(
         symbol=symbol.upper(),
         company_name=data.get("profile", {}).get("companyName"),
@@ -309,6 +344,10 @@ async def get_stock(symbol: str, provider: str):
         provenance=DataProvenance(**{
             k: ProvenanceItem(**v) for k, v in extractor.get_all_provenance().items()
         }),
+        # Data freshness indicator (NOTES2.md enhancement)
+        latest_statement_date=latest_statement_date,
+        data_freshness_days=data_freshness_days,
+        data_is_stale=data_is_stale,
     )
 
 

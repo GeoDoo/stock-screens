@@ -170,4 +170,43 @@ describe('ValuationTrustStrip', () => {
     const sharesBadge = screen.getByText('Unknown').closest('span');
     expect(sharesBadge?.className).toContain('amber');
   });
+
+  it('shows data freshness when provided', () => {
+    render(
+      <ValuationTrustStrip 
+        result={createMockResult()} 
+        period="ttm"
+        dataFreshnessDays={45}
+        dataIsStale={false}
+        latestStatementDate="2025-11-01"
+      />
+    );
+    expect(screen.getByText('45d ago')).toBeInTheDocument();
+  });
+
+  it('shows stale data warning when data is old', () => {
+    render(
+      <ValuationTrustStrip 
+        result={createMockResult()} 
+        period="ttm"
+        dataFreshnessDays={150}
+        dataIsStale={true}
+        latestStatementDate="2025-08-01"
+      />
+    );
+    expect(screen.getByText('150d old ⚠️')).toBeInTheDocument();
+    // Should have warning styling (amber)
+    const staleBadge = screen.getByText('150d old ⚠️').closest('span');
+    expect(staleBadge?.className).toContain('amber');
+  });
+
+  it('does not show data age when not provided', () => {
+    render(
+      <ValuationTrustStrip 
+        result={createMockResult()} 
+        period="ttm"
+      />
+    );
+    expect(screen.queryByText('Data Age:')).not.toBeInTheDocument();
+  });
 });

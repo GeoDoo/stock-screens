@@ -1538,6 +1538,9 @@ export default function App() {
                   result={result} 
                   period={fundamentalPeriod}
                   provenance={stockData?.provenance}
+                  dataFreshnessDays={stockData?.data_freshness_days}
+                  dataIsStale={stockData?.data_is_stale}
+                  latestStatementDate={stockData?.latest_statement_date}
                 />
               </div>
             </div>
