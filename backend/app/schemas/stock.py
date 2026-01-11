@@ -340,3 +340,5 @@ class SensitivityMatrixResponse(BaseModel):
     matrix: List[List[Optional[float]]]
     # Base values (center of matrix)
     base_values: dict
+    # P1 Fix: Expose actual discount rate used (transparency)
+    base_discount_rate_used: Optional[float] = None

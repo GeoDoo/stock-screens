@@ -2,7 +2,7 @@
 import os
 from fastapi import APIRouter, HTTPException
 
-from app.constants import DEFAULT_TAX_RATE, DEFAULT_MARKET_RISK_PREMIUM
+from app.constants import DEFAULT_TAX_RATE, DEFAULT_MARKET_RISK_PREMIUM, DEFAULT_TREASURY_RATE
 from app.schemas.stock import (
     StockDataResponse,
     CompanyData,
@@ -1639,7 +1639,31 @@ async def get_sensitivity_matrix(
     
     base_growth = request.base_growth or fcf_projector.revenue_cagr() or 0.05
     base_margin = request.base_margin or fcf_projector.operating_margin() or 0.15
-    base_discount_rate = request.base_discount_rate or 0.10
+    
+    # P1 Fix: Compute WACC when base_discount_rate not provided
+    # Bug: Previously defaulted to 10% which is misleading
+    if request.base_discount_rate is not None:
+        base_discount_rate = request.base_discount_rate
+    else:
+        # Compute WACC from stock data for transparency
+        market_cap = extractor.market_cap() or 0
+        total_debt_for_wacc = extractor.total_debt() or 0
+        beta = extractor.beta() or 1.0
+        risk_free_rate = DEFAULT_TREASURY_RATE
+        cost_of_debt = extractor.cost_of_debt(risk_free_rate=risk_free_rate) or 0.06
+        tax_rate_for_wacc = extractor.tax_rate() or 0.25
+        
+        wacc_calc = WACCCalculator(
+            market_cap=market_cap,
+            total_debt=total_debt_for_wacc,
+            beta=beta,
+            risk_free_rate=risk_free_rate,
+            market_risk_premium=0.06,
+            cost_of_debt=cost_of_debt,
+            tax_rate=tax_rate_for_wacc,
+        )
+        base_discount_rate = wacc_calc.calculate() or 0.10  # Fallback only if calc fails
+    
     da_ratio = request.da_ratio or fcf_projector.da_to_revenue_ratio() or 0.03
     capex_ratio = request.capex_ratio or fcf_projector.capex_to_revenue_ratio() or 0.04
     wc_ratio = request.wc_ratio or fcf_projector.wc_to_revenue_ratio() or 0.05
@@ -1703,6 +1727,7 @@ async def get_sensitivity_matrix(
                 "discount_rate": base_discount_rate,
                 "terminal_growth": request.terminal_growth,
             },
+            base_discount_rate_used=base_discount_rate,  # P1 Fix: transparency
         )
     else:  # margin_growth
         result = calc.generate_margin_growth_matrix(
@@ -1723,4 +1748,5 @@ async def get_sensitivity_matrix(
                 "margin": base_margin,
                 "growth": base_growth,
             },
+            base_discount_rate_used=base_discount_rate,  # P1 Fix: transparency
         )
