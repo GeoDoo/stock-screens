@@ -693,7 +693,8 @@ POST /api/stock/{symbol}/valuation
       "end_wc_ratio": 0.0
     }
   ],
-  "annual_dilution_rate": 0.0
+  "annual_dilution_rate": 0.0,
+  "sector_ev_ebitda_multiple": 0.0
 }
 ```
 
@@ -712,6 +713,7 @@ POST /api/stock/{symbol}/valuation
 | `wc_mode` | string | No |  |
 | `growth_stages` | array | null | No |  |
 | `annual_dilution_rate` | number | No |  |
+| `sector_ev_ebitda_multiple` | number | null | No |  |
 
 
 ---

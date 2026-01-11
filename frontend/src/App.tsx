@@ -96,6 +96,7 @@ export default function App() {
   const [wcMode, setWcMode] = useState<'level' | 'incremental'>('level');
   const [growthStages, setGrowthStages] = useState<GrowthStage[]>([]);
   const [annualDilutionRate, setAnnualDilutionRate] = useState('0');  // SBC dilution %
+  const [sectorEvEbitdaMultiple, setSectorEvEbitdaMultiple] = useState('');  // Exit multiple cross-check
   
   // Valuation state (loading/error tracked but not displayed separately)
   const [_valuationLoading, setValuationLoading] = useState(false);
@@ -286,6 +287,8 @@ export default function App() {
       growth_stages: growthStages.length > 0 ? growthStages : null,
       // SBC dilution - affects per-share value
       annual_dilution_rate: annualDilutionRate ? parseFloat(annualDilutionRate) / 100 : 0,
+      // Exit Multiple cross-check (optional)
+      sector_ev_ebitda_multiple: sectorEvEbitdaMultiple ? parseFloat(sectorEvEbitdaMultiple) : null,
     };
     
     try {
@@ -1265,6 +1268,25 @@ export default function App() {
                       (share dilution)
                     </span>
                   </div>
+                  
+                  {/* Sector EV/EBITDA Multiple for Exit Multiple Cross-Check */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-500">Sector EV/EBITDA:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="50"
+                      step="0.5"
+                      value={sectorEvEbitdaMultiple}
+                      onChange={(e) => setSectorEvEbitdaMultiple(e.target.value)}
+                      placeholder="—"
+                      className="w-16 px-2 py-1 text-sm font-mono border border-gray-200 rounded bg-white text-gray-700"
+                    />
+                    <span className="text-xs text-gray-400">×</span>
+                    <span className="text-xs text-gray-400" title="Sector/peer median EV/EBITDA. Used to cross-check Gordon Growth terminal value. Leave empty to skip cross-check.">
+                      (exit multiple cross-check)
+                    </span>
+                  </div>
                 </div>
                 
                 {/* WC Mode Impact Calculator */}
@@ -1589,6 +1611,88 @@ export default function App() {
                       </p>
                     </div>
                   </div>
+                  
+                  {/* Terminal Value Cross-Check & Warnings */}
+                  {result.terminal_value_check && (
+                    <div className="mt-4 space-y-3">
+                      {/* Exit Multiple Cross-Check (if sector multiple provided) */}
+                      {result.terminal_value_check.exit_multiple_tv && (
+                        <div className="text-xs p-3 bg-white rounded border border-gray-200">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-semibold text-gray-600">Exit Multiple Cross-Check</span>
+                            <span className="text-gray-400">{result.terminal_value_check.sector_ev_ebitda_multiple?.toFixed(1)}× EV/EBITDA</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-gray-500">
+                            <div>
+                              <span className="block text-gray-400">Gordon Growth TV:</span>
+                              <span className="font-mono">{formatCurrency(result.terminal_value_check.gordon_growth_tv || 0)}</span>
+                            </div>
+                            <div>
+                              <span className="block text-gray-400">Exit Multiple TV:</span>
+                              <span className="font-mono">{formatCurrency(result.terminal_value_check.exit_multiple_tv)}</span>
+                            </div>
+                          </div>
+                          {result.terminal_value_check.method_divergence_pct != null && (
+                            <div className="mt-2">
+                              <span className="text-gray-400">Divergence: </span>
+                              <span className={`font-mono font-semibold ${
+                                Math.abs(result.terminal_value_check.method_divergence_pct) > 0.20 
+                                  ? 'text-amber-600' 
+                                  : 'text-emerald-600'
+                              }`}>
+                                {(result.terminal_value_check.method_divergence_pct * 100).toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Implied Exit Multiple */}
+                      {result.terminal_value_check.implied_exit_multiple && (
+                        <div className="text-xs text-gray-500">
+                          <span>Implied Exit Multiple: </span>
+                          <span className="font-mono font-medium">{result.terminal_value_check.implied_exit_multiple.toFixed(1)}× EV/EBITDA</span>
+                          <span className="text-gray-400 ml-2">(Terminal EBITDA: {formatCurrency(result.terminal_value_check.terminal_ebitda)})</span>
+                        </div>
+                      )}
+                      
+                      {/* TV Dominance % */}
+                      {result.terminal_value_check.terminal_value_pct > 0 && (
+                        <div className="text-xs text-gray-500">
+                          <span>Terminal Value % of EV: </span>
+                          <span className={`font-mono font-medium ${
+                            result.terminal_value_check.terminal_value_pct > 0.70 
+                              ? 'text-amber-600' 
+                              : 'text-gray-600'
+                          }`}>
+                            {(result.terminal_value_check.terminal_value_pct * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Warning Alerts */}
+                      {result.terminal_value_check.method_divergence_warning && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                          <span className="font-semibold">⚠️ Terminal Value Divergence:</span>
+                          <span className="block mt-1">{result.terminal_value_check.method_divergence_warning}</span>
+                        </div>
+                      )}
+                      
+                      {result.terminal_value_check.dominance_warning && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                          <span className="font-semibold">⚠️ Terminal Value Dominance:</span>
+                          <span className="block mt-1">{result.terminal_value_check.dominance_warning}</span>
+                        </div>
+                      )}
+                      
+                      {result.terminal_value_check.warning && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                          <span className="font-semibold">⚠️ High Implied Multiple:</span>
+                          <span className="block mt-1">{result.terminal_value_check.warning}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

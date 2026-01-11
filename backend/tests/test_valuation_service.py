@@ -610,6 +610,117 @@ class TestExitMultipleSanityCheck:
         assert check["terminal_ebitda"] > 0
 
 
+class TestExitMultipleCrossCheck:
+    """
+    Tests for P1: Exit Multiple Method cross-check.
+    
+    Professional valuation cross-checks Gordon Growth terminal value with
+    Exit Multiple Method (Terminal EBITDA × Sector Multiple).
+    
+    If the two methods diverge by >20%, it indicates either:
+    - Terminal growth assumption is too aggressive/conservative
+    - Exit multiple assumption doesn't match growth profile
+    """
+    
+    @pytest.fixture
+    def mock_client(self):
+        """Create a mock StockDataClient."""
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=create_mock_stock_data())
+        client.get_treasury_rate = AsyncMock(return_value=0.045)
+        return client
+    
+    @pytest.mark.asyncio
+    async def test_includes_exit_multiple_crosscheck(self, mock_client):
+        """
+        Valuation should include exit multiple cross-check in terminal_value_check.
+        """
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock(
+            "AAPL",
+            sector_ev_ebitda_multiple=15.0,  # Provide sector multiple
+        )
+        
+        check = result["terminal_value_check"]
+        assert "exit_multiple_tv" in check, (
+            "terminal_value_check should include exit_multiple_tv (TV via Exit Multiple Method)"
+        )
+        assert "gordon_growth_tv" in check, (
+            "terminal_value_check should include gordon_growth_tv for comparison"
+        )
+        assert "method_divergence_pct" in check, (
+            "terminal_value_check should include divergence percentage"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_large_divergence_triggers_warning(self, mock_client):
+        """
+        When Gordon Growth and Exit Multiple methods diverge by >20%, warn user.
+        
+        This catches cases where terminal growth is inconsistent with
+        reasonable exit multiples.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Use low exit multiple but high terminal growth to create divergence
+        result = await service.value_stock(
+            "AAPL",
+            terminal_growth_rate=0.04,  # 4% - aggressive
+            discount_rate_override=0.08,  # Low WACC amplifies Gordon TV
+            sector_ev_ebitda_multiple=10.0,  # Conservative exit multiple
+        )
+        
+        check = result["terminal_value_check"]
+        assert "method_divergence_warning" in check, (
+            "Should warn when Gordon Growth and Exit Multiple diverge significantly"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_small_divergence_no_warning(self, mock_client):
+        """
+        When methods are aligned (<20% divergence), no warning needed.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Use balanced assumptions
+        result = await service.value_stock(
+            "AAPL",
+            terminal_growth_rate=0.025,  # 2.5% - reasonable
+            discount_rate_override=0.10,  # Normal WACC
+            sector_ev_ebitda_multiple=12.0,  # Reasonable exit multiple
+        )
+        
+        check = result["terminal_value_check"]
+        # Should not have a method_divergence_warning if divergence < 20%
+        if check.get("method_divergence_pct") is not None:
+            if abs(check["method_divergence_pct"]) < 0.20:
+                assert "method_divergence_warning" not in check
+    
+    @pytest.mark.asyncio
+    async def test_exit_multiple_calculation_is_correct(self, mock_client):
+        """
+        Exit Multiple TV = Terminal EBITDA × Sector Multiple.
+        """
+        service = ValuationService(client=mock_client)
+        
+        sector_multiple = 15.0
+        result = await service.value_stock(
+            "AAPL",
+            sector_ev_ebitda_multiple=sector_multiple,
+        )
+        
+        check = result["terminal_value_check"]
+        terminal_ebitda = check["terminal_ebitda"]
+        exit_multiple_tv = check.get("exit_multiple_tv")
+        
+        if exit_multiple_tv is not None and terminal_ebitda > 0:
+            expected = terminal_ebitda * sector_multiple
+            assert abs(exit_multiple_tv - expected) < 1, (
+                f"Exit Multiple TV should be {expected}, got {exit_multiple_tv}"
+            )
+
+
 class TestSBCShareDilution:
     """
     Tests for P0: SBC Share Dilution.

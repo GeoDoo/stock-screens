@@ -117,6 +117,9 @@ export interface ValuationRequest {
   // SBC dilution - annual share growth rate from stock-based compensation
   // E.g., 0.02 means 2% more shares issued each year (dilutes per-share value)
   annual_dilution_rate?: number;
+  // Exit Multiple cross-check - sector/peer median EV/EBITDA multiple
+  // If provided, compares Gordon Growth TV with Exit Multiple TV and warns if >20% divergence
+  sector_ev_ebitda_multiple?: number | null;
 }
 
 export interface SensitivityMatrix {
@@ -134,6 +137,20 @@ export interface EquityBridge {
   preferred_stock: number;
   deferred_tax_assets: number;  // NOLs/tax shields (adds value)
   pension_deficit: number;
+}
+
+// Terminal Value cross-check (Exit Multiple vs Gordon Growth)
+export interface TerminalValueCheck {
+  terminal_ebitda: number;
+  implied_exit_multiple: number | null;
+  terminal_value_pct: number;  // PV(Terminal) / EV - dominance check
+  gordon_growth_tv?: number;  // TV via Gordon Growth Model
+  exit_multiple_tv?: number;  // TV via Exit Multiple Method (if sector multiple provided)
+  sector_ev_ebitda_multiple?: number;  // The sector multiple used
+  method_divergence_pct?: number;  // (Gordon - Exit Multiple) / Exit Multiple
+  warning?: string;  // High implied multiple warning
+  dominance_warning?: string;  // Terminal value dominance warning
+  method_divergence_warning?: string;  // Gordon vs Exit Multiple divergence warning
 }
 
 export interface ValuationResult {
@@ -160,6 +177,7 @@ export interface ValuationResult {
   }>;
   inputs: Record<string, unknown>;
   sensitivity: SensitivityMatrix;
+  terminal_value_check?: TerminalValueCheck;  // Exit Multiple cross-check and dominance warnings
 }
 
 // Scenario Analysis Types

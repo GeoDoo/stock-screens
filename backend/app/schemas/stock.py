@@ -119,6 +119,9 @@ class ValuationRequest(BaseModel):
     # SBC dilution - annual share growth rate from stock-based compensation
     # E.g., 0.02 means 2% more shares issued each year (dilutes per-share value)
     annual_dilution_rate: float = 0.0
+    # Exit Multiple cross-check - sector/peer median EV/EBITDA multiple
+    # If provided, compares Gordon Growth TV with Exit Multiple TV and warns if >20% divergence
+    sector_ev_ebitda_multiple: Optional[float] = None
     
     @field_validator('terminal_growth_rate')
     @classmethod
