@@ -148,6 +148,7 @@ export interface SensitivityMatrix {
   discount_rates: number[];
   terminal_growth_rates: number[];
   matrix: (number | null)[][];
+  roic_flags?: boolean[][];  // True if cell is economically suspect (implied ROIC > 2× WACC)
   base_discount_rate: number;
   base_terminal_growth: number;
 }
@@ -430,6 +431,7 @@ export interface SensitivityMatrixResponse {
   discount_rates?: number[];  // For wacc_terminal
   terminal_growth_rates?: number[];  // For wacc_terminal
   matrix: (number | null)[][];  // 2D matrix of intrinsic values
+  roic_flags?: boolean[][];  // True if cell is economically suspect (implied ROIC > 2× WACC)
   base_values: Record<string, number>;
 }
 
