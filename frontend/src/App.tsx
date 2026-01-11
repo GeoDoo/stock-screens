@@ -1158,8 +1158,37 @@ export default function App() {
             {/* Historical Valuation Context */}
             {historicalValuation && historicalValuation.current && historicalValuation.average_5yr && historicalValuation.premium_discount && historicalValuation.assessment && historicalValuation.average_5yr.pe && (
               <section className="mb-16 pt-8 border-t border-gray-100">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Historical Valuation Context</h2>
-                <p className="text-sm text-gray-400 mb-8">Current multiples vs. 5-year averages</p>
+                <div className="flex items-center gap-3 mb-2">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Historical Valuation Context</h2>
+                  {/* P1.7: Proxy vs True Historical Prices indicator */}
+                  {historicalValuation.uses_true_historical_prices ? (
+                    <span 
+                      className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 border border-emerald-200 cursor-help"
+                      title="Using actual year-end stock prices to calculate historical market caps - most accurate"
+                    >
+                      ✓ True Historical
+                    </span>
+                  ) : (
+                    <span 
+                      className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200 cursor-help"
+                      title="Historical prices unavailable - using current market cap for all years. Historical multiples may not reflect actual valuations at the time."
+                    >
+                      ⚠ Proxy Market Cap
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-400 mb-4">Current multiples vs. 5-year averages</p>
+                
+                {/* P1.7: Detailed warning for proxy mode */}
+                {!historicalValuation.uses_true_historical_prices && (
+                  <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                    <span className="font-semibold">⚠️ Proxy Mode:</span>
+                    <span className="ml-1">
+                      Historical year-end prices unavailable. All historical multiples use today's market cap, 
+                      which can distort comparisons if the stock price has changed significantly.
+                    </span>
+                  </div>
+                )}
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {[
