@@ -2084,6 +2084,14 @@ export default function App() {
                     <span> / {comparableResult.industry}</span>
                   )}
                   <span className="text-gray-400 ml-2">• {comparableResult.peers.length} peers</span>
+                  {comparableResult.currency_conversions && comparableResult.currency_conversions.length > 0 && (
+                    <span 
+                      className="text-gray-400 ml-2 cursor-help" 
+                      title={`${comparableResult.currency_conversions.length} peer(s) converted to ${comparableResult.base_currency || 'USD'}: ${comparableResult.currency_conversions.map(c => `${c.symbol} (${c.original_currency})`).join(', ')}`}
+                    >
+                      • 🌐 {comparableResult.currency_conversions.length} FX-adjusted
+                    </span>
+                  )}
                 </div>
 
                 {/* Implied Valuations */}
@@ -2166,10 +2174,20 @@ export default function App() {
                           </td>
                         </tr>
                         {/* Peer rows */}
-                        {comparableResult.peers.map((peer) => (
+                        {comparableResult.peers.map((peer) => {
+                          const conversion = comparableResult.currency_conversions?.find(c => c.symbol === peer.symbol);
+                          return (
                           <tr key={peer.symbol} className="border-b border-gray-100">
                             <td className="py-3">
                               <span className="font-medium">{peer.symbol}</span>
+                              {conversion && (
+                                <span 
+                                  className="text-[10px] text-amber-500 ml-1 cursor-help" 
+                                  title={`Converted from ${conversion.original_currency} to ${conversion.converted_to} (×${conversion.rate < 0.01 ? conversion.rate.toExponential(2) : conversion.rate.toFixed(4)})`}
+                                >
+                                  ({conversion.original_currency})
+                                </span>
+                              )}
                               <span className="text-xs text-gray-400 ml-2 truncate max-w-[150px] inline-block align-bottom">
                                 {peer.name}
                               </span>
@@ -2190,7 +2208,8 @@ export default function App() {
                               {formatMetric(peer.price_to_book)}
                             </td>
                           </tr>
-                        ))}
+                        );
+                        })}
                         {/* Median row */}
                         <tr className="border-t-2 border-gray-200">
                           <td className="py-3 font-medium text-gray-500">Peer Median</td>

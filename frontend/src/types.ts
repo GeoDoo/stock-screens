@@ -243,6 +243,15 @@ export interface PeerCompany {
   ev_to_ebitda: number | null;
   price_to_sales: number | null;
   price_to_book: number | null;
+  currency?: string;  // Reporting currency (e.g., "USD", "JPY", "EUR")
+}
+
+// Currency conversion tracking for cross-currency peer comparisons
+export interface CurrencyConversion {
+  symbol: string;
+  original_currency: string;
+  converted_to: string;
+  rate: number;  // Units of original currency per unit of target currency
 }
 
 export interface ImpliedValuation {
@@ -277,6 +286,9 @@ export interface ComparableResult {
     average_implied_price: number | null;
     average_upside_percent: number | null;
   };
+  // Currency normalization info
+  base_currency?: string;  // Currency all values are normalized to (target's currency)
+  currency_conversions?: CurrencyConversion[] | null;  // Peers that required currency conversion
 }
 
 // Technical Analysis Types
