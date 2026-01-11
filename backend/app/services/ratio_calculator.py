@@ -317,13 +317,15 @@ class RatioCalculator:
             # Convert to positive for buybacks (negate the negative cash flow)
             buyback_amount = -share_repurchases if share_repurchases else 0
             metrics.buyback_yield = buyback_amount / market_cap
-        else:
-            metrics.buyback_yield = 0.0
+        # else: buyback_yield remains None (data unavailable, not "zero buybacks")
         
         # Total Shareholder Yield = Dividend Yield + Buyback Yield
-        div_yield = metrics.dividend_yield or 0.0
-        buy_yield = metrics.buyback_yield or 0.0
-        metrics.total_shareholder_yield = div_yield + buy_yield
+        # Only calculate when we have at least one component with valid data
+        if metrics.dividend_yield is not None or metrics.buyback_yield is not None:
+            div_yield = metrics.dividend_yield or 0.0
+            buy_yield = metrics.buyback_yield or 0.0
+            metrics.total_shareholder_yield = div_yield + buy_yield
+        # else: total_shareholder_yield remains None (insufficient data)
         
         return metrics
     
