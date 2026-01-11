@@ -1011,7 +1011,8 @@ export default function App() {
                     ? ratiosResult.ttm 
                     : ratiosResult.annual || ratiosResult.ttm;
                   const incRoic = currentRatios?.profitability?.incremental_roic;
-                  if (incRoic != null && result.wacc) {
+                  // Use != null to handle WACC = 0 (falsy but valid)
+                  if (incRoic != null && result.wacc != null) {
                     return (
                       <div className="mt-6">
                         <CEOEfficiencyWarning 
