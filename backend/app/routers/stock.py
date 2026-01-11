@@ -1173,7 +1173,8 @@ async def batch_analyze(symbol: str, provider: str):
                 "operating_margin": (ttm_operating_income / ttm_revenue) if ttm_revenue and ttm_operating_income else None,
                 "da_ratio": (ttm_da / ttm_revenue) if ttm_revenue and ttm_da else None,
                 "capex_ratio": (abs(ttm_capex) / ttm_revenue) if ttm_revenue and ttm_capex else None,
-                "wc_ratio": (ttm_wc / ttm_revenue) if ttm_revenue and ttm_wc else None,
+                # Use `is not None` to handle WC=0 correctly (0 is valid, not falsy)
+                "wc_ratio": (ttm_wc / ttm_revenue) if ttm_revenue and ttm_wc is not None else None,
             }
     
     stock_response["hints_ttm"] = hints_ttm
