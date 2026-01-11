@@ -1605,6 +1605,9 @@ async def get_sensitivity_matrix(
     deferred_tax_assets = extractor.deferred_tax_assets() or 0
     pension_liability = extractor.pension_liability() or 0
     
+    # Tax rate for FCF calculation
+    tax_rate = extractor.tax_rate() or 0.25
+    
     # Project base FCFs for WACC/terminal matrix
     projections = fcf_projector.project(
         years=request.projection_years,
@@ -1626,6 +1629,11 @@ async def get_sensitivity_matrix(
         preferred_stock=preferred_stock,
         deferred_tax_assets=deferred_tax_assets,
         pension_deficit=pension_liability,
+        # P0 Fix: Pass FCF component ratios for margin/growth matrix consistency
+        da_ratio=da_ratio,
+        capex_ratio=capex_ratio,
+        wc_ratio=wc_ratio,
+        tax_rate=tax_rate,
     )
     
     if request.matrix_type == "wacc_terminal":
