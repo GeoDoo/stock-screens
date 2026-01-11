@@ -109,7 +109,7 @@ export function MemosPage() {
                         : 'text-red-600'
                     }`}>
                       {memo.current_performance.price_change_percent >= 0 ? '+' : ''}
-                      {memo.current_performance.price_change_percent.toFixed(1)}%
+                      {memo.current_performance.price_change_percent.toFixed(2)}%
                     </div>
                   )}
                   <span className={`text-xs px-2 py-0.5 rounded mt-1 inline-block ${

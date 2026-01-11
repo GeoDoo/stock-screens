@@ -91,7 +91,7 @@ describe('MomentumBridge', () => {
     );
     
     // 50% margin of safety
-    expect(screen.getByText('50.0%')).toBeInTheDocument();
+    expect(screen.getByText('50.00%')).toBeInTheDocument();
   });
   
   it('displays negative margin correctly', () => {
@@ -104,6 +104,6 @@ describe('MomentumBridge', () => {
     );
     
     // -20% margin (overvalued)
-    expect(screen.getByText('-20.0%')).toBeInTheDocument();
+    expect(screen.getByText('-20.00%')).toBeInTheDocument();
   });
 });

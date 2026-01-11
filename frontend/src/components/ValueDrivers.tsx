@@ -51,7 +51,7 @@ export function ValueDrivers({ drivers }: ValueDriversProps) {
                 'text-gray-500'
               }`}
             >
-              {driver.impact_percent.toFixed(1)}%
+              {driver.impact_percent.toFixed(2)}%
             </span>
           </div>
           <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">

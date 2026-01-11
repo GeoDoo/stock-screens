@@ -22,7 +22,7 @@ export function CEOEfficiencyWarning({ incrementalRoic, wacc }: CEOEfficiencyWar
   }
   
   const spread = incrementalRoic - wacc;
-  const spreadPct = (spread * 100).toFixed(1);
+  const spreadPct = (spread * 100).toFixed(2);
   
   // Determine status
   let statusLabel: string;
@@ -79,13 +79,13 @@ export function CEOEfficiencyWarning({ incrementalRoic, wacc }: CEOEfficiencyWar
         <div>
           <div className="text-xs text-gray-400 uppercase">Inc. ROIC</div>
           <div className="font-medium font-mono">
-            {(incrementalRoic * 100).toFixed(1)}%
+            {(incrementalRoic * 100).toFixed(2)}%
           </div>
         </div>
         <div>
           <div className="text-xs text-gray-400 uppercase">WACC</div>
           <div className="font-medium font-mono">
-            {(wacc * 100).toFixed(1)}%
+            {(wacc * 100).toFixed(2)}%
           </div>
         </div>
         <div>

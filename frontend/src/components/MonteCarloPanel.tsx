@@ -48,14 +48,14 @@ interface MonteCarloPanelProps {
 
 const formatCurrency = (value: number): string => {
   if (Math.abs(value) >= 1e9) {
-    return `$${(value / 1e9).toFixed(1)}B`;
+    return `$${(value / 1e9).toFixed(2)}B`;
   } else if (Math.abs(value) >= 1e6) {
-    return `$${(value / 1e6).toFixed(1)}M`;
+    return `$${(value / 1e6).toFixed(2)}M`;
   }
   return `$${value.toFixed(2)}`;
 };
 
-const formatPercent = (value: number, decimals = 0): string => {
+const formatPercent = (value: number, decimals = 2): string => {
   return `${(value * 100).toFixed(decimals)}%`;
 };
 
@@ -201,7 +201,7 @@ export function MonteCarloPanel({
   
   const formatUpside = (upside: number): string => {
     const sign = upside > 0 ? '+' : '';
-    return `${sign}${upside.toFixed(0)}%`;
+    return `${sign}${upside.toFixed(2)}%`;
   };
   
   // Get per-share data regardless of mode
@@ -276,7 +276,7 @@ export function MonteCarloPanel({
                 <div className="flex gap-1 items-center">
                   <input
                     type="number"
-                    value={(inputs.growth * 100).toFixed(1)}
+                    value={(inputs.growth * 100).toFixed(2)}
                     onChange={(e) => setInputs(prev => ({ ...prev, growth: parseFloat(e.target.value) / 100 }))}
                     className="w-16 px-2 py-1 text-sm border rounded"
                     step="0.5"
@@ -284,7 +284,7 @@ export function MonteCarloPanel({
                   <span className="text-xs text-gray-400">±</span>
                   <input
                     type="number"
-                    value={(inputs.growthStd * 100).toFixed(1)}
+                    value={(inputs.growthStd * 100).toFixed(2)}
                     onChange={(e) => setInputs(prev => ({ ...prev, growthStd: parseFloat(e.target.value) / 100 }))}
                     className="w-14 px-2 py-1 text-sm border rounded"
                     step="0.5"
@@ -298,7 +298,7 @@ export function MonteCarloPanel({
                 <div className="flex gap-1 items-center">
                   <input
                     type="number"
-                    value={(inputs.margin * 100).toFixed(1)}
+                    value={(inputs.margin * 100).toFixed(2)}
                     onChange={(e) => setInputs(prev => ({ ...prev, margin: parseFloat(e.target.value) / 100 }))}
                     className="w-16 px-2 py-1 text-sm border rounded"
                     step="0.5"
@@ -306,7 +306,7 @@ export function MonteCarloPanel({
                   <span className="text-xs text-gray-400">±</span>
                   <input
                     type="number"
-                    value={(inputs.marginStd * 100).toFixed(1)}
+                    value={(inputs.marginStd * 100).toFixed(2)}
                     onChange={(e) => setInputs(prev => ({ ...prev, marginStd: parseFloat(e.target.value) / 100 }))}
                     className="w-14 px-2 py-1 text-sm border rounded"
                     step="0.5"
@@ -320,7 +320,7 @@ export function MonteCarloPanel({
                 <div className="flex gap-1 items-center">
                   <input
                     type="number"
-                    value={(inputs.discountRate * 100).toFixed(1)}
+                    value={(inputs.discountRate * 100).toFixed(2)}
                     onChange={(e) => setInputs(prev => ({ ...prev, discountRate: parseFloat(e.target.value) / 100 }))}
                     className="w-16 px-2 py-1 text-sm border rounded"
                     step="0.5"
@@ -328,7 +328,7 @@ export function MonteCarloPanel({
                   <span className="text-xs text-gray-400">±</span>
                   <input
                     type="number"
-                    value={(inputs.discountStd * 100).toFixed(1)}
+                    value={(inputs.discountStd * 100).toFixed(2)}
                     onChange={(e) => setInputs(prev => ({ ...prev, discountStd: parseFloat(e.target.value) / 100 }))}
                     className="w-14 px-2 py-1 text-sm border rounded"
                     step="0.5"
@@ -342,7 +342,7 @@ export function MonteCarloPanel({
                 <div className="flex gap-1 items-center">
                   <input
                     type="number"
-                    value={(inputs.terminalGrowth * 100).toFixed(1)}
+                    value={(inputs.terminalGrowth * 100).toFixed(2)}
                     onChange={(e) => setInputs(prev => ({ ...prev, terminalGrowth: parseFloat(e.target.value) / 100 }))}
                     className="w-16 px-2 py-1 text-sm border rounded"
                     step="0.5"
@@ -373,7 +373,7 @@ export function MonteCarloPanel({
                     <div className="flex gap-1 items-center">
                       <input
                         type="number"
-                        value={(inputs.daRatio * 100).toFixed(1)}
+                        value={(inputs.daRatio * 100).toFixed(2)}
                         onChange={(e) => setInputs(prev => ({ ...prev, daRatio: parseFloat(e.target.value) / 100 }))}
                         className="w-16 px-2 py-1 text-sm border rounded"
                         step="0.5"
@@ -381,7 +381,7 @@ export function MonteCarloPanel({
                       <span className="text-xs text-gray-400">±</span>
                       <input
                         type="number"
-                        value={(inputs.daRatioStd * 100).toFixed(1)}
+                        value={(inputs.daRatioStd * 100).toFixed(2)}
                         onChange={(e) => setInputs(prev => ({ ...prev, daRatioStd: parseFloat(e.target.value) / 100 }))}
                         className="w-14 px-2 py-1 text-sm border rounded"
                         step="0.1"
@@ -395,7 +395,7 @@ export function MonteCarloPanel({
                     <div className="flex gap-1 items-center">
                       <input
                         type="number"
-                        value={(inputs.capexRatio * 100).toFixed(1)}
+                        value={(inputs.capexRatio * 100).toFixed(2)}
                         onChange={(e) => setInputs(prev => ({ ...prev, capexRatio: parseFloat(e.target.value) / 100 }))}
                         className="w-16 px-2 py-1 text-sm border rounded"
                         step="0.5"
@@ -403,7 +403,7 @@ export function MonteCarloPanel({
                       <span className="text-xs text-gray-400">±</span>
                       <input
                         type="number"
-                        value={(inputs.capexRatioStd * 100).toFixed(1)}
+                        value={(inputs.capexRatioStd * 100).toFixed(2)}
                         onChange={(e) => setInputs(prev => ({ ...prev, capexRatioStd: parseFloat(e.target.value) / 100 }))}
                         className="w-14 px-2 py-1 text-sm border rounded"
                         step="0.5"
@@ -417,7 +417,7 @@ export function MonteCarloPanel({
                     <div className="flex gap-1 items-center">
                       <input
                         type="number"
-                        value={(inputs.wcRatio * 100).toFixed(1)}
+                        value={(inputs.wcRatio * 100).toFixed(2)}
                         onChange={(e) => setInputs(prev => ({ ...prev, wcRatio: parseFloat(e.target.value) / 100 }))}
                         className="w-16 px-2 py-1 text-sm border rounded"
                         step="0.5"
@@ -425,7 +425,7 @@ export function MonteCarloPanel({
                       <span className="text-xs text-gray-400">±</span>
                       <input
                         type="number"
-                        value={(inputs.wcRatioStd * 100).toFixed(1)}
+                        value={(inputs.wcRatioStd * 100).toFixed(2)}
                         onChange={(e) => setInputs(prev => ({ ...prev, wcRatioStd: parseFloat(e.target.value) / 100 }))}
                         className="w-14 px-2 py-1 text-sm border rounded"
                         step="0.5"
@@ -453,7 +453,7 @@ export function MonteCarloPanel({
                     <label className="text-xs text-gray-500">Growth↔Margin</label>
                     <input
                       type="number"
-                      value={inputs.growthMarginCorr.toFixed(1)}
+                      value={inputs.growthMarginCorr.toFixed(2)}
                       onChange={(e) => setInputs(prev => ({ ...prev, growthMarginCorr: parseFloat(e.target.value) }))}
                       className="w-16 px-2 py-1 text-sm border rounded"
                       step="0.1"
@@ -466,7 +466,7 @@ export function MonteCarloPanel({
                     <label className="text-xs text-gray-500">Growth↔CapEx</label>
                     <input
                       type="number"
-                      value={inputs.growthCapexCorr.toFixed(1)}
+                      value={inputs.growthCapexCorr.toFixed(2)}
                       onChange={(e) => setInputs(prev => ({ ...prev, growthCapexCorr: parseFloat(e.target.value) }))}
                       className="w-16 px-2 py-1 text-sm border rounded"
                       step="0.1"

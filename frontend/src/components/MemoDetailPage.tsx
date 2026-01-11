@@ -44,7 +44,7 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
 
   const formatPercent = (value: number) => {
     const sign = value >= 0 ? '+' : '';
-    return `${sign}${(value * 100).toFixed(1)}%`;
+    return `${sign}${(value * 100).toFixed(2)}%`;
   };
 
   const handleAddPostMortem = async () => {
@@ -247,7 +247,7 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
               memo.current_performance.price_change_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
             }`}>
               {memo.current_performance.price_change_percent >= 0 ? '+' : ''}
-              {memo.current_performance.price_change_percent.toFixed(1)}%
+              {memo.current_performance.price_change_percent.toFixed(2)}%
             </div>
           </div>
           <div>
@@ -294,11 +294,11 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
             {memo.scenarios.map((scenario) => (
               <div key={scenario.name} className="text-center p-4 bg-gray-50 rounded">
                 <div className="text-xs text-gray-400 uppercase">{scenario.name}</div>
-                <div className="font-mono text-xl mt-2">${scenario.intrinsic_value.toFixed(0)}</div>
+                <div className="font-mono text-xl mt-2">${scenario.intrinsic_value.toFixed(2)}</div>
                 <div className={`text-sm mt-1 ${
                   scenario.upside_percent >= 0 ? 'text-emerald-600' : 'text-red-600'
                 }`}>
-                  {scenario.upside_percent >= 0 ? '+' : ''}{scenario.upside_percent.toFixed(0)}%
+                  {scenario.upside_percent >= 0 ? '+' : ''}{scenario.upside_percent.toFixed(2)}%
                 </div>
               </div>
             ))}

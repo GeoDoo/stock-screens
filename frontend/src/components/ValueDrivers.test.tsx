@@ -24,10 +24,10 @@ describe('ValueDrivers', () => {
   it('displays impact percentages', () => {
     render(<ValueDrivers drivers={mockDrivers} />);
     
-    expect(screen.getByText('25.5%')).toBeInTheDocument();
-    expect(screen.getByText('18.2%')).toBeInTheDocument();
-    expect(screen.getByText('12.3%')).toBeInTheDocument();
-    expect(screen.getByText('8.1%')).toBeInTheDocument();
+    expect(screen.getByText('25.50%')).toBeInTheDocument();
+    expect(screen.getByText('18.20%')).toBeInTheDocument();
+    expect(screen.getByText('12.30%')).toBeInTheDocument();
+    expect(screen.getByText('8.10%')).toBeInTheDocument();
   });
 
   it('shows descriptions', () => {
@@ -64,7 +64,7 @@ describe('ValueDrivers', () => {
     render(<ValueDrivers drivers={singleDriver} />);
     
     expect(screen.getByText('Discount Rate')).toBeInTheDocument();
-    expect(screen.getByText('15.0%')).toBeInTheDocument();
+    expect(screen.getByText('15.00%')).toBeInTheDocument();
   });
 
   it('applies correct colors based on impact level', () => {
@@ -73,12 +73,12 @@ describe('ValueDrivers', () => {
     // Low impact (<10) should be green
     render(<ValueDrivers drivers={mockDrivers} />);
     
-    // The 25.5% impact should have red text styling
-    const highImpact = screen.getByText('25.5%');
+    // The 25.50% impact should have red text styling
+    const highImpact = screen.getByText('25.50%');
     expect(highImpact).toHaveClass('text-red-600');
     
-    // The 8.1% impact should have gray text
-    const lowImpact = screen.getByText('8.1%');
+    // The 8.10% impact should have gray text
+    const lowImpact = screen.getByText('8.10%');
     expect(lowImpact).toHaveClass('text-gray-500');
   });
 });
