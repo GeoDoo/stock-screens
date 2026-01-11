@@ -194,6 +194,7 @@ class FMPProvider(StockDataProvider):
                 depreciation_amortization=cf.get("depreciationAndAmortization"),
                 dividends_paid=cf.get("commonDividendsPaid") or cf.get("netDividendsPaid"),
                 stock_based_compensation=cf.get("stockBasedCompensation"),
+                share_repurchases=cf.get("commonStockRepurchased") or cf.get("purchaseOfCommonStock"),
             )
             financials.append(stmt)
         
@@ -294,6 +295,7 @@ class FMPProvider(StockDataProvider):
             depreciation_amortization=sum_field("depreciation_amortization"),
             dividends_paid=sum_field("dividends_paid"),
             stock_based_compensation=sum_field("stock_based_compensation"),
+            share_repurchases=sum_field("share_repurchases"),
         )
     
     async def get_treasury_rate(self) -> float:

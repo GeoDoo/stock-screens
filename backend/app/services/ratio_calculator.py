@@ -21,9 +21,12 @@ class ValuationRatios:
 
 @dataclass
 class DividendMetrics:
-    """Dividend-related metrics."""
+    """Dividend and shareholder return metrics."""
     dividend_yield: Optional[float] = None
     payout_ratio: Optional[float] = None
+    # NEW: Total Shareholder Yield (Alpha Layer)
+    buyback_yield: Optional[float] = None  # Share Repurchases / Market Cap
+    total_shareholder_yield: Optional[float] = None  # Dividend Yield + Buyback Yield
 
 
 @dataclass
@@ -162,6 +165,8 @@ class RatioCalculator:
         operating_cash_flow = cash_flow.get("operatingCashFlow")
         free_cash_flow = cash_flow.get("freeCashFlow")
         stock_based_compensation = cash_flow.get("stockBasedCompensation")
+        # Share repurchases (negative = buybacks, positive = issuance)
+        share_repurchases = cash_flow.get("shareRepurchases") or 0
         
         # Calculate Enterprise Value
         ev = None
@@ -203,7 +208,7 @@ class RatioCalculator:
                 price, market_cap, shares, net_income, revenue, equity, ev, ebitda
             ),
             dividend=self._calc_dividend(
-                price, shares, dividends_paid, net_income
+                price, shares, dividends_paid, net_income, market_cap, share_repurchases
             ),
             profitability=self._calc_profitability(
                 revenue, gross_profit, operating_income, net_income,
@@ -280,8 +285,17 @@ class RatioCalculator:
         shares: Optional[float],
         dividends_paid: float,
         net_income: Optional[float],
+        market_cap: Optional[float],
+        share_repurchases: float,
     ) -> DividendMetrics:
-        """Calculate dividend metrics."""
+        """
+        Calculate dividend and total shareholder yield metrics.
+        
+        Total Shareholder Yield = Dividend Yield + Buyback Yield
+        
+        This captures the true "cash return" to shareholders, as modern
+        tech companies often return more via buybacks than dividends.
+        """
         metrics = DividendMetrics()
         
         # Dividend Yield
@@ -294,6 +308,22 @@ class RatioCalculator:
             metrics.payout_ratio = dividends_paid / net_income
         elif dividends_paid == 0:
             metrics.payout_ratio = 0.0
+        
+        # Buyback Yield = Share Repurchases / Market Cap
+        # Note: In cash flow, repurchases are typically negative (cash outflow)
+        # A negative shareRepurchases means money spent on buybacks (good for shareholders)
+        # A positive shareRepurchases means shares issued (dilution)
+        if market_cap and market_cap > 0:
+            # Convert to positive for buybacks (negate the negative cash flow)
+            buyback_amount = -share_repurchases if share_repurchases else 0
+            metrics.buyback_yield = buyback_amount / market_cap
+        else:
+            metrics.buyback_yield = 0.0
+        
+        # Total Shareholder Yield = Dividend Yield + Buyback Yield
+        div_yield = metrics.dividend_yield or 0.0
+        buy_yield = metrics.buyback_yield or 0.0
+        metrics.total_shareholder_yield = div_yield + buy_yield
         
         return metrics
     

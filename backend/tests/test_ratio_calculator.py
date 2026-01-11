@@ -1847,3 +1847,127 @@ class TestCashConversionCycle:
             "Retail companies typically have CCC > 30 days due to inventory"
         )
 
+
+class TestTotalShareholderYield:
+    """
+    Tests for Total Shareholder Yield calculation.
+    
+    From NOTES2.md Alpha Layer:
+    - Modern firms return more via Buybacks than Dividends
+    - Total Shareholder Yield = Dividend Yield + Buyback Yield
+    - Buyback Yield = Share Repurchases / Market Cap
+    """
+    
+    def test_buyback_yield_calculated(self, calculator):
+        """
+        Buyback Yield = Share Repurchases / Market Cap.
+        
+        Companies that repurchase shares are returning capital to
+        shareholders just like dividends, but in a tax-efficient way.
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,  # $100B
+                "sharesOutstanding": 1_000_000_000,
+            },
+            "income_statement": [{"revenue": 50_000_000_000, "netIncome": 10_000_000_000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "dividendsPaid": -2_000_000_000,  # $2B dividends
+                "shareRepurchases": -5_000_000_000,  # $5B buybacks
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Buyback Yield = 5B / 100B = 5%
+        assert ratios.dividend.buyback_yield is not None
+        assert abs(ratios.dividend.buyback_yield - 0.05) < 0.001
+    
+    def test_total_shareholder_yield_combines_dividend_and_buyback(self, calculator):
+        """
+        Total Shareholder Yield = Dividend Yield + Buyback Yield.
+        
+        This is the true "cash return" to shareholders, not just
+        dividends. Tech companies often have higher TSY than dividend
+        yield alone suggests.
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,  # $100B
+                "sharesOutstanding": 1_000_000_000,
+            },
+            "income_statement": [{"revenue": 50_000_000_000, "netIncome": 10_000_000_000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "dividendsPaid": -2_000_000_000,  # $2B = 2% yield
+                "shareRepurchases": -5_000_000_000,  # $5B = 5% yield
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Dividend Yield = 2B / 100B = 2%
+        # Buyback Yield = 5B / 100B = 5%
+        # Total = 7%
+        assert ratios.dividend.total_shareholder_yield is not None
+        assert abs(ratios.dividend.total_shareholder_yield - 0.07) < 0.001
+    
+    def test_total_shareholder_yield_zero_when_no_buybacks(self, calculator):
+        """
+        When no buybacks, TSY equals dividend yield.
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,
+                "sharesOutstanding": 1_000_000_000,
+            },
+            "income_statement": [{"revenue": 50_000_000_000, "netIncome": 10_000_000_000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "dividendsPaid": -3_000_000_000,  # $3B = 3% yield
+                # No buybacks
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.dividend.buyback_yield == 0.0
+        # TSY should equal dividend yield
+        assert ratios.dividend.total_shareholder_yield is not None
+        assert abs(ratios.dividend.total_shareholder_yield - 0.03) < 0.001
+    
+    def test_negative_buybacks_means_share_issuance(self, calculator):
+        """
+        Positive 'shareRepurchases' in cash flow means share issuance (dilution).
+        
+        This should result in negative buyback yield, reducing total
+        shareholder yield.
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,
+                "sharesOutstanding": 1_000_000_000,
+            },
+            "income_statement": [{"revenue": 50_000_000_000, "netIncome": 10_000_000_000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "dividendsPaid": -2_000_000_000,  # $2B = 2% dividend yield
+                "shareRepurchases": 3_000_000_000,  # $3B issuance (POSITIVE = outflow)
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Buyback Yield = -3B / 100B = -3% (dilution)
+        assert ratios.dividend.buyback_yield is not None
+        assert abs(ratios.dividend.buyback_yield - (-0.03)) < 0.001
+        
+        # TSY = 2% - 3% = -1%
+        assert ratios.dividend.total_shareholder_yield is not None
+        assert abs(ratios.dividend.total_shareholder_yield - (-0.01)) < 0.001
+

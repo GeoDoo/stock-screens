@@ -222,6 +222,57 @@ export function FinancialRatiosTable({ ratios }: Props) {
           </table>
         </div>
       )}
+
+      {/* Shareholder Returns (Total Shareholder Yield) */}
+      {ratios.dividend && (ratios.dividend.total_shareholder_yield != null || ratios.dividend.dividend_yield != null) && (
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-600 mb-4">Shareholder Returns</h3>
+          <table className="w-full">
+            <tbody>
+              {ratios.dividend.dividend_yield != null && (
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-sm text-gray-500">Dividend Yield<GlossaryRef id="dividend-yield" /></td>
+                  <td className="py-2 text-sm font-mono font-medium text-right">{formatPercent(ratios.dividend.dividend_yield)}</td>
+                </tr>
+              )}
+              {ratios.dividend.buyback_yield != null && (
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-sm text-gray-500">Buyback Yield<GlossaryRef id="buyback-yield" /></td>
+                  <td className="py-2 text-sm font-mono font-medium text-right">
+                    <span className={ratios.dividend.buyback_yield > 0 ? 'text-emerald-600' : ratios.dividend.buyback_yield < 0 ? 'text-red-600' : ''}>
+                      {formatPercent(ratios.dividend.buyback_yield)}
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {ratios.dividend.total_shareholder_yield != null && (
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-sm text-gray-500 font-medium">Total Yield<GlossaryRef id="total-shareholder-yield" /></td>
+                  <td className="py-2 text-sm font-mono font-bold text-right">
+                    <span className={ratios.dividend.total_shareholder_yield > 0.04 ? 'text-emerald-600' : ''}>
+                      {formatPercent(ratios.dividend.total_shareholder_yield)}
+                    </span>
+                  </td>
+                </tr>
+              )}
+              {ratios.dividend.payout_ratio != null && (
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-sm text-gray-500">Payout Ratio<GlossaryRef id="payout-ratio" /></td>
+                  <td className="py-2 text-sm font-mono font-medium text-right">
+                    <span className={
+                      ratios.dividend.payout_ratio > 1 ? 'text-red-600' :
+                      ratios.dividend.payout_ratio > 0.8 ? 'text-amber-600' :
+                      ''
+                    }>
+                      {formatPercent(ratios.dividend.payout_ratio)}
+                    </span>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
