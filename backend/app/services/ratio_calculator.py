@@ -71,7 +71,7 @@ class RiskMetrics:
     accrual_ratio: Optional[float] = None  # Earnings quality metric
     accrual_quality: Optional[str] = None  # "good", "elevated", or "warning"
     beneish_m_score: Optional[float] = None  # Fraud detection
-    manipulation_risk: Optional[str] = None  # "low" or "high"
+    manipulation_risk: Optional[str] = None  # "low_risk" or "high_risk" (matches frontend contract)
 
 
 @dataclass
@@ -529,7 +529,8 @@ class RatioCalculator:
         )
         if m_score is not None:
             ratios.beneish_m_score = m_score
-            ratios.manipulation_risk = "high" if m_score > -1.78 else "low"
+            # P0 Fix: Return "high_risk"/"low_risk" to match frontend contract
+            ratios.manipulation_risk = "high_risk" if m_score > -1.78 else "low_risk"
         
         # Check for critical data needed for Z-Score
         if not total_assets or total_assets <= 0:
