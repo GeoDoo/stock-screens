@@ -365,6 +365,8 @@ export interface TechnicalAnalysisResult {
     volume_confirmation?: 'confirmed' | 'weak' | 'neutral';  // Volume validates signal
     mfi_signal?: 'overbought' | 'oversold' | 'neutral';  // MFI signal (matches backend field name)
     obv_trend?: 'accumulation' | 'distribution' | 'neutral';  // Smart money flow
+    // NEW: Momentum Bridge (Value + Momentum convergence)
+    vwma_trend?: 'uptrend' | 'downtrend' | 'flat';  // 200-day VWMA trend
   };
 }
 

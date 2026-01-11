@@ -19,6 +19,7 @@ import { Layout } from './components/Layout';
 import { MonteCarloPanel } from './components/MonteCarloPanel';
 import { MultiStageGrowth } from './components/MultiStageGrowth';
 import { ProvenanceDisplay } from './components/ProvenanceBadge';
+import { MomentumBridge } from './components/MomentumBridge';
 import { SensitivityMatrixPanel } from './components/SensitivityMatrixPanel';
 import { ValueDrivers } from './components/ValueDrivers';
 import { VolumeSignals } from './components/VolumeSignals';
@@ -2410,6 +2411,20 @@ export default function App() {
                   <div className="mt-6">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Volume-Weighted Signals</h3>
                     <VolumeSignals technicalResult={technicalResult} />
+                  </div>
+                )}
+                
+                {/* Momentum Bridge (Value + Momentum Convergence) */}
+                {result && technicalResult.signals.vwma_trend && (
+                  <div className="mt-6">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Entry Timing Signal</h3>
+                    <MomentumBridge 
+                      vwmaTrend={technicalResult.signals.vwma_trend}
+                      intrinsicValue={result.intrinsic_value_per_share}
+                      currentPrice={stockData.data.market_cap && stockData.data.shares_outstanding 
+                        ? stockData.data.market_cap / stockData.data.shares_outstanding 
+                        : 0}
+                    />
                   </div>
                 )}
 
