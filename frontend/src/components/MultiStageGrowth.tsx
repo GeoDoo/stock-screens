@@ -10,30 +10,41 @@ interface MultiStageGrowthProps {
 }
 
 // Pre-built templates for common scenarios
-const TEMPLATES = {
+// Now includes economics (margin/capex/wc fading) for institutional-grade modeling
+const TEMPLATES: Record<string, GrowthStage[]> = {
   highGrowthTech: [
-    { name: 'Hypergrowth', years: 2, growth_rate: 0.30 },
-    { name: 'High Growth', years: 3, growth_rate: 0.20 },
-    { name: 'Fade', years: 3, growth_rate: 0.20, end_growth_rate: 0.08 },
-    { name: 'Mature', years: 2, growth_rate: 0.05 },
+    { name: 'Hypergrowth', years: 2, growth_rate: 0.30, operating_margin: 0.10, capex_ratio: 0.15, wc_ratio: 0.20 },
+    { name: 'High Growth', years: 3, growth_rate: 0.20, operating_margin: 0.10, end_operating_margin: 0.18, capex_ratio: 0.12, wc_ratio: 0.18 },
+    { name: 'Fade', years: 3, growth_rate: 0.20, end_growth_rate: 0.08, operating_margin: 0.18, end_operating_margin: 0.22, capex_ratio: 0.10, end_capex_ratio: 0.06, wc_ratio: 0.15 },
+    { name: 'Mature', years: 2, growth_rate: 0.05, operating_margin: 0.22, capex_ratio: 0.06, wc_ratio: 0.12 },
   ],
   stableCompany: [
-    { name: 'Current Growth', years: 3, growth_rate: 0.06 },
-    { name: 'Fade', years: 4, growth_rate: 0.06, end_growth_rate: 0.03 },
-    { name: 'Terminal Approach', years: 3, growth_rate: 0.03 },
+    { name: 'Current Growth', years: 3, growth_rate: 0.06, operating_margin: 0.15, capex_ratio: 0.05, wc_ratio: 0.10 },
+    { name: 'Fade', years: 4, growth_rate: 0.06, end_growth_rate: 0.03, operating_margin: 0.15, capex_ratio: 0.05, wc_ratio: 0.10 },
+    { name: 'Terminal Approach', years: 3, growth_rate: 0.03, operating_margin: 0.14, capex_ratio: 0.04, wc_ratio: 0.08 },
   ],
   turnaround: [
-    { name: 'Recovery', years: 2, growth_rate: -0.05, end_growth_rate: 0.0 },
-    { name: 'Stabilization', years: 2, growth_rate: 0.02 },
-    { name: 'Growth', years: 3, growth_rate: 0.02, end_growth_rate: 0.08 },
-    { name: 'Mature', years: 3, growth_rate: 0.05 },
+    { name: 'Recovery', years: 2, growth_rate: -0.05, end_growth_rate: 0.0, operating_margin: -0.05, end_operating_margin: 0.02, capex_ratio: 0.03, wc_ratio: 0.25 },
+    { name: 'Stabilization', years: 2, growth_rate: 0.02, operating_margin: 0.02, end_operating_margin: 0.08, capex_ratio: 0.05, wc_ratio: 0.20, end_wc_ratio: 0.15 },
+    { name: 'Growth', years: 3, growth_rate: 0.02, end_growth_rate: 0.08, operating_margin: 0.08, end_operating_margin: 0.12, capex_ratio: 0.06, wc_ratio: 0.15 },
+    { name: 'Mature', years: 3, growth_rate: 0.05, operating_margin: 0.12, capex_ratio: 0.05, wc_ratio: 0.12 },
   ],
 };
 
 export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }: MultiStageGrowthProps) {
   const [isExpanded, setIsExpanded] = useState(stages.length > 0);
+  const [economicsExpanded, setEconomicsExpanded] = useState<Record<number, boolean>>({});
 
   const totalYears = stages.reduce((sum, s) => sum + s.years, 0);
+  
+  const toggleEconomics = (index: number) => {
+    setEconomicsExpanded(prev => ({ ...prev, [index]: !prev[index] }));
+  };
+  
+  // Check if any stage has economics defined
+  const hasEconomics = (stage: GrowthStage): boolean => {
+    return stage.operating_margin != null || stage.capex_ratio != null || stage.wc_ratio != null;
+  };
 
   const addStage = () => {
     onChange([
@@ -147,6 +158,7 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
             <div className="space-y-3 mb-4">
               {stages.map((stage, index) => (
                 <div key={index} className="bg-white border border-gray-200 rounded p-3">
+                  {/* Main row: Name, Years, Growth, Fade, Actions */}
                   <div className="grid grid-cols-12 gap-2 items-center">
                     {/* Stage Name */}
                     <div className="col-span-3">
@@ -213,17 +225,148 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                       </div>
                     </div>
                     
-                    {/* Remove Button */}
-                    <div className="col-span-2 text-right">
+                    {/* Actions: Economics toggle + Remove */}
+                    <div className="col-span-2 flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => toggleEconomics(index)}
+                        className={`text-xs px-1.5 py-0.5 rounded border ${
+                          hasEconomics(stage) || economicsExpanded[index]
+                            ? 'bg-blue-50 text-blue-600 border-blue-200'
+                            : 'text-gray-400 border-gray-200 hover:text-gray-600'
+                        }`}
+                        disabled={disabled}
+                        title="Toggle unit economics (margin, capex, working capital)"
+                      >
+                        {economicsExpanded[index] ? '▼' : '▶'} Econ
+                      </button>
                       <button
                         onClick={() => removeStage(index)}
                         className="text-xs text-red-500 hover:text-red-700"
                         disabled={disabled}
                       >
-                        Remove
+                        ✕
                       </button>
                     </div>
                   </div>
+                  
+                  {/* Economics panel (collapsible) */}
+                  {economicsExpanded[index] && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-2">Unit Economics (override global inputs for this stage)</p>
+                      
+                      {/* Operating Margin */}
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 w-24">Op. Margin</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="1"
+                            value={stage.operating_margin != null ? (stage.operating_margin * 100).toFixed(0) : ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateStage(index, { operating_margin: val ? parseFloat(val) / 100 : null });
+                            }}
+                            className="w-14 text-sm border border-gray-200 rounded px-2 py-1 bg-white text-center"
+                            placeholder="—"
+                            disabled={disabled}
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                        </div>
+                        <span className="text-xs text-gray-400">→</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="1"
+                            value={stage.end_operating_margin != null ? (stage.end_operating_margin * 100).toFixed(0) : ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateStage(index, { end_operating_margin: val ? parseFloat(val) / 100 : null });
+                            }}
+                            className="w-14 text-sm border border-gray-200 rounded px-2 py-1 bg-white text-center"
+                            placeholder="—"
+                            disabled={disabled}
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                        </div>
+                      </div>
+                      
+                      {/* CapEx Ratio */}
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 w-24">CapEx Ratio</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="1"
+                            value={stage.capex_ratio != null ? (stage.capex_ratio * 100).toFixed(0) : ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateStage(index, { capex_ratio: val ? parseFloat(val) / 100 : null });
+                            }}
+                            className="w-14 text-sm border border-gray-200 rounded px-2 py-1 bg-white text-center"
+                            placeholder="—"
+                            disabled={disabled}
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                        </div>
+                        <span className="text-xs text-gray-400">→</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="1"
+                            value={stage.end_capex_ratio != null ? (stage.end_capex_ratio * 100).toFixed(0) : ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateStage(index, { end_capex_ratio: val ? parseFloat(val) / 100 : null });
+                            }}
+                            className="w-14 text-sm border border-gray-200 rounded px-2 py-1 bg-white text-center"
+                            placeholder="—"
+                            disabled={disabled}
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                        </div>
+                      </div>
+                      
+                      {/* Working Capital Ratio */}
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 w-24">WC Ratio</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="1"
+                            value={stage.wc_ratio != null ? (stage.wc_ratio * 100).toFixed(0) : ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateStage(index, { wc_ratio: val ? parseFloat(val) / 100 : null });
+                            }}
+                            className="w-14 text-sm border border-gray-200 rounded px-2 py-1 bg-white text-center"
+                            placeholder="—"
+                            disabled={disabled}
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                        </div>
+                        <span className="text-xs text-gray-400">→</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="1"
+                            value={stage.end_wc_ratio != null ? (stage.end_wc_ratio * 100).toFixed(0) : ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateStage(index, { end_wc_ratio: val ? parseFloat(val) / 100 : null });
+                            }}
+                            className="w-14 text-sm border border-gray-200 rounded px-2 py-1 bg-white text-center"
+                            placeholder="—"
+                            disabled={disabled}
+                          />
+                          <span className="text-xs text-gray-400">%</span>
+                        </div>
+                      </div>
+                      
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Leave blank to use global inputs. Set start→end for fading.
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
