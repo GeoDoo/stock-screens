@@ -775,6 +775,46 @@ class TestFullMonteCarloEndpoint:
             assert "valid_simulations" in data
             # Most should be valid for reasonable inputs
             assert data["valid_simulations"] >= 50
+    
+    def test_full_monte_carlo_returns_warnings_and_skipped_count(self):
+        """
+        P2 Fix: Full MC endpoint should return warnings and negative_terminal_fcf_count.
+        
+        Bug: Backend computes these but didn't include them in the response,
+        so frontend couldn't display simulation quality warnings.
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            response = client.post(
+                "/api/stock/AAPL/monte-carlo-full?provider=fmp",
+                json={
+                    "base_growth": 0.08,
+                    "base_margin": 0.25,
+                    "base_da_ratio": 0.05,
+                    "base_capex_ratio": 0.08,
+                    "base_wc_ratio": 0.10,
+                    "base_discount_rate": 0.10,
+                    "iterations": 100,
+                }
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            # P2: Response should include simulation quality info
+            assert "warnings" in data, \
+                "Response should include warnings list for simulation quality"
+            assert "negative_terminal_fcf_count" in data, \
+                "Response should include count of skipped simulations"
+            
+            # Warnings should be a list
+            assert isinstance(data["warnings"], list)
+            # Count should be a non-negative integer
+            assert isinstance(data["negative_terminal_fcf_count"], int)
+            assert data["negative_terminal_fcf_count"] >= 0
 
 
 class TestSensitivityMatrix:
