@@ -125,17 +125,48 @@ class CorrelatedInputs:
                     L[i][j] = (matrix[i][j] - s) / L[j][j] if L[j][j] != 0 else 0
         return L
     
+    def _sample_standard(self, df: Optional[float]) -> float:
+        """
+        Sample from standard distribution (Normal or Student's t).
+        
+        For correlated sampling, we need standardized samples (mean=0, variance~1).
+        When fat tails are enabled (df specified), uses Student's t-distribution.
+        """
+        if df is None or df > 100:
+            # Standard Normal
+            return random.gauss(0, 1)
+        else:
+            # Standard Student's t (with variance normalization)
+            # Generate t random variable using ratio method
+            z = random.gauss(0, 1)
+            v = sum(random.gauss(0, 1) ** 2 for _ in range(int(df)))
+            t_sample = z / math.sqrt(v / df) if v > 0 else z
+            
+            # Normalize to unit variance for correlation matrix math
+            # Standard t has variance df/(df-2), so we divide by sqrt(df/(df-2))
+            if df > 2:
+                t_sample = t_sample / math.sqrt(df / (df - 2))
+            # For df <= 2, variance is infinite but we still want fat tails
+            # Just use the raw t-sample (will have very high variance)
+            
+            return t_sample
+    
     def sample(self) -> Dict[str, float]:
         """
         Sample all inputs with correlations applied.
         
         Uses Cholesky decomposition to transform independent samples
         into correlated samples.
+        
+        Fat tails: If any input has degrees_of_freedom set, uses Student's t
+        distribution for that input's base sample (preserving fat tail behavior
+        while maintaining correlation structure).
         """
         n = len(self.inputs)
         
-        # Generate independent standard normal samples
-        z = [random.gauss(0, 1) for _ in range(n)]
+        # Generate independent samples (Normal or t-distribution based on each input's df)
+        # This preserves fat tails for inputs that have degrees_of_freedom set
+        z = [self._sample_standard(inp.degrees_of_freedom) for inp in self.inputs]
         
         # Apply Cholesky to get correlated samples
         L = self._cholesky(self.correlation_matrix)
@@ -144,7 +175,7 @@ class CorrelatedInputs:
         # Transform to bounded distributions
         result = {}
         for i, inp in enumerate(self.inputs):
-            # Transform standard normal to actual distribution
+            # Transform standardized sample to actual distribution
             raw_value = inp.mean + correlated_z[i] * inp.std_dev
             # Clamp to bounds
             value = max(inp.min_val, min(inp.max_val, raw_value))
