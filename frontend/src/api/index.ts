@@ -322,7 +322,8 @@ export interface AddPostMortemParams {
   memoId: number;
   note: string;
   action: PostMortemAction;
-  current_price?: number;
+  price_at_time: number;
+  iv_at_time: number;
 }
 
 export async function addPostMortem(params: AddPostMortemParams): Promise<void> {
@@ -332,7 +333,8 @@ export async function addPostMortem(params: AddPostMortemParams): Promise<void> 
     body: JSON.stringify({
       note: params.note,
       action: params.action,
-      current_price: params.current_price,
+      price_at_time: params.price_at_time,
+      iv_at_time: params.iv_at_time,
     }),
   });
   await handleResponse<void>(res);

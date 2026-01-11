@@ -57,7 +57,8 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
         memoId: memo.id,
         note: postMortemContent.trim(),
         action: postMortemAction,
-        current_price: memo.current_performance?.latest_price || memo.initial_market.price,
+        price_at_time: memo.current_performance?.latest_price || memo.initial_market.price,
+        iv_at_time: memo.current_performance?.latest_iv || memo.initial_market.intrinsic_value,
       });
 
       // Refresh memo data
