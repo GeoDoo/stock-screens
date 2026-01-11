@@ -128,7 +128,13 @@ class ScenarioCalculator:
         self.preferred_stock = preferred_stock
         self.deferred_tax_assets = deferred_tax_assets
         self.pension_deficit = pension_deficit
-        # P1 Fix: Dilution
+        # P1 Fix: Dilution with validation
+        if annual_dilution_rate < -0.5 or annual_dilution_rate > 0.5:
+            raise ValueError(
+                f"annual_dilution_rate must be between -0.5 and 0.5 "
+                f"(got {annual_dilution_rate}). Values outside this range are unrealistic "
+                f"and can cause mathematical errors (negative terminal shares)."
+            )
         self.annual_dilution_rate = annual_dilution_rate
     
     def get_default_scenarios(self, hints: dict) -> List[Scenario]:

@@ -803,3 +803,48 @@ class TestDilutionInScenarios:
         # Value reduction should be ~25%
         reduction = (result_no_dilution.intrinsic_value - result_with_dilution.intrinsic_value) / result_no_dilution.intrinsic_value
         assert 0.20 < reduction < 0.35, f"Dilution reduction {reduction:.1%} seems wrong"
+    
+    def test_rejects_invalid_dilution_rate_too_negative(self):
+        """
+        Dilution rate < -0.5 (50% share buyback) should be rejected.
+        
+        Bug: -1.5 dilution rate with odd projection years causes
+        negative terminal_shares, silently returning 0 instead of error.
+        """
+        with pytest.raises(ValueError, match="annual_dilution_rate"):
+            ScenarioCalculator(
+                historical_revenue=[100],
+                historical_ebit=[20],
+                historical_da=[5],
+                historical_capex=[-8],
+                historical_working_capital=[10],
+                tax_rate=0.25,
+                shares_outstanding=1000,
+                total_debt=50,
+                cash=100,
+                base_wacc=0.10,
+                projection_years=5,
+                annual_dilution_rate=-1.5,  # Invalid: causes negative terminal_shares
+            )
+    
+    def test_rejects_invalid_dilution_rate_too_positive(self):
+        """
+        Dilution rate > 0.5 (50% annual dilution) should be rejected.
+        
+        No realistic company dilutes shareholders by 50%+ per year.
+        """
+        with pytest.raises(ValueError, match="annual_dilution_rate"):
+            ScenarioCalculator(
+                historical_revenue=[100],
+                historical_ebit=[20],
+                historical_da=[5],
+                historical_capex=[-8],
+                historical_working_capital=[10],
+                tax_rate=0.25,
+                shares_outstanding=1000,
+                total_debt=50,
+                cash=100,
+                base_wacc=0.10,
+                projection_years=10,
+                annual_dilution_rate=0.75,  # Invalid: 75% annual dilution is unrealistic
+            )
