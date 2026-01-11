@@ -103,6 +103,39 @@ class TestBatchAnalyzeEndpoint:
             assert data["stock"]["symbol"] == "AAPL"
             assert data["stock"]["company_name"] == "Apple Inc."
     
+    def test_batch_analyze_includes_provenance(self):
+        """
+        P1 Fix: /analyze endpoint should include is_using_ltm and provenance
+        for consistency with /stock endpoint.
+        
+        Bug: Frontend calls /analyze but ProvenanceBadge system had nothing
+        to show because these fields were missing.
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+        mock_client.get_peer_symbols = AsyncMock(return_value=["MSFT", "GOOGL"])
+        mock_client.get_company_metrics = AsyncMock(return_value={})
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            response = client.get("/api/stock/AAPL/analyze?provider=fmp")
+
+            assert response.status_code == 200
+            data = response.json()
+            
+            # P1: Should include provenance fields for transparency
+            assert "is_using_ltm" in data["stock"], \
+                "Response should include is_using_ltm for data source transparency"
+            assert "provenance" in data["stock"], \
+                "Response should include provenance for metric source tracking"
+            
+            # Provenance should have expected structure
+            provenance = data["stock"]["provenance"]
+            assert provenance is not None
+            # Should have tax_rate provenance at minimum
+            assert "tax_rate" in provenance
+    
     def test_batch_analyze_reduces_api_calls(self):
         """Batch analyze should make fewer API calls than individual endpoints."""
         mock_stock_data = create_mock_stock_data()
