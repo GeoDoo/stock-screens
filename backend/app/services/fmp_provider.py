@@ -29,47 +29,63 @@ class FMPProvider(StockDataProvider):
     name = "fmp"
     BASE_URL = "https://financialmodelingprep.com/stable"
     
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, client: Optional[httpx.AsyncClient] = None):
+        """
+        Initialize FMPProvider.
+        
+        Args:
+            api_key: FMP API key
+            client: Optional shared httpx.AsyncClient for connection pooling.
+                    If provided, reuses TCP/TLS connections saving ~100ms per call.
+                    If None, creates a new client per request (backward compat).
+        """
         self.api_key = api_key
+        self._client = client  # NOTES2.md IV.1: Connection pooling
     
     async def _request(self, endpoint: str, **params) -> Any:
-        async with httpx.AsyncClient() as client:
-            params["apikey"] = self.api_key
-            response = await client.get(f"{self.BASE_URL}{endpoint}", params=params)
+        params["apikey"] = self.api_key
+        url = f"{self.BASE_URL}{endpoint}"
+        
+        # NOTES2.md IV.1: Use shared client if available, else create per-request
+        if self._client is not None:
+            response = await self._client.get(url, params=params)
+        else:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params=params)
+        
+        # Check for subscription/premium-only responses (FMP returns 200 with text)
+        content_type = response.headers.get("content-type", "")
+        if response.status_code == 200 and "application/json" not in content_type:
+            text = response.text
+            if "subscription" in text.lower() or "premium" in text.lower():
+                raise DataNotAvailableError("Data requires premium FMP subscription")
+            if "not found" in text.lower():
+                raise TickerNotFoundError("Ticker not found")
+        
+        # Handle HTTP errors
+        if response.status_code >= 400:
+            error_detail = None
+            try:
+                body = response.json()
+                if isinstance(body, dict):
+                    error_detail = body.get("error") or body.get("message")
+            except Exception:
+                error_detail = response.text[:200] if response.text else None
             
-            # Check for subscription/premium-only responses (FMP returns 200 with text)
-            content_type = response.headers.get("content-type", "")
-            if response.status_code == 200 and "application/json" not in content_type:
-                text = response.text
-                if "subscription" in text.lower() or "premium" in text.lower():
+            if response.status_code == 401:
+                raise ProviderError("Invalid FMP API key")
+            elif response.status_code == 402:
+                if error_detail and ("subscription" in error_detail.lower() or "premium" in error_detail.lower()):
                     raise DataNotAvailableError("Data requires premium FMP subscription")
-                if "not found" in text.lower():
-                    raise TickerNotFoundError("Ticker not found")
-            
-            # Handle HTTP errors
-            if response.status_code >= 400:
-                error_detail = None
-                try:
-                    body = response.json()
-                    if isinstance(body, dict):
-                        error_detail = body.get("error") or body.get("message")
-                except Exception:
-                    error_detail = response.text[:200] if response.text else None
-                
-                if response.status_code == 401:
-                    raise ProviderError("Invalid FMP API key")
-                elif response.status_code == 402:
-                    if error_detail and ("subscription" in error_detail.lower() or "premium" in error_detail.lower()):
-                        raise DataNotAvailableError("Data requires premium FMP subscription")
-                    raise RateLimitError("FMP daily API limit reached")
-                elif response.status_code == 403:
-                    raise ProviderError("FMP access denied")
-                elif response.status_code == 404:
-                    raise TickerNotFoundError("Ticker not found")
-                elif response.status_code == 429:
-                    raise RateLimitError("FMP rate limit exceeded")
-                else:
-                    raise ProviderError(error_detail or f"FMP API error ({response.status_code})")
+                raise RateLimitError("FMP daily API limit reached")
+            elif response.status_code == 403:
+                raise ProviderError("FMP access denied")
+            elif response.status_code == 404:
+                raise TickerNotFoundError("Ticker not found")
+            elif response.status_code == 429:
+                raise RateLimitError("FMP rate limit exceeded")
+            else:
+                raise ProviderError(error_detail or f"FMP API error ({response.status_code})")
             
             return response.json()
     

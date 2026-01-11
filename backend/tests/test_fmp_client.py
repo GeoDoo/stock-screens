@@ -348,3 +348,82 @@ class TestFMPProviderTTMReconstruction:
             # Should NOT have a TTM statement
             ttm_statements = [f for f in stock_data.financials if f.period == "ttm"]
             assert len(ttm_statements) == 0, "Should not reconstruct TTM with < 4 quarters"
+
+
+class TestConnectionPooling:
+    """
+    Tests for NOTES2.md IV.1: Connection Pooling.
+    
+    Without a persistent httpx.AsyncClient session, the app wastes ~100ms
+    on TCP/TLS handshakes per call. The FMPProvider should accept a shared
+    client for connection reuse.
+    """
+    
+    def test_accepts_shared_client(self):
+        """
+        FMPProvider should accept an optional shared httpx.AsyncClient.
+        """
+        import httpx
+        
+        shared_client = httpx.AsyncClient()
+        provider = FMPProvider(api_key="test_key", client=shared_client)
+        
+        assert provider._client is shared_client
+    
+    def test_works_without_shared_client(self):
+        """
+        FMPProvider should still work without a shared client (backward compat).
+        """
+        provider = FMPProvider(api_key="test_key")
+        
+        assert provider._client is None
+    
+    @pytest.mark.asyncio
+    async def test_shared_client_used_for_requests(self):
+        """
+        When a shared client is provided, it should be used for requests.
+        """
+        import httpx
+        from unittest.mock import MagicMock
+        
+        # Create a mock client
+        mock_client = MagicMock(spec=httpx.AsyncClient)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/json"}
+        mock_response.json.return_value = [{"symbol": "AAPL", "companyName": "Apple"}]
+        
+        mock_client.get = AsyncMock(return_value=mock_response)
+        
+        provider = FMPProvider(api_key="test_key", client=mock_client)
+        
+        # Make a request
+        result = await provider._request("/profile")
+        
+        # Verify the shared client was used
+        mock_client.get.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_creates_client_per_request_when_none_shared(self):
+        """
+        When no shared client is provided, create one per request.
+        This maintains backward compatibility.
+        """
+        provider = FMPProvider(api_key="test_key")
+        
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client_instance = AsyncMock()
+            mock_response = AsyncMock()
+            mock_response.status_code = 200
+            mock_response.headers = {"content-type": "application/json"}
+            mock_response.json.return_value = [{"symbol": "AAPL"}]
+            
+            mock_client_instance.get.return_value = mock_response
+            mock_client_instance.__aenter__.return_value = mock_client_instance
+            mock_client_instance.__aexit__.return_value = None
+            mock_client_class.return_value = mock_client_instance
+            
+            await provider._request("/profile")
+            
+            # Should have created a new client
+            mock_client_class.assert_called_once()
