@@ -1236,7 +1236,8 @@ class TestBeneishMScore:
         assert ratios.risk.beneish_m_score < -1.78, (
             f"Low-risk company M-Score ({ratios.risk.beneish_m_score:.2f}) should be < -1.78"
         )
-        assert ratios.risk.manipulation_risk == "low"
+        # P0 Fix: Backend must return "low_risk"/"high_risk" to match frontend contract
+        assert ratios.risk.manipulation_risk == "low_risk"
     
     def test_m_score_high_risk_company(self, calculator):
         """
@@ -1288,7 +1289,8 @@ class TestBeneishMScore:
         assert ratios.risk.beneish_m_score > -1.78, (
             f"High-risk company M-Score ({ratios.risk.beneish_m_score:.2f}) should be > -1.78"
         )
-        assert ratios.risk.manipulation_risk == "high"
+        # P0 Fix: Backend must return "low_risk"/"high_risk" to match frontend contract
+        assert ratios.risk.manipulation_risk == "high_risk"
     
     def test_m_score_none_without_prior_year(self, calculator):
         """
