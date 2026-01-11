@@ -1180,7 +1180,8 @@ POST /api/stock/{symbol}/sensitivity-matrix
       0.0
     ]
   ],
-  "base_values": {}
+  "base_values": {},
+  "base_discount_rate_used": 0.0
 }
 ```
 
