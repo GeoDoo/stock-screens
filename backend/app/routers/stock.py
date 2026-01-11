@@ -1628,6 +1628,10 @@ async def run_full_monte_carlo_endpoint(
                 "growth_capex": request.growth_capex_correlation,
             },
         },
+        # P2 Fix: Include simulation quality metrics for UI display
+        # Negative terminal FCF means the simulation was skipped (Gordon Growth doesn't apply)
+        "warnings": result.warnings,
+        "negative_terminal_fcf_count": result.negative_terminal_fcf_count,
     }
 
 
