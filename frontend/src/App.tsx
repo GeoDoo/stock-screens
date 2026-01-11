@@ -2177,10 +2177,11 @@ export default function App() {
                   <span className="text-gray-400 ml-2">• {comparableResult.peers.length} peers</span>
                   {comparableResult.currency_conversions && comparableResult.currency_conversions.length > 0 && (
                     <span 
-                      className="text-gray-400 ml-2 cursor-help" 
-                      title={`${comparableResult.currency_conversions.length} peer(s) converted to ${comparableResult.base_currency || 'USD'}: ${comparableResult.currency_conversions.map(c => `${c.symbol} (${c.original_currency})`).join(', ')}`}
+                      className={`ml-2 cursor-help ${comparableResult.fx_rates_approximate ? 'text-amber-500' : 'text-gray-400'}`}
+                      title={`${comparableResult.currency_conversions.length} peer(s) converted to ${comparableResult.base_currency || 'USD'}: ${comparableResult.currency_conversions.map(c => `${c.symbol} (${c.original_currency})`).join(', ')}${comparableResult.fx_rates_approximate ? '\n⚠️ Using approximate exchange rates (not live data)' : ''}`}
                     >
                       • 🌐 {comparableResult.currency_conversions.length} FX-adjusted
+                      {comparableResult.fx_rates_approximate && <span className="text-xs text-amber-500 ml-1" title="P1.3: FX rates are approximate estimates, not live market data">~approx</span>}
                     </span>
                   )}
                 </div>

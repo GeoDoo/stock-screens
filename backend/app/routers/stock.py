@@ -628,9 +628,12 @@ async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
                 "original_currency": c.original_currency,
                 "converted_to": c.converted_to,
                 "rate": c.rate,
+                "is_approximate": c.is_approximate,  # P1.3: Mark approximate rates
             }
             for c in result.currency_conversions
         ] if result.currency_conversions else None,
+        # P1.3: Top-level warning if any FX rates were approximate
+        "fx_rates_approximate": result.fx_rates_approximate,
     }
 
 
