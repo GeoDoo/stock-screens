@@ -3,7 +3,7 @@ import { GlossaryRef } from './GlossaryRef';
 
 interface CapitalEfficiencyPanelProps {
   data: CapitalEfficiency;
-  wacc: number;
+  wacc: number | null;
 }
 
 /**
@@ -33,7 +33,7 @@ export function CapitalEfficiencyPanel({ data, wacc }: CapitalEfficiencyPanelPro
     if (roic > 0.20) return { text: `${pct}%`, color: 'text-emerald-600 font-semibold' };
     if (roic > 0.15) return { text: `${pct}%`, color: 'text-emerald-500' };
     if (roic > 0.10) return { text: `${pct}%`, color: 'text-gray-700' };
-    if (roic > wacc) return { text: `${pct}%`, color: 'text-amber-500' };
+    if (wacc !== null && roic > wacc) return { text: `${pct}%`, color: 'text-amber-500' };
     return { text: `${pct}%`, color: 'text-red-500' };
   };
 
@@ -136,7 +136,7 @@ export function CapitalEfficiencyPanel({ data, wacc }: CapitalEfficiencyPanelPro
 
       {/* Interpretation help */}
       <div className="text-[10px] text-gray-400 border-t border-gray-200 pt-2 mt-2">
-        ROIC &gt; WACC ({(wacc * 100).toFixed(1)}%) = Growth creates value
+        ROIC &gt; WACC ({wacc !== null ? (wacc * 100).toFixed(1) : 'N/A'}%) = Growth creates value
       </div>
     </div>
   );
