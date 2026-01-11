@@ -86,8 +86,8 @@ class FMPProvider(StockDataProvider):
                 raise RateLimitError("FMP rate limit exceeded")
             else:
                 raise ProviderError(error_detail or f"FMP API error ({response.status_code})")
-            
-            return response.json()
+        
+        return response.json()
     
     async def get_stock_data(self, symbol: str) -> StockData:
         """Fetch and normalize stock data from FMP."""
