@@ -809,12 +809,17 @@ class TestFullMonteCarloEndpoint:
                 "Response should include warnings list for simulation quality"
             assert "negative_terminal_fcf_count" in data, \
                 "Response should include count of skipped simulations"
+            # P0.3: Response should include wipe-out count
+            assert "zero_equity_count" in data, \
+                "Response should include count of wipe-out scenarios (equity <= 0)"
             
             # Warnings should be a list
             assert isinstance(data["warnings"], list)
-            # Count should be a non-negative integer
+            # Counts should be non-negative integers
             assert isinstance(data["negative_terminal_fcf_count"], int)
             assert data["negative_terminal_fcf_count"] >= 0
+            assert isinstance(data["zero_equity_count"], int)
+            assert data["zero_equity_count"] >= 0
 
 
 class TestSensitivityMatrix:

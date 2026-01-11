@@ -1641,6 +1641,8 @@ async def run_full_monte_carlo_endpoint(
         # Negative terminal FCF means the simulation was skipped (Gordon Growth doesn't apply)
         "warnings": result.warnings,
         "negative_terminal_fcf_count": result.negative_terminal_fcf_count,
+        # P0.3 Fix: Include wipe-out count (equity <= 0 scenarios clamped to $0)
+        "zero_equity_count": result.zero_equity_count,
     }
 
 
