@@ -442,13 +442,14 @@ export interface FinancialRatiosPeriod {
     cash_conversion_cycle: number | null;  // CCC = DSO + DIO - DPO
   };
   // Institutional-grade risk metrics
+  // P1.2: z_score_zone and m_score_zone can be "not_applicable" for financial companies
   risk?: {
     altman_z_score: number | null;
-    z_score_zone: 'safe' | 'grey' | 'distress' | null;
+    z_score_zone: 'safe' | 'grey' | 'distress' | 'not_applicable' | null;
     accrual_ratio: number | null;
     accrual_quality: 'good' | 'elevated' | 'warning' | null;
     beneish_m_score: number | null;
-    m_score_zone: 'low_risk' | 'high_risk' | null;
+    m_score_zone: 'low_risk' | 'high_risk' | 'not_applicable' | null;
   };
   // Stock-based compensation analysis
   sbc?: {

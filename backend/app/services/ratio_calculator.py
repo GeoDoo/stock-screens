@@ -168,6 +168,9 @@ class RatioCalculator:
         # Share repurchases (negative = buybacks, positive = issuance)
         share_repurchases = cash_flow.get("shareRepurchases") or 0
         
+        # Get sector for risk metrics gating (P1.2)
+        sector = profile.get("sector")
+        
         # Calculate Enterprise Value
         ev = None
         if market_cap is not None:
@@ -230,7 +233,8 @@ class RatioCalculator:
                 retained_earnings, operating_income, market_cap,
                 total_liabilities, revenue, net_income, operating_cash_flow,
                 income_stmt, balance_sheet, cash_flow,
-                prior_income, prior_balance, prior_cash_flow
+                prior_income, prior_balance, prior_cash_flow,
+                sector=sector,
             ),
             sbc=self._calc_sbc(
                 stock_based_compensation, free_cash_flow, revenue
@@ -484,6 +488,9 @@ class RatioCalculator:
         
         return ratios
     
+    # Financial sector gating: sectors where Z-Score/M-Score are not applicable
+    FINANCIAL_SECTORS = {"Financial Services", "Financials", "Financial"}
+    
     def _calc_risk(
         self,
         current_assets: Optional[float],
@@ -502,13 +509,26 @@ class RatioCalculator:
         prior_income: Optional[dict],
         prior_balance: Optional[dict],
         prior_cash_flow: Optional[dict],
+        sector: Optional[str] = None,
     ) -> RiskMetrics:
         """
         Calculate risk metrics including Altman Z-Score, Accrual Ratio, and Beneish M-Score.
+        
+        P1.2 Fix: Altman Z-Score and Beneish M-Score are NOT applicable to financial
+        companies (banks, insurers, REITs) because:
+        - Z-Score: Financial companies have different capital structures (high leverage
+          is normal, working capital concepts don't apply, no inventory)
+        - M-Score: Revenue recognition differs (interest income vs product sales)
+        
+        For Financial Services sector, return "not_applicable" for z_score_zone and
+        manipulation_risk instead of calculating misleading values.
         """
         ratios = RiskMetrics()
         
-        # Calculate Accrual Ratio (independent of Z-Score)
+        # Check if this is a financial sector company
+        is_financial = sector in self.FINANCIAL_SECTORS if sector else False
+        
+        # Calculate Accrual Ratio (valid for ALL sectors including financials)
         if (total_assets and total_assets > 0 and 
             net_income is not None and operating_cash_flow is not None):
             accrual = (net_income - operating_cash_flow) / total_assets
@@ -522,15 +542,24 @@ class RatioCalculator:
             else:
                 ratios.accrual_quality = "good"
         
-        # Calculate Beneish M-Score (requires prior year data)
-        m_score = self._calc_beneish_m_score(
-            income_stmt, balance_sheet, cash_flow,
-            prior_income, prior_balance, prior_cash_flow
-        )
-        if m_score is not None:
-            ratios.beneish_m_score = m_score
-            # P0 Fix: Return "high_risk"/"low_risk" to match frontend contract
-            ratios.manipulation_risk = "high_risk" if m_score > -1.78 else "low_risk"
+        # P1.2: Skip M-Score for financial companies
+        if is_financial:
+            ratios.manipulation_risk = "not_applicable"
+        else:
+            # Calculate Beneish M-Score (requires prior year data)
+            m_score = self._calc_beneish_m_score(
+                income_stmt, balance_sheet, cash_flow,
+                prior_income, prior_balance, prior_cash_flow
+            )
+            if m_score is not None:
+                ratios.beneish_m_score = m_score
+                # P0 Fix: Return "high_risk"/"low_risk" to match frontend contract
+                ratios.manipulation_risk = "high_risk" if m_score > -1.78 else "low_risk"
+        
+        # P1.2: Skip Z-Score for financial companies
+        if is_financial:
+            ratios.z_score_zone = "not_applicable"
+            return ratios
         
         # Check for critical data needed for Z-Score
         if not total_assets or total_assets <= 0:
