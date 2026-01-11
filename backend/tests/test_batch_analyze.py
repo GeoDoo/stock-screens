@@ -710,3 +710,159 @@ class TestTTMWorkingCapitalFormula:
             "Bug: `if ttm_wc` treats 0 as falsy."
         )
         assert ttm_wc_ratio == 0.0, f"WC ratio should be exactly 0.0, got {ttm_wc_ratio}"
+
+
+class TestTTMRatiosCashFlow:
+    """
+    P0 Fix: TTM ratios must include cash_flow data for accurate calculations.
+    
+    Bug: ttm_data passed to RatioCalculator only has income_statement + balance_sheet,
+    missing cash_flow. This causes:
+    - D&A defaults to 0 → EBITDA understated (EBITDA = EBIT + 0)
+    - FCF/SBC fields missing → SBC-adjusted metrics are null/wrong
+    
+    Fix: Add cash_flow section to ttm_data with D&A, CapEx, OCF, FCF, SBC.
+    """
+    
+    def test_ttm_sbc_metrics_not_null_when_sbc_available(self):
+        """
+        When TTM financials include stock_based_compensation,
+        the SBC metrics should be calculated, not null.
+        
+        Bug: ttm_data doesn't include cash_flow → sbc fields are null
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_stock_data.financials = [
+            FinancialStatement(
+                date="2024-01-01", period="annual",
+                revenue=100_000_000_000,
+                operating_income=15_000_000_000,
+                net_income=10_000_000_000,
+                total_assets=200_000_000_000,
+                total_liabilities=100_000_000_000,
+                total_equity=100_000_000_000,
+                operating_cash_flow=20_000_000_000,
+                free_cash_flow=15_000_000_000,
+                stock_based_compensation=2_000_000_000,  # 2B SBC
+            ),
+        ]
+        
+        # TTM with SBC data
+        mock_ttm = FinancialStatement(
+            date="TTM",
+            period="ttm",
+            revenue=110_000_000_000,  # 110B
+            gross_profit=44_000_000_000,
+            operating_income=16_500_000_000,
+            net_income=11_000_000_000,
+            depreciation_amortization=5_000_000_000,
+            capital_expenditure=-8_000_000_000,
+            operating_cash_flow=22_000_000_000,  # 22B OCF
+            free_cash_flow=16_000_000_000,  # 16B FCF
+            stock_based_compensation=2_500_000_000,  # 2.5B SBC (high!)
+            total_assets=220_000_000_000,
+            total_liabilities=110_000_000_000,
+            total_equity=110_000_000_000,
+            current_assets=55_000_000_000,
+            current_liabilities=33_000_000_000,
+            cash_and_equivalents=12_000_000_000,
+            total_debt=40_000_000_000,
+        )
+        
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+        
+        mock_yahoo = MagicMock()
+        mock_yahoo.get_ttm_financials = AsyncMock(return_value=mock_ttm)
+        mock_yahoo.get_dividends = AsyncMock(return_value=[])
+        
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client), \
+             patch("app.routers.stock.YahooProvider", return_value=mock_yahoo):
+            response = client.get("/api/stock/TEST/analyze?provider=yahoo")
+        
+        assert response.status_code == 200
+        data = response.json()
+        ratios = data["ratios"]["ttm"]
+        
+        # SBC metrics should be calculated, not null
+        assert ratios["sbc"]["sbc_percent_revenue"] is not None, (
+            "SBC % revenue should be calculated when SBC data is available. "
+            "Bug: ttm_data is missing cash_flow section."
+        )
+        
+        # SBC / Revenue = 2.5B / 110B = 2.27%
+        expected_sbc_pct = 2_500_000_000 / 110_000_000_000
+        assert abs(ratios["sbc"]["sbc_percent_revenue"] - expected_sbc_pct) < 0.01, (
+            f"SBC % revenue should be ~{expected_sbc_pct:.1%}, "
+            f"got {ratios['sbc']['sbc_percent_revenue']:.1%}"
+        )
+    
+    def test_ttm_fcf_adjusted_calculated_when_fcf_and_sbc_available(self):
+        """
+        FCF adjusted = FCF - SBC
+        
+        When both FCF and SBC are in TTM financials, fcf_adjusted should
+        be calculated, not null.
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_stock_data.financials = [
+            FinancialStatement(
+                date="2024-01-01", period="annual",
+                revenue=100_000_000_000,
+                operating_income=15_000_000_000,
+                net_income=10_000_000_000,
+                total_assets=200_000_000_000,
+                total_liabilities=100_000_000_000,
+                total_equity=100_000_000_000,
+            ),
+        ]
+        
+        mock_ttm = FinancialStatement(
+            date="TTM",
+            period="ttm",
+            revenue=110_000_000_000,
+            gross_profit=44_000_000_000,
+            operating_income=16_500_000_000,
+            net_income=11_000_000_000,
+            depreciation_amortization=5_000_000_000,
+            capital_expenditure=-8_000_000_000,
+            operating_cash_flow=22_000_000_000,
+            free_cash_flow=16_000_000_000,  # 16B FCF
+            stock_based_compensation=3_000_000_000,  # 3B SBC
+            total_assets=220_000_000_000,
+            total_liabilities=110_000_000_000,
+            total_equity=110_000_000_000,
+            current_assets=55_000_000_000,
+            current_liabilities=33_000_000_000,
+            cash_and_equivalents=12_000_000_000,
+            total_debt=40_000_000_000,
+        )
+        
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+        
+        mock_yahoo = MagicMock()
+        mock_yahoo.get_ttm_financials = AsyncMock(return_value=mock_ttm)
+        mock_yahoo.get_dividends = AsyncMock(return_value=[])
+        
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client), \
+             patch("app.routers.stock.YahooProvider", return_value=mock_yahoo):
+            response = client.get("/api/stock/TEST/analyze?provider=yahoo")
+        
+        assert response.status_code == 200
+        data = response.json()
+        ratios = data["ratios"]["ttm"]
+        
+        # FCF adjusted = FCF - SBC = 16B - 3B = 13B
+        expected_fcf_adjusted = 16_000_000_000 - 3_000_000_000
+        
+        assert ratios["sbc"]["fcf_adjusted"] is not None, (
+            "FCF adjusted should be calculated when FCF and SBC are available. "
+            "Bug: ttm_data is missing cash_flow section."
+        )
+        assert abs(ratios["sbc"]["fcf_adjusted"] - expected_fcf_adjusted) < 1_000_000, (
+            f"FCF adjusted should be ~{expected_fcf_adjusted/1e9:.1f}B, "
+            f"got {ratios['sbc']['fcf_adjusted']/1e9:.1f}B"
+        )
