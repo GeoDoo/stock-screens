@@ -848,6 +848,53 @@ class TestDynamicPeerDiscovery:
     """
     
     @pytest.mark.asyncio
+    async def test_handles_fmp_array_response_format(self):
+        """
+        Regression test: FMP /stock_peers returns array of objects:
+        [{"symbol": "AAPL", "peersList": ["MSFT", "GOOGL"]}]
+        
+        Bug: If FMP returns different format, extraction would fail silently.
+        """
+        from app.services.fmp_provider import FMPProvider
+        from unittest.mock import patch
+        
+        provider = FMPProvider(api_key="test_key")
+        
+        # FMP stable API returns array with object containing peersList
+        with patch.object(provider, '_request', return_value=[
+            {"symbol": "AAPL", "peersList": ["MSFT", "GOOGL", "META"]}
+        ]) as mock_request:
+            peers = await provider.get_stock_peers("AAPL")
+            
+            assert peers == ["MSFT", "GOOGL", "META"], (
+                "Should extract peersList from array response format"
+            )
+    
+    @pytest.mark.asyncio
+    async def test_handles_fmp_object_response_format(self):
+        """
+        Regression test: Some FMP endpoints return a single object:
+        {"symbol": "AAPL", "peersList": ["MSFT", "GOOGL"]}
+        
+        Bug: Code assumed array format, would fail on object format.
+        """
+        from app.services.fmp_provider import FMPProvider
+        from unittest.mock import patch
+        
+        provider = FMPProvider(api_key="test_key")
+        
+        # FMP might return single object (not wrapped in array)
+        with patch.object(provider, '_request', return_value={
+            "symbol": "AAPL", 
+            "peersList": ["MSFT", "GOOGL", "META"]
+        }) as mock_request:
+            peers = await provider.get_stock_peers("AAPL")
+            
+            assert peers == ["MSFT", "GOOGL", "META"], (
+                "Should handle object response format (not array)"
+            )
+    
+    @pytest.mark.asyncio
     async def test_uses_fmp_peers_when_available(self):
         """
         When provider is FMP and /stock-peers returns data, use those peers.

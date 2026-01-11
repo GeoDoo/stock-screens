@@ -105,8 +105,17 @@ class FMPClient:
         """Get list of peer company symbols for a stock."""
         try:
             result = await self._request("/stock_peers", symbol=symbol)
-            if result and len(result) > 0:
+            if not result:
+                return []
+            
+            # Handle both response formats:
+            # 1. Array: [{"symbol": "AAPL", "peersList": ["MSFT", "GOOGL"]}]
+            # 2. Object: {"symbol": "AAPL", "peersList": ["MSFT", "GOOGL"]}
+            if isinstance(result, list) and len(result) > 0:
                 return result[0].get("peersList", [])
+            elif isinstance(result, dict):
+                return result.get("peersList", [])
+                
         except Exception as e:
             logger.warning(f"Failed to fetch peers for {symbol}: {e}")
         return []

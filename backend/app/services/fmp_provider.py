@@ -404,8 +404,19 @@ class FMPProvider(StockDataProvider):
         """
         try:
             result = await self._request("/stock_peers", symbol=symbol)
-            if result and len(result) > 0:
+            if not result:
+                return []
+            
+            # Handle both response formats:
+            # 1. Array: [{"symbol": "AAPL", "peersList": ["MSFT", "GOOGL"]}]
+            # 2. Object: {"symbol": "AAPL", "peersList": ["MSFT", "GOOGL"]}
+            if isinstance(result, list) and len(result) > 0:
+                # Array format - get first element's peersList
                 return result[0].get("peersList", [])
+            elif isinstance(result, dict):
+                # Object format - get peersList directly
+                return result.get("peersList", [])
+            
         except Exception as e:
             logger.warning(f"Failed to fetch peers for {symbol}: {e}")
         return []
