@@ -415,11 +415,16 @@ class RatioCalculator:
         
         # Incremental ROIC = ΔNOPAT / ΔInvested Capital
         # Measures return on NEW capital invested - critical for reinvestment quality
+        # Note: Only meaningful when ΔIC > 0 (new capital was invested).
+        # When ΔIC <= 0 (capital returned via buybacks), the metric is N/A -
+        # you can't measure "return on capital invested" when no capital was invested.
         if (nopat is not None and invested_capital is not None and
             prior_nopat is not None and prior_invested_capital is not None):
             delta_nopat = nopat - prior_nopat
             delta_ic = invested_capital - prior_invested_capital
-            if delta_ic != 0:
+            # Only calculate when capital was actually invested (ΔIC > 0)
+            # Negative ΔIC means capital was returned (buybacks), not invested
+            if delta_ic > 0:
                 ratios.incremental_roic = delta_nopat / delta_ic
         
         return ratios

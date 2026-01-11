@@ -1735,6 +1735,57 @@ class TestIncrementalROIC:
         assert ratios.profitability.incremental_roic is not None
         assert ratios.profitability.incremental_roic == pytest.approx(0.097, rel=0.1)
 
+    def test_incremental_roic_none_when_capital_returned(self, calculator):
+        """
+        Incremental ROIC should be None when ΔIC <= 0 (capital returned, not invested).
+        
+        This happens with companies like AAPL that do massive buybacks.
+        Over 3 years, their Invested Capital might decrease even as earnings grow.
+        
+        Formula: ΔNOPAT / ΔIC breaks when ΔIC < 0
+        Example: +$12B NOPAT / -$6B IC = -200% (mathematically correct, economically meaningless)
+        
+        You can't measure "return on capital invested" when capital was RETURNED.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [
+                # Year T: Higher earnings
+                {"revenue": 400_000_000_000, "operatingIncome": 130_000_000_000, 
+                 "incomeBeforeTax": 125_000_000_000, "netIncome": 100_000_000_000},
+                # Year T-1
+                {"revenue": 390_000_000_000, "operatingIncome": 120_000_000_000, 
+                 "incomeBeforeTax": 115_000_000_000, "netIncome": 90_000_000_000},
+                # Year T-2
+                {"revenue": 380_000_000_000, "operatingIncome": 115_000_000_000, 
+                 "incomeBeforeTax": 110_000_000_000, "netIncome": 85_000_000_000},
+                # Year T-3: Lower earnings, HIGHER capital (before buybacks)
+                {"revenue": 360_000_000_000, "operatingIncome": 100_000_000_000, 
+                 "incomeBeforeTax": 95_000_000_000, "netIncome": 75_000_000_000},
+            ],
+            "balance_sheet": [
+                # Year T: LOWER IC due to buybacks reducing equity
+                {"totalStockholdersEquity": 70_000_000_000, "totalDebt": 100_000_000_000, 
+                 "cashAndCashEquivalents": 30_000_000_000},
+                # Year T-1
+                {"totalStockholdersEquity": 60_000_000_000, "totalDebt": 110_000_000_000, 
+                 "cashAndCashEquivalents": 25_000_000_000},
+                # Year T-2
+                {"totalStockholdersEquity": 65_000_000_000, "totalDebt": 120_000_000_000, 
+                 "cashAndCashEquivalents": 28_000_000_000},
+                # Year T-3: HIGHER IC before buybacks
+                {"totalStockholdersEquity": 100_000_000_000, "totalDebt": 90_000_000_000, 
+                 "cashAndCashEquivalents": 20_000_000_000},
+            ],
+            "cash_flow": [{}, {}, {}, {}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # ΔIC is negative (capital returned via buybacks)
+        # Should return None, not a misleading negative percentage
+        assert ratios.profitability.incremental_roic is None
+
     def test_incremental_roic_falls_back_to_1yr_without_3yr_data(self, calculator):
         """
         When 3 years of data is not available, fall back to 1-year calculation.
