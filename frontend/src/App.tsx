@@ -2201,6 +2201,31 @@ export default function App() {
                   </div>
                 )}
 
+                {/* P2 #9: Peer selection info for transparency */}
+                {comparableResult.peer_selection_info && (
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                    <div className="flex items-center gap-4">
+                      <span>
+                        <span className="font-semibold">Peers:</span>{' '}
+                        {comparableResult.peer_selection_info.source === 'industry' ? 'Industry-level' : 'Sector-level'}
+                      </span>
+                      <span className="text-gray-400">•</span>
+                      <span>
+                        <span className="font-semibold">Market Cap Filter:</span>{' '}
+                        {comparableResult.peer_selection_info.market_cap_range}
+                      </span>
+                      {comparableResult.peer_selection_info.after_market_cap_filter < comparableResult.peer_selection_info.total_candidates && (
+                        <>
+                          <span className="text-gray-400">•</span>
+                          <span className="text-amber-600" title={comparableResult.peer_selection_info.filter_note}>
+                            {comparableResult.peer_selection_info.total_candidates - comparableResult.peer_selection_info.after_market_cap_filter} peer(s) excluded (size mismatch)
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Implied Valuations */}
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Implied Value by Multiple</h3>

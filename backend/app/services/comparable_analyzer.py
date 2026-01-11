@@ -70,6 +70,8 @@ class ComparableResult:
     fx_rates_approximate: bool = False  # True if any peer used approximate FX rates
     # P2 #8: Business-type valuation notes for financials/cyclicals
     valuation_notes: List[str] = None  # type: ignore  # Notes about metric applicability
+    # P2 #9: Peer selection info for transparency
+    peer_selection_info: Optional[dict] = None  # Info about how peers were selected/filtered
     
     def __post_init__(self):
         if self.valuation_notes is None:
@@ -291,6 +293,30 @@ class ComparableAnalyzer:
             
             peers.append(peer)
         
+        # P2 #9: Track peer selection info for transparency
+        total_candidates = len(peers)
+        peer_source = self._get_peer_source(sector, industry)
+        
+        # P2 #9: Filter peers by market cap band (0.1x to 10x of target)
+        # This ensures we compare with similarly-sized companies
+        peers = self._filter_peers_by_market_cap(target, peers, min_ratio=0.1, max_ratio=10.0)
+        after_market_cap_filter = len(peers)
+        
+        # Build peer selection info
+        peer_selection_info = {
+            "source": peer_source,
+            "total_candidates": total_candidates,
+            "after_market_cap_filter": after_market_cap_filter,
+            "market_cap_range": "0.1x - 10x of target",
+        }
+        
+        # Add note if peers were filtered out
+        if after_market_cap_filter < total_candidates:
+            peer_selection_info["filter_note"] = (
+                f"{total_candidates - after_market_cap_filter} peer(s) excluded due to "
+                "market cap outside 0.1x-10x range of target"
+            )
+        
         # Calculate peer medians (now all in same currency)
         peer_medians = self._calculate_medians(peers)
         
@@ -324,6 +350,8 @@ class ComparableAnalyzer:
             fx_rates_approximate=any(c.is_approximate for c in currency_conversions) if currency_conversions else False,
             # P2 #8: Business-type valuation notes
             valuation_notes=valuation_notes,
+            # P2 #9: Peer selection transparency
+            peer_selection_info=peer_selection_info,
         )
     
     async def _get_exchange_rates(self, currencies: List[str]) -> dict:
@@ -431,6 +459,48 @@ class ComparableAnalyzer:
         if industry in self.INDUSTRY_PEERS or normalized_industry in self.INDUSTRY_PEERS:
             return "industry"
         return "sector"
+    
+    def _filter_peers_by_market_cap(
+        self,
+        target: CompanyMetrics,
+        peers: List[CompanyMetrics],
+        min_ratio: float = 0.1,
+        max_ratio: float = 10.0,
+    ) -> List[CompanyMetrics]:
+        """
+        Filter peers to those within a reasonable market cap range of the target.
+        
+        P2 #9: Improves peer selection by ensuring comparisons are with
+        similarly-sized companies. Apple ($3T) shouldn't be compared to
+        GoPro ($300M) just because both are "Consumer Electronics".
+        
+        Args:
+            target: Target company metrics
+            peers: List of peer company metrics
+            min_ratio: Minimum peer/target market cap ratio (default 0.1 = 10% of target)
+            max_ratio: Maximum peer/target market cap ratio (default 10.0 = 10x target)
+            
+        Returns:
+            Filtered list of peers within the market cap band
+        """
+        # If target has no market cap, don't filter
+        if target.market_cap is None or target.market_cap <= 0:
+            return peers
+        
+        filtered = []
+        for peer in peers:
+            # Exclude peers without market cap data
+            if peer.market_cap is None or peer.market_cap <= 0:
+                continue
+            
+            # Calculate ratio
+            ratio = peer.market_cap / target.market_cap
+            
+            # Include if within range
+            if min_ratio <= ratio <= max_ratio:
+                filtered.append(peer)
+        
+        return filtered
     
     def _get_sector_peers(self, symbol: str, sector: str) -> List[str]:
         """Get peer companies for a given sector, excluding the target.

@@ -319,6 +319,14 @@ export interface ComparableResult {
   fx_rates_approximate?: boolean;  // P1.3: True if any FX rates were approximate
   // P2 #8: Business-type valuation notes for financials/cyclicals
   valuation_notes?: string[];  // Notes about metric applicability for this business type
+  // P2 #9: Peer selection transparency (market cap filtering info)
+  peer_selection_info?: {
+    source: 'industry' | 'sector';
+    total_candidates: number;
+    after_market_cap_filter: number;
+    market_cap_range: string;
+    filter_note?: string;  // Shown when peers were filtered out
+  };
 }
 
 // Technical Analysis Types

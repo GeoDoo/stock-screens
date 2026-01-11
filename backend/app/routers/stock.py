@@ -636,6 +636,8 @@ async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
         "fx_rates_approximate": result.fx_rates_approximate,
         # P2 #8: Business-type valuation notes for financials/cyclicals
         "valuation_notes": result.valuation_notes,
+        # P2 #9: Peer selection transparency (market cap filtering info)
+        "peer_selection_info": result.peer_selection_info,
     }
 
 

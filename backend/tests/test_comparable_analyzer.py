@@ -706,3 +706,131 @@ class TestBusinessTypeGating:
         
         assert hasattr(result, "valuation_notes"), "ComparableResult should have valuation_notes field"
         assert len(result.valuation_notes) > 0, "Financial sector should have notes"
+
+
+class TestMarketCapFiltering:
+    """
+    P2 #9: Improve peer selection with market cap bands.
+    
+    Problem: Static peer lists can include vastly different-sized companies.
+    Apple ($3T) shouldn't be compared to GoPro ($300M) just because both
+    are "Consumer Electronics".
+    
+    Solution: Filter peers to those within a reasonable market cap range
+    (e.g., 0.1x to 10x of target's market cap).
+    """
+    
+    def test_filter_peers_by_market_cap_range(self):
+        """
+        Peers should be filtered to those within a market cap band.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        # Target: $100B market cap
+        target = CompanyMetrics(
+            symbol="TARGET",
+            name="Target Co",
+            market_cap=100_000_000_000,  # $100B
+            currency="USD",
+        )
+        
+        # Peers with various market caps
+        peers = [
+            CompanyMetrics(symbol="HUGE", name="Huge Corp", market_cap=500_000_000_000, currency="USD"),  # $500B - 5x, within range
+            CompanyMetrics(symbol="BIG", name="Big Corp", market_cap=200_000_000_000, currency="USD"),   # $200B - 2x, within range
+            CompanyMetrics(symbol="SIMILAR", name="Similar Corp", market_cap=80_000_000_000, currency="USD"),  # $80B - 0.8x, within range
+            CompanyMetrics(symbol="SMALL", name="Small Corp", market_cap=5_000_000_000, currency="USD"),  # $5B - 0.05x, TOO SMALL
+            CompanyMetrics(symbol="TINY", name="Tiny Corp", market_cap=500_000_000, currency="USD"),  # $500M - 0.005x, TOO SMALL
+            CompanyMetrics(symbol="GIANT", name="Giant Corp", market_cap=2_000_000_000_000, currency="USD"),  # $2T - 20x, TOO BIG
+        ]
+        
+        # Filter by market cap band (0.1x to 10x)
+        filtered = analyzer._filter_peers_by_market_cap(target, peers, min_ratio=0.1, max_ratio=10.0)
+        
+        # Should include: HUGE (5x), BIG (2x), SIMILAR (0.8x)
+        # Should exclude: SMALL (0.05x), TINY (0.005x), GIANT (20x)
+        filtered_symbols = [p.symbol for p in filtered]
+        
+        assert "HUGE" in filtered_symbols, "HUGE (5x) should be included"
+        assert "BIG" in filtered_symbols, "BIG (2x) should be included"
+        assert "SIMILAR" in filtered_symbols, "SIMILAR (0.8x) should be included"
+        assert "SMALL" not in filtered_symbols, "SMALL (0.05x) is too small"
+        assert "TINY" not in filtered_symbols, "TINY (0.005x) is too small"
+        assert "GIANT" not in filtered_symbols, "GIANT (20x) is too big"
+    
+    def test_no_filter_when_target_has_no_market_cap(self):
+        """
+        If target has no market cap, don't filter (return all peers).
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        target = CompanyMetrics(
+            symbol="TARGET",
+            name="Target Co",
+            market_cap=None,  # No market cap data
+            currency="USD",
+        )
+        
+        peers = [
+            CompanyMetrics(symbol="A", name="A", market_cap=100_000_000_000, currency="USD"),
+            CompanyMetrics(symbol="B", name="B", market_cap=1_000_000_000, currency="USD"),
+        ]
+        
+        filtered = analyzer._filter_peers_by_market_cap(target, peers)
+        
+        # Should return all peers unfiltered
+        assert len(filtered) == 2, "Should return all peers when target has no market cap"
+    
+    def test_peers_without_market_cap_excluded(self):
+        """
+        Peers without market cap data should be excluded from filtered results.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        target = CompanyMetrics(
+            symbol="TARGET",
+            name="Target Co",
+            market_cap=100_000_000_000,
+            currency="USD",
+        )
+        
+        peers = [
+            CompanyMetrics(symbol="GOOD", name="Good", market_cap=80_000_000_000, currency="USD"),
+            CompanyMetrics(symbol="NODATA", name="No Data", market_cap=None, currency="USD"),  # No market cap
+        ]
+        
+        filtered = analyzer._filter_peers_by_market_cap(target, peers)
+        
+        assert len(filtered) == 1, "Should exclude peers without market cap"
+        assert filtered[0].symbol == "GOOD"
+    
+    def test_comparable_result_includes_peer_selection_info(self):
+        """
+        ComparableResult should include info about peer selection/filtering.
+        """
+        from app.services.comparable_analyzer import ComparableResult
+        
+        result = ComparableResult(
+            target=None,  # type: ignore
+            peers=[],
+            sector="Technology",
+            industry="Consumer Electronics",
+            peer_medians={},
+            implied_valuations=[],
+            average_implied_price=None,
+            average_upside=None,
+            peer_selection_info={
+                "source": "industry",
+                "total_candidates": 7,
+                "after_market_cap_filter": 4,
+                "market_cap_range": "0.1x - 10x of target",
+            },
+        )
+        
+        assert hasattr(result, "peer_selection_info"), "Should have peer_selection_info field"
+        assert result.peer_selection_info["source"] == "industry"
+        assert result.peer_selection_info["total_candidates"] == 7
+        assert result.peer_selection_info["after_market_cap_filter"] == 4
