@@ -79,7 +79,11 @@ export default function App() {
     setFallbackNotice,
   } = useStockAnalysis(refreshRateLimits);
   
-  const [ticker, setTicker] = useState('');
+  // P2 Fix: Read ticker from URL for shareable links
+  const [ticker, setTicker] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('symbol')?.toUpperCase() || '';
+  });
   const [result, setResult] = useState<ValuationResult | null>(null);
   
   // User inputs
@@ -124,7 +128,20 @@ export default function App() {
   
   // Tab navigation
   const [activeTab, setActiveTab] = useState<'fundamental' | 'technical'>('fundamental');
-  const [fundamentalPeriod, setFundamentalPeriod] = useState<'annual' | 'ttm'>('ttm'); // Default to TTM (more current)
+  
+  // P2 Fix: Read period from URL query params for shareable links
+  const [fundamentalPeriod, setFundamentalPeriod] = useState<'annual' | 'ttm'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const periodFromUrl = params.get('period');
+    return periodFromUrl === 'annual' ? 'annual' : 'ttm'; // Default to TTM
+  });
+  
+  // P2 Fix: Update URL when period changes (without page reload)
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('period', fundamentalPeriod);
+    window.history.replaceState({}, '', url.toString());
+  }, [fundamentalPeriod]);
   
   // Assumption Audit Trail hook
   const assumptionTracker = useAssumptionTracker(stockData?.symbol || '');
@@ -135,6 +152,7 @@ export default function App() {
       assumptionTracker.fetchHistory();
     }
   }, [stockData?.symbol]);
+  
   
   // Computed: Get hints for the selected period
   const currentHints = stockData ? 
@@ -194,6 +212,11 @@ export default function App() {
         if (actualProvider !== selectedFundamentalProvider) {
           setSelectedFundamentalProvider(actualProvider);
         }
+        
+        // P2 Fix: Update URL with symbol for shareable links
+        const url = new URL(window.location.href);
+        url.searchParams.set('symbol', symbol);
+        window.history.replaceState({}, '', url.toString());
         
         // Pre-fill inputs with hints (prefer TTM if available, else annual)
         const hintsToUse = stockResponse.hints_ttm || stockResponse.hints_annual;
