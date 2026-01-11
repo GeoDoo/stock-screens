@@ -193,25 +193,35 @@ class YahooProvider(StockDataProvider):
             # ========================================
             # Check the date of the most recent quarter
             # If older than 6 months, reject as stale data
-            most_recent_quarter = q_income.columns[0]
+            most_recent_quarter_raw = q_income.columns[0]
             
-            if isinstance(most_recent_quarter, pd.Timestamp):
-                now = pd.Timestamp.now()
-                days_old = (now - most_recent_quarter).days
-                
-                if days_old > TTM_STALENESS_THRESHOLD_DAYS:
-                    logger.warning(
-                        f"TTM data is {days_old} days old "
-                        f"(last quarter: {most_recent_quarter.date()}). "
-                        f"Rejecting as stale - possible delisted/bankrupt company."
-                    )
-                    return None
-                
-                # Use actual quarter end date, not hardcoded "TTM"
-                ttm_date = f"TTM-{most_recent_quarter.strftime('%Y-%m-%d')}"
-            else:
-                # If date parsing fails, still allow but use generic date
-                ttm_date = "TTM"
+            # Convert to pd.Timestamp regardless of input type
+            # yfinance may return datetime, numpy datetime64, or pd.Timestamp
+            try:
+                most_recent_quarter = pd.Timestamp(most_recent_quarter_raw)
+            except (ValueError, TypeError) as e:
+                # If we can't parse the date, we CANNOT validate freshness
+                # Reject to maintain data integrity (fail safe)
+                logger.warning(
+                    f"Cannot parse quarter date '{most_recent_quarter_raw}' "
+                    f"(type: {type(most_recent_quarter_raw).__name__}). "
+                    f"Rejecting TTM data - unable to validate freshness."
+                )
+                return None
+            
+            now = pd.Timestamp.now()
+            days_old = (now - most_recent_quarter).days
+            
+            if days_old > TTM_STALENESS_THRESHOLD_DAYS:
+                logger.warning(
+                    f"TTM data is {days_old} days old "
+                    f"(last quarter: {most_recent_quarter.date()}). "
+                    f"Rejecting as stale - possible delisted/bankrupt company."
+                )
+                return None
+            
+            # Use actual quarter end date, not hardcoded "TTM"
+            ttm_date = f"TTM-{most_recent_quarter.strftime('%Y-%m-%d')}"
             
             # Helper to sum last 4 quarters (for income/cash flow)
             def sum_quarters(df, *keys):
