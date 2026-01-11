@@ -286,9 +286,11 @@ async def get_stock(symbol: str, provider: str):
     if stock_data.financials:
         # Get the most recent statement (financials are typically ordered most recent first)
         # Filter to non-TTM statements for accurate date
+        # Check BOTH date prefix (e.g. "TTM-2024-01-01") AND period field (e.g. period="ttm")
+        # A provider might return TTM with a real date but period="ttm"
         dated_statements = [
             f for f in stock_data.financials 
-            if f.date and not f.date.startswith("TTM")
+            if f.date and not f.date.startswith("TTM") and f.period.lower() != "ttm"
         ]
         if dated_statements:
             # Parse dates and find the most recent

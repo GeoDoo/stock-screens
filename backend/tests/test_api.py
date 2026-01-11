@@ -256,6 +256,68 @@ class TestStockEndpoint:
         # Since 2024-01-01 is well over 120 days ago in 2026, it should be stale
         assert result["data_is_stale"] is True
 
+    def test_data_freshness_excludes_ttm_by_period_not_just_date(self):
+        """
+        Bug fix: TTM statements should be excluded based on period field, not just date.
+        
+        A TTM statement might have a real date like "2024-06-30" with period="ttm".
+        The filter should check period != "ttm", not just date.startswith("TTM").
+        
+        Scenario: 
+        - TTM statement with period="ttm" and date="2025-12-01" (recent)
+        - Annual statement with period="annual" and date="2024-01-01" (old)
+        
+        Expected: Use the annual date (2024-01-01) for freshness, NOT the TTM date.
+        """
+        # Create mock with TTM statement that has a real date (not "TTM-...")
+        mock_stock_data = StockData(
+            profile=CompanyProfile(
+                symbol="TEST",
+                name="Test Corp",
+                price=100.0,
+                market_cap=1000000000,
+                beta=1.0,
+                shares_outstanding=10000000,
+                currency="USD",
+            ),
+            financials=[
+                # TTM with a REAL date (this should be EXCLUDED from freshness calc)
+                FinancialStatement(
+                    date="2025-12-01",  # Recent date but period is TTM
+                    period="ttm",  # <-- This should trigger exclusion
+                    revenue=100000000,
+                    net_income=10000000,
+                ),
+                # Annual statement with older date (this SHOULD be used)
+                FinancialStatement(
+                    date="2024-01-01",
+                    period="annual",
+                    revenue=95000000,
+                    net_income=9500000,
+                ),
+            ],
+            provider="fmp",
+        )
+        
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            response = client.get("/api/stock/TEST?provider=fmp")
+
+        assert response.status_code == 200
+        result = response.json()
+        
+        # Should use the ANNUAL statement date (2024-01-01), NOT the TTM date (2025-12-01)
+        assert result["latest_statement_date"] == "2024-01-01", (
+            f"Expected freshness based on annual statement date (2024-01-01), "
+            f"but got {result['latest_statement_date']}. "
+            "TTM statements should be excluded by period, not just by date prefix."
+        )
+        # 2024-01-01 is stale (>120 days old in 2026)
+        assert result["data_is_stale"] is True
+
 
 class TestValuationEndpoint:
     @pytest.fixture
