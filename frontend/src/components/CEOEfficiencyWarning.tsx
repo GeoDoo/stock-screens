@@ -3,6 +3,8 @@ import { GlossaryRef } from './GlossaryRef';
 interface CEOEfficiencyWarningProps {
   incrementalRoic: number | null | undefined;
   wacc: number | null | undefined;
+  /** True when Inc. ROIC is null because capital was returned (buybacks) not invested */
+  capitalReturned?: boolean;
 }
 
 /**
@@ -14,8 +16,51 @@ interface CEOEfficiencyWarningProps {
  * - Value Creator: Inc. ROIC > WACC (every new $ invested earns above cost)
  * - Value Neutral: Inc. ROIC ≈ WACC (breaking even on new investments)
  * - Value Destroyer: Inc. ROIC < WACC (burning capital with growth)
+ * - N/A: When capital was returned (buybacks) rather than invested
  */
-export function CEOEfficiencyWarning({ incrementalRoic, wacc }: CEOEfficiencyWarningProps) {
+export function CEOEfficiencyWarning({ incrementalRoic, wacc, capitalReturned }: CEOEfficiencyWarningProps) {
+  // Special case: Capital was returned (buybacks), not invested
+  // Show explanatory message instead of hiding the section
+  if (capitalReturned && wacc != null) {
+    return (
+      <div className="p-4 rounded-lg border border-blue-200 bg-blue-50">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            CEO Efficiency
+            <GlossaryRef id="ceo-efficiency" />
+          </div>
+          <span className="text-sm font-bold text-blue-700">
+            N/A — CAPITAL RETURNED
+          </span>
+        </div>
+        
+        <div className="text-sm text-gray-600 mb-3">
+          Cannot measure return on <em>invested</em> capital when capital was <em>returned</em>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3 text-sm mb-3">
+          <div>
+            <div className="text-xs text-gray-400 uppercase">Inc. ROIC (3yr)</div>
+            <div className="font-medium font-mono text-gray-500">N/A</div>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400 uppercase">WACC</div>
+            <div className="font-medium font-mono">{(wacc * 100).toFixed(2)}%</div>
+          </div>
+        </div>
+        
+        <div className="p-2 bg-blue-100 border border-blue-200 rounded text-xs text-blue-800">
+          <span className="font-semibold">ℹ️ Why N/A?</span>{' '}
+          Over the past 3 years, this company's Invested Capital <strong>decreased</strong> — typically 
+          due to share buybacks reducing equity. The formula <code>ΔNOPAT / ΔIC</code> produces 
+          misleading results when ΔIC &lt; 0 (e.g., +$10B earnings / -$5B capital = -200%). 
+          This company is <strong>returning capital to shareholders</strong>, not deploying new 
+          capital for growth. Consider Total Shareholder Yield instead.
+        </div>
+      </div>
+    );
+  }
+  
   // Need both values to assess
   if (incrementalRoic == null || wacc == null) {
     return null;
