@@ -1358,3 +1358,126 @@ class TestNegativeTerminalFCFHandling:
         assert result.negative_terminal_fcf_count < result.iterations * 0.5, (
             "Zero FCF should not be counted as negative terminal FCF"
         )
+
+
+class TestFatTailsDistribution:
+    """
+    Tests for fat tails (Student's t-distribution) in Monte Carlo.
+    
+    The "Gaussian Fallacy" is that markets don't follow Normal distributions.
+    Real markets have "fat tails" - extreme events happen more often than
+    Normal distribution predicts (1-in-100 year crashes happen more often).
+    
+    Student's t-distribution with low degrees of freedom (df) has fatter tails.
+    - df=∞ → Normal distribution
+    - df=3-5 → Moderate fat tails (recommended for finance)
+    - df=1 → Cauchy (very fat tails, undefined variance)
+    """
+    
+    def test_bounded_input_accepts_degrees_of_freedom(self):
+        """
+        BoundedInput should accept a degrees_of_freedom parameter.
+        
+        When df is specified, it should use Student's t-distribution
+        instead of Normal distribution for sampling.
+        """
+        # This test will fail until we implement fat tails
+        inp = BoundedInput(
+            name="growth",
+            mean=0.10,
+            std_dev=0.05,
+            min_val=-0.20,
+            max_val=0.40,
+            degrees_of_freedom=4,  # Fat tails parameter
+        )
+        
+        # Should have the attribute
+        assert hasattr(inp, 'degrees_of_freedom')
+        assert inp.degrees_of_freedom == 4
+    
+    def test_fat_tails_produces_more_extreme_values(self):
+        """
+        With fat tails (low df), we should see more extreme samples
+        compared to Normal distribution.
+        
+        Test: Count samples beyond 3 standard deviations from mean.
+        - Normal: ~0.3% of samples beyond 3σ
+        - t(df=4): ~1.2% of samples beyond 3σ (4x more)
+        """
+        random.seed(42)
+        
+        # Normal distribution (df=None or very high)
+        normal_inp = BoundedInput(
+            name="growth",
+            mean=0.10,
+            std_dev=0.05,
+            min_val=-0.50,  # Wide bounds so we can see extremes
+            max_val=0.70,
+            degrees_of_freedom=None,  # Normal distribution
+        )
+        
+        # Fat tails distribution (df=4)
+        fat_tail_inp = BoundedInput(
+            name="growth",
+            mean=0.10,
+            std_dev=0.05,
+            min_val=-0.50,
+            max_val=0.70,
+            degrees_of_freedom=4,  # Fat tails
+        )
+        
+        n_samples = 10000
+        threshold_low = 0.10 - 3 * 0.05  # mean - 3σ = -0.05
+        threshold_high = 0.10 + 3 * 0.05  # mean + 3σ = 0.25
+        
+        random.seed(42)
+        normal_samples = [normal_inp.sample() for _ in range(n_samples)]
+        normal_extremes = sum(1 for s in normal_samples if s < threshold_low or s > threshold_high)
+        
+        random.seed(42)
+        fat_samples = [fat_tail_inp.sample() for _ in range(n_samples)]
+        fat_extremes = sum(1 for s in fat_samples if s < threshold_low or s > threshold_high)
+        
+        # Fat tails should have MORE extreme values
+        # (at least 2x as many, typically 3-4x)
+        assert fat_extremes > normal_extremes * 1.5, (
+            f"Fat tails (df=4) should produce more extremes. "
+            f"Normal: {normal_extremes}, Fat tails: {fat_extremes}"
+        )
+    
+    def test_run_full_monte_carlo_accepts_fat_tails_parameter(self):
+        """
+        run_full_monte_carlo should accept a fat_tails_df parameter.
+        
+        This enables users to model "1-in-100 year" economic crashes
+        more realistically than Normal distribution allows.
+        """
+        # Historical data (5 years)
+        historical_revenue = [80e6, 85e6, 90e6, 95e6, 100e6]
+        historical_ebit = [12e6, 13e6, 14e6, 15e6, 16e6]
+        historical_da = [3e6, 3.2e6, 3.4e6, 3.6e6, 3.8e6]
+        historical_capex = [4e6, 4.2e6, 4.5e6, 4.8e6, 5e6]
+        historical_wc = [8e6, 8.5e6, 9e6, 9.5e6, 10e6]
+        
+        result = run_full_monte_carlo(
+            historical_revenue=historical_revenue,
+            historical_ebit=historical_ebit,
+            historical_da=historical_da,
+            historical_capex=historical_capex,
+            historical_working_capital=historical_wc,
+            shares_outstanding=10_000_000,
+            total_debt=30_000_000,
+            cash=10_000_000,
+            current_price=15.0,
+            base_growth=0.08,
+            base_margin=0.15,
+            base_discount_rate=0.10,
+            projection_years=5,
+            iterations=100,
+            seed=42,
+            fat_tails_df=4,  # Enable fat tails
+        )
+        
+        # Should complete without error and have valid results
+        assert result is not None
+        assert result.valid_simulations > 0
