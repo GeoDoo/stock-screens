@@ -18,9 +18,32 @@ Example:
     Terminal:  3% perpetuity
 
 This is how institutional investors actually model companies.
+
+Operating Leverage Enhancement:
+    For capital-intensive businesses (airlines, manufacturers, utilities),
+    margins don't fade linearly. They behave as step functions due to
+    high fixed costs creating operating leverage:
+    
+    - Flat at low margin while capacity is being filled
+    - Jump to high margin when utilization exceeds threshold
+    - Flat again until next capacity investment
+    
+    This is modeled via FadeMode.STEP with margin_step_at_year.
 """
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import List, Optional, Dict, Any
+
+
+class FadeMode(Enum):
+    """
+    How values transition from start to end over a growth stage.
+    
+    LINEAR: Smooth linear interpolation (default, good for most companies)
+    STEP: Step function that jumps at a specific year (for operating leverage)
+    """
+    LINEAR = "linear"
+    STEP = "step"
 
 
 @dataclass
@@ -28,20 +51,30 @@ class GrowthStage:
     """
     A single growth phase in a multi-stage model.
     
-    If end_* fields are provided, the stage will fade linearly
-    from start to end values over the years.
+    If end_* fields are provided, the stage will fade from start to end
+    values over the years. The fade can be:
+    - LINEAR (default): Smooth linear interpolation
+    - STEP: Jump at a specific year (for operating leverage modeling)
     
     Economics fields (margin, capex, wc) allow modeling how a company's
     unit economics evolve as it matures - critical for accurate DCF.
+    
+    Operating Leverage (Step Function):
+        For capital-intensive businesses, set margin_fade_mode=FadeMode.STEP
+        and margin_step_at_year=N to model the capacity fill effect:
+        - Years 1 to (N-1): margin stays at operating_margin (low utilization)
+        - Years N onwards: margin jumps to end_operating_margin (capacity filled)
     """
     name: str
     years: int
     growth_rate: float
-    end_growth_rate: Optional[float] = None  # If set, fade linearly to this rate
+    end_growth_rate: Optional[float] = None  # If set, fade to this rate
     
     # Economics - operating margin as % of revenue
     operating_margin: Optional[float] = None
     end_operating_margin: Optional[float] = None
+    margin_fade_mode: FadeMode = FadeMode.LINEAR
+    margin_step_at_year: Optional[int] = None  # For STEP mode: year when margin jumps
     
     # Economics - CapEx as % of revenue  
     capex_ratio: Optional[float] = None
@@ -50,6 +83,19 @@ class GrowthStage:
     # Economics - Working Capital as % of revenue
     wc_ratio: Optional[float] = None
     end_wc_ratio: Optional[float] = None
+    
+    def __post_init__(self):
+        """Validate step parameters."""
+        if self.margin_fade_mode == FadeMode.STEP:
+            if self.margin_step_at_year is None:
+                raise ValueError(
+                    "margin_step_at_year is required when margin_fade_mode=STEP"
+                )
+            if self.margin_step_at_year < 1 or self.margin_step_at_year > self.years:
+                raise ValueError(
+                    f"margin_step_at_year ({self.margin_step_at_year}) must be "
+                    f"between 1 and years ({self.years})"
+                )
 
 
 def create_fade_schedule(
@@ -72,6 +118,50 @@ def create_fade_schedule(
     for i in range(years):
         rate = start_rate + (step * i)
         schedule.append(rate)
+    
+    return schedule
+
+
+def create_step_schedule(
+    start_value: float,
+    end_value: float,
+    years: int,
+    step_at_year: int,
+) -> List[float]:
+    """
+    Create a step function schedule for operating leverage modeling.
+    
+    For capital-intensive businesses, margins don't fade linearly.
+    Instead, they stay flat until capacity fills, then jump.
+    
+    Args:
+        start_value: Value before the step (e.g., low margin during capacity fill)
+        end_value: Value after the step (e.g., high margin when capacity filled)
+        years: Total years in the stage
+        step_at_year: Year when the step occurs (1-indexed, within years)
+    
+    Returns:
+        List of values, flat at start_value until step_at_year, then end_value
+    
+    Example:
+        create_step_schedule(0.08, 0.22, 5, 3)
+        -> [0.08, 0.08, 0.22, 0.22, 0.22]
+        # Margin stays at 8% for years 1-2, jumps to 22% at year 3
+    """
+    if years <= 0:
+        return []
+    
+    if step_at_year < 1:
+        step_at_year = 1
+    if step_at_year > years:
+        step_at_year = years
+    
+    schedule = []
+    for year in range(1, years + 1):
+        if year < step_at_year:
+            schedule.append(start_value)
+        else:
+            schedule.append(end_value)
     
     return schedule
 
@@ -104,14 +194,22 @@ def calculate_economics_schedule(
     stages: List[GrowthStage],
     start_attr: str,
     end_attr: str,
+    fade_mode_attr: Optional[str] = None,
+    step_at_year_attr: Optional[str] = None,
 ) -> Optional[List[float]]:
     """
     Calculate year-by-year schedule for an economics metric (margin, capex, wc).
+    
+    Supports two fade modes:
+    - LINEAR (default): Smooth linear interpolation
+    - STEP: Jump at a specific year (for operating leverage modeling)
     
     Args:
         stages: List of growth stages
         start_attr: Attribute name for start value (e.g., 'operating_margin')
         end_attr: Attribute name for end value (e.g., 'end_operating_margin')
+        fade_mode_attr: Attribute name for fade mode (e.g., 'margin_fade_mode')
+        step_at_year_attr: Attribute name for step year (e.g., 'margin_step_at_year')
     
     Returns:
         List of values per year, or None if metric not specified in any stage
@@ -127,16 +225,33 @@ def calculate_economics_schedule(
         start_value = getattr(stage, start_attr)
         end_value = getattr(stage, end_attr)
         
+        # Get fade mode and step parameters if applicable
+        fade_mode = FadeMode.LINEAR
+        step_at_year = None
+        if fade_mode_attr:
+            fade_mode = getattr(stage, fade_mode_attr, FadeMode.LINEAR) or FadeMode.LINEAR
+        if step_at_year_attr:
+            step_at_year = getattr(stage, step_at_year_attr, None)
+        
         if start_value is None:
             # No value for this stage - use None placeholders
             schedule.extend([None] * stage.years)
         elif end_value is not None:
-            # Fade stage
-            stage_schedule = create_fade_schedule(
-                start_rate=start_value,
-                end_rate=end_value,
-                years=stage.years,
-            )
+            # Fade stage - choose fade method based on mode
+            if fade_mode == FadeMode.STEP and step_at_year is not None:
+                stage_schedule = create_step_schedule(
+                    start_value=start_value,
+                    end_value=end_value,
+                    years=stage.years,
+                    step_at_year=step_at_year,
+                )
+            else:
+                # Default to linear fade
+                stage_schedule = create_fade_schedule(
+                    start_rate=start_value,
+                    end_rate=end_value,
+                    years=stage.years,
+                )
             schedule.extend(stage_schedule)
         else:
             # Constant value stage
@@ -191,8 +306,11 @@ class MultiStageGrowthModel:
         object.__setattr__(self, 'stages', tuple(self.stages))
         
         self._growth_schedule = calculate_growth_schedule(self.stages)
+        # Margin schedule supports step function for operating leverage modeling
         self._margin_schedule = calculate_economics_schedule(
-            self.stages, 'operating_margin', 'end_operating_margin'
+            self.stages, 'operating_margin', 'end_operating_margin',
+            fade_mode_attr='margin_fade_mode',
+            step_at_year_attr='margin_step_at_year',
         )
         self._capex_schedule = calculate_economics_schedule(
             self.stages, 'capex_ratio', 'end_capex_ratio'
@@ -333,6 +451,68 @@ def turnaround_model(terminal_rate: float = 0.025) -> MultiStageGrowthModel:
             GrowthStage("Stabilization", years=2, growth_rate=0.02),
             GrowthStage("Growth Resumption", years=3, growth_rate=0.02, end_growth_rate=0.08),
             GrowthStage("Mature Growth", years=3, growth_rate=0.05),
+        ],
+        terminal_growth_rate=terminal_rate,
+    )
+
+
+def capital_intensive_model(
+    capacity_fill_years: int = 4,
+    low_margin: float = 0.06,
+    high_margin: float = 0.22,
+    step_at_year: int = 3,
+    growth_rate: float = 0.10,
+    terminal_rate: float = 0.025,
+) -> MultiStageGrowthModel:
+    """
+    Pre-built model for capital-intensive businesses.
+    
+    Models operating leverage / capacity fill dynamics:
+    - Margins stay low while capacity is being filled (high fixed costs, low utilization)
+    - Margins jump when capacity utilization exceeds threshold
+    - Then stable at high margin as operating leverage kicks in
+    
+    Suitable for: Airlines, Manufacturing, Utilities, Mining, Semiconductors (fab buildout)
+    
+    Args:
+        capacity_fill_years: Years in the capacity fill phase
+        low_margin: Margin while filling capacity (low utilization)
+        high_margin: Margin after capacity filled (operating leverage)
+        step_at_year: Year when margin jumps (capacity fills)
+        growth_rate: Revenue growth during capacity fill
+        terminal_rate: Terminal growth rate
+    
+    Example:
+        A semiconductor company building a new fab:
+        - Years 1-2: 6% margin (fab ramping, low utilization)
+        - Year 3+: 22% margin (fab at capacity, fixed costs spread)
+    """
+    return MultiStageGrowthModel(
+        stages=[
+            GrowthStage(
+                name="Capacity Fill",
+                years=capacity_fill_years,
+                growth_rate=growth_rate,
+                operating_margin=low_margin,
+                end_operating_margin=high_margin,
+                margin_fade_mode=FadeMode.STEP,
+                margin_step_at_year=step_at_year,
+            ),
+            GrowthStage(
+                name="Mature Operations",
+                years=3,
+                growth_rate=growth_rate,
+                end_growth_rate=terminal_rate + 0.02,  # Fade toward terminal
+                operating_margin=high_margin,
+            ),
+            GrowthStage(
+                name="Terminal Approach",
+                years=3,
+                growth_rate=terminal_rate + 0.02,
+                end_growth_rate=terminal_rate,
+                operating_margin=high_margin,
+                end_operating_margin=high_margin * 0.9,  # Slight margin compression
+            ),
         ],
         terminal_growth_rate=terminal_rate,
     )

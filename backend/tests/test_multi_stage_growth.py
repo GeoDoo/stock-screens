@@ -4,6 +4,9 @@ from app.services.multi_stage_growth import (
     MultiStageGrowthModel,
     create_fade_schedule,
     calculate_growth_schedule,
+    FadeMode,
+    create_step_schedule,
+    capital_intensive_model,
 )
 
 
@@ -454,3 +457,201 @@ class TestScheduleLengthConsistency:
         # Tuple has no append method - raises AttributeError
         with pytest.raises(AttributeError):
             model.stages.append(GrowthStage("Extra", years=5, growth_rate=0.10))
+
+
+class TestStepFunctionFade:
+    """
+    Tests for step function (operating leverage) fade mode.
+    
+    For capital-intensive businesses (airlines, manufacturers, utilities),
+    margins don't fade linearly. Instead, they behave as step functions:
+    - Flat at low margin while capacity is being filled
+    - Jump to high margin when utilization exceeds threshold
+    - Flat again until next capacity investment
+    
+    This models the fixed-cost leverage effect where high fixed costs
+    mean operating leverage works both ways (high upside, high downside).
+    """
+    
+    def test_fade_mode_enum_exists(self):
+        """FadeMode enum should have linear and step options."""
+        assert FadeMode.LINEAR.value == "linear"
+        assert FadeMode.STEP.value == "step"
+    
+    def test_create_step_schedule_basic(self):
+        """Step schedule should stay flat, then jump at threshold."""
+        schedule = create_step_schedule(
+            start_value=0.10,   # 10% margin initially
+            end_value=0.25,     # 25% margin after step
+            years=5,
+            step_at_year=3,     # Step happens at year 3
+        )
+        
+        assert len(schedule) == 5
+        # Years 1-2: flat at start value
+        assert schedule[0] == 0.10
+        assert schedule[1] == 0.10
+        # Years 3-5: jumped to end value
+        assert schedule[2] == 0.25
+        assert schedule[3] == 0.25
+        assert schedule[4] == 0.25
+    
+    def test_create_step_schedule_early_step(self):
+        """Step at year 1 should immediately use end value."""
+        schedule = create_step_schedule(
+            start_value=0.08,
+            end_value=0.20,
+            years=4,
+            step_at_year=1,
+        )
+        
+        # All years at end value (step at year 1 = immediate)
+        assert all(v == 0.20 for v in schedule)
+    
+    def test_create_step_schedule_late_step(self):
+        """Step at last year should stay at start until final year."""
+        schedule = create_step_schedule(
+            start_value=0.12,
+            end_value=0.30,
+            years=5,
+            step_at_year=5,
+        )
+        
+        # Years 1-4: at start value
+        assert schedule[0] == 0.12
+        assert schedule[1] == 0.12
+        assert schedule[2] == 0.12
+        assert schedule[3] == 0.12
+        # Year 5: jumped to end
+        assert schedule[4] == 0.30
+    
+    def test_growth_stage_with_step_fade_mode(self):
+        """GrowthStage should support fade_mode parameter."""
+        stage = GrowthStage(
+            name="Capacity Fill",
+            years=5,
+            growth_rate=0.15,
+            operating_margin=0.08,
+            end_operating_margin=0.22,
+            margin_fade_mode=FadeMode.STEP,
+            margin_step_at_year=3,  # Margin jumps at year 3
+        )
+        
+        assert stage.margin_fade_mode == FadeMode.STEP
+        assert stage.margin_step_at_year == 3
+    
+    def test_step_fade_in_multi_stage_model(self):
+        """MultiStageGrowthModel should respect step fade mode."""
+        model = MultiStageGrowthModel(
+            stages=[
+                GrowthStage(
+                    name="Capacity Build",
+                    years=4,
+                    growth_rate=0.10,
+                    operating_margin=0.05,       # Low margin while filling capacity
+                    end_operating_margin=0.20,   # High margin once capacity filled
+                    margin_fade_mode=FadeMode.STEP,
+                    margin_step_at_year=3,       # Capacity fills in year 3
+                ),
+            ],
+            terminal_growth_rate=0.03,
+        )
+        
+        margins = model.margin_schedule
+        assert margins is not None
+        assert len(margins) == 4
+        
+        # Years 1-2: low margin (capacity not yet filled)
+        assert margins[0] == 0.05
+        assert margins[1] == 0.05
+        # Years 3-4: high margin (capacity filled, operating leverage kicks in)
+        assert margins[2] == 0.20
+        assert margins[3] == 0.20
+    
+    def test_mixed_fade_modes_across_stages(self):
+        """Different stages can use different fade modes."""
+        model = MultiStageGrowthModel(
+            stages=[
+                # Stage 1: Step function (capacity build)
+                GrowthStage(
+                    name="Capacity Build",
+                    years=3,
+                    growth_rate=0.15,
+                    operating_margin=0.08,
+                    end_operating_margin=0.18,
+                    margin_fade_mode=FadeMode.STEP,
+                    margin_step_at_year=2,
+                ),
+                # Stage 2: Linear fade (maturity)
+                GrowthStage(
+                    name="Mature Fade",
+                    years=3,
+                    growth_rate=0.08,
+                    end_growth_rate=0.04,
+                    operating_margin=0.18,
+                    end_operating_margin=0.15,
+                    margin_fade_mode=FadeMode.LINEAR,
+                ),
+            ],
+            terminal_growth_rate=0.03,
+        )
+        
+        margins = model.margin_schedule
+        assert margins is not None
+        assert len(margins) == 6
+        
+        # Stage 1: step function (years 1-3)
+        assert margins[0] == 0.08  # Before step
+        assert margins[1] == 0.18  # After step (year 2)
+        assert margins[2] == 0.18  # Still high
+        
+        # Stage 2: linear fade (years 4-6)
+        assert margins[3] == 0.18  # Start of fade
+        assert 0.15 < margins[4] < 0.18  # Mid-fade
+        assert abs(margins[5] - 0.15) < 0.01  # End of fade
+    
+    def test_capital_intensive_model_template(self):
+        """Pre-built model for capital-intensive businesses."""
+        model = capital_intensive_model(
+            capacity_fill_years=4,
+            low_margin=0.06,
+            high_margin=0.22,
+            step_at_year=3,
+            terminal_rate=0.025,
+        )
+        
+        assert model.total_projection_years >= 4
+        
+        margins = model.margin_schedule
+        assert margins is not None
+        
+        # Should have step behavior in early years
+        assert margins[0] == 0.06  # Low margin
+        assert margins[1] == 0.06  # Still low
+        assert margins[2] == 0.22  # Jumped to high
+    
+    def test_default_fade_mode_is_linear(self):
+        """If fade_mode not specified, should default to LINEAR."""
+        stage = GrowthStage(
+            name="Default",
+            years=3,
+            growth_rate=0.10,
+            operating_margin=0.15,
+            end_operating_margin=0.10,
+            # No fade_mode specified
+        )
+        
+        assert stage.margin_fade_mode == FadeMode.LINEAR
+    
+    def test_step_at_year_validation(self):
+        """step_at_year should be validated to be within stage years."""
+        with pytest.raises(ValueError, match="step_at_year"):
+            GrowthStage(
+                name="Invalid",
+                years=3,
+                growth_rate=0.10,
+                operating_margin=0.15,
+                end_operating_margin=0.25,
+                margin_fade_mode=FadeMode.STEP,
+                margin_step_at_year=5,  # Invalid: stage only has 3 years
+            )

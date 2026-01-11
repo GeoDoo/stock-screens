@@ -29,6 +29,23 @@ const TEMPLATES: Record<string, GrowthStage[]> = {
     { name: 'Growth', years: 3, growth_rate: 0.02, end_growth_rate: 0.08, operating_margin: 0.08, end_operating_margin: 0.12, capex_ratio: 0.06, wc_ratio: 0.15 },
     { name: 'Mature', years: 3, growth_rate: 0.05, operating_margin: 0.12, capex_ratio: 0.05, wc_ratio: 0.12 },
   ],
+  // Operating Leverage: For capital-intensive businesses (airlines, manufacturing, semis)
+  // Margins stay low during capacity fill, then jump when utilization hits threshold
+  capitalIntensive: [
+    { 
+      name: 'Capacity Fill', 
+      years: 4, 
+      growth_rate: 0.12, 
+      operating_margin: 0.06, 
+      end_operating_margin: 0.22,
+      margin_fade_mode: 'step',  // Step function instead of linear
+      margin_step_at_year: 3,    // Margin jumps at year 3 when capacity fills
+      capex_ratio: 0.15, 
+      wc_ratio: 0.15 
+    },
+    { name: 'Mature Ops', years: 3, growth_rate: 0.08, end_growth_rate: 0.05, operating_margin: 0.22, capex_ratio: 0.08, wc_ratio: 0.12 },
+    { name: 'Terminal', years: 3, growth_rate: 0.05, end_growth_rate: 0.03, operating_margin: 0.20, capex_ratio: 0.06, wc_ratio: 0.10 },
+  ],
 };
 
 export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }: MultiStageGrowthProps) {
@@ -140,6 +157,14 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                 disabled={disabled}
               >
                 Turnaround
+              </button>
+              <button
+                onClick={() => applyTemplate('capitalIntensive')}
+                className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-white"
+                disabled={disabled}
+                title="Operating leverage: margins stay low until capacity fills, then jump"
+              >
+                Capital Intensive
               </button>
               {stages.length > 0 && (
                 <button
@@ -289,6 +314,49 @@ export function MultiStageGrowth({ stages, onChange, terminalGrowth, disabled }:
                           <span className="text-xs text-gray-400">%</span>
                         </div>
                       </div>
+                      
+                      {/* Margin Fade Mode (Operating Leverage) */}
+                      {stage.operating_margin != null && stage.end_operating_margin != null && (
+                        <div className="flex items-center gap-3 ml-24 pl-1">
+                          <span className="text-xs text-gray-400">Mode:</span>
+                          <select
+                            value={stage.margin_fade_mode || 'linear'}
+                            onChange={(e) => {
+                              const mode = e.target.value as 'linear' | 'step';
+                              updateStage(index, { 
+                                margin_fade_mode: mode,
+                                // Default step at year 2 when switching to step mode
+                                margin_step_at_year: mode === 'step' ? (stage.margin_step_at_year || Math.ceil(stage.years / 2)) : null,
+                              });
+                            }}
+                            className="text-xs border border-gray-200 rounded px-1 py-0.5 bg-white"
+                            disabled={disabled}
+                            title="Linear: smooth fade. Step: jump at specific year (operating leverage)"
+                          >
+                            <option value="linear">Linear Fade</option>
+                            <option value="step">Step (Op. Leverage)</option>
+                          </select>
+                          {stage.margin_fade_mode === 'step' && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-gray-400">Jump at year:</span>
+                              <input
+                                type="number"
+                                min="1"
+                                max={stage.years}
+                                value={stage.margin_step_at_year || Math.ceil(stage.years / 2)}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  if (val >= 1 && val <= stage.years) {
+                                    updateStage(index, { margin_step_at_year: val });
+                                  }
+                                }}
+                                className="w-12 text-xs border border-gray-200 rounded px-1 py-0.5 bg-white text-center"
+                                disabled={disabled}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
                       
                       {/* CapEx Ratio */}
                       <div className="flex items-center gap-3">

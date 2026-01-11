@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code docstrings.
 > 
-> Last updated: 2026-01-11 21:32
+> Last updated: 2026-01-11 21:47
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -67,13 +67,10 @@ Working Capital Modes:
 
 ## Multi-Stage Growth
 
-A single growth phase in a multi-stage model.
+How values transition from start to end over a growth stage.
 
-If end_* fields are provided, the stage will fade linearly
-from start to end values over the years.
-
-Economics fields (margin, capex, wc) allow modeling how a company's
-unit economics evolve as it matures - critical for accurate DCF.
+LINEAR: Smooth linear interpolation (default, good for most companies)
+STEP: Step function that jumps at a specific year (for operating leverage)
 
 ## Monte Carlo Simulation
 

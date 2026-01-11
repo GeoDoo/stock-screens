@@ -95,6 +95,9 @@ export interface StockDataResponse {
   data_is_stale?: boolean;  // True if >120 days old (post-earnings update required)
 }
 
+// Fade mode for economics schedules
+export type FadeMode = 'linear' | 'step';
+
 export interface GrowthStage {
   name: string;
   years: number;
@@ -104,6 +107,9 @@ export interface GrowthStage {
   // Multi-stage economics - fade operating margin as company matures
   operating_margin?: number | null;  // e.g., 0.15 for 15% margin
   end_operating_margin?: number | null;  // If set, fade to this margin
+  // Operating leverage mode: 'linear' = smooth fade, 'step' = jump at step_at_year
+  margin_fade_mode?: FadeMode | null;
+  margin_step_at_year?: number | null;  // For 'step' mode: year when margin jumps
   
   // CapEx ratio (as % of revenue) - typically declines as growth slows
   capex_ratio?: number | null;  // e.g., 0.10 for 10%

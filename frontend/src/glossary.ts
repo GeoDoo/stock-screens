@@ -453,6 +453,13 @@ export const glossaryTerms: GlossaryTerm[] = [
     investopediaUrl: "https://www.investopedia.com/terms/m/multistageddm.asp",
   },
   {
+    id: "operating-leverage",
+    term: "Operating Leverage",
+    fullName: "Capacity Fill / Step Function Margins",
+    definition: "For capital-intensive businesses (airlines, manufacturers, semiconductors), margins don't fade linearly. They behave as step functions: flat at low margin while capacity fills (high fixed costs spread over low volume), then jump when utilization exceeds threshold. Use 'Step' mode in multi-stage economics to model this — margins stay at the start value until the step year, then jump to the end value.",
+    investopediaUrl: "https://www.investopedia.com/terms/o/operatingleverage.asp",
+  },
+  {
     id: "growth-decay",
     term: "Growth Decay",
     fullName: "Growth Fade",
