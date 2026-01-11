@@ -109,4 +109,10 @@ describe('CapitalEfficiencyPanel', () => {
     renderWithRouter(<CapitalEfficiencyPanel data={defaultData} wacc={0.10} />);
     expect(screen.getByText(/ROIC.*WACC.*Growth creates value/)).toBeInTheDocument();
   });
+
+  it('handles null WACC gracefully', () => {
+    renderWithRouter(<CapitalEfficiencyPanel data={defaultData} wacc={null} />);
+    // Should show N/A for WACC percentage
+    expect(screen.getByText(/WACC \(N\/A%\)/)).toBeInTheDocument();
+  });
 });

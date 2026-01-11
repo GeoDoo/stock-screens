@@ -211,7 +211,7 @@ export interface ValuationResult {
   market_cap: number | null;
   net_debt: number;
   equity_bridge?: EquityBridge;  // Full institutional bridge
-  wacc: number;
+  wacc: number | null;  // Can be null if WACC calculation fails
   discount_rate: number;
   using_custom_discount_rate: boolean;
   terminal_value: number;
