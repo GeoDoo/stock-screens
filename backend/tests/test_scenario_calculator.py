@@ -750,6 +750,7 @@ class TestDilutionInScenarios:
         Tech companies with 2-3% annual SBC issuance will see
         meaningful dilution over a 10-year projection.
         """
+        # Use realistic values that produce positive equity value
         # No dilution
         calc_no_dilution = ScenarioCalculator(
             historical_revenue=[100],
@@ -759,8 +760,8 @@ class TestDilutionInScenarios:
             historical_working_capital=[10],
             tax_rate=0.25,
             shares_outstanding=1000,
-            total_debt=500,
-            cash=200,
+            total_debt=50,   # Lower debt
+            cash=100,        # Higher cash
             base_wacc=0.10,
             projection_years=10,
         )
@@ -774,8 +775,8 @@ class TestDilutionInScenarios:
             historical_working_capital=[10],
             tax_rate=0.25,
             shares_outstanding=1000,
-            total_debt=500,
-            cash=200,
+            total_debt=50,   # Same as above
+            cash=100,        # Same as above
             base_wacc=0.10,
             projection_years=10,
             annual_dilution_rate=0.03,  # 3% annual dilution

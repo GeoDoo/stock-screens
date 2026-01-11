@@ -465,6 +465,12 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
         "operating_margin": request.operating_margin_hint if request.operating_margin_hint is not None else fcf_projector.operating_margin(),
     }
     
+    # P1 Fix: Full equity bridge (consistency with main valuation)
+    minority_interest = extractor.minority_interest() or 0
+    preferred_stock = extractor.preferred_stock() or 0
+    deferred_tax_assets = extractor.deferred_tax_assets() or 0
+    pension_deficit = extractor.pension_liability() or 0
+    
     calculator = ScenarioCalculator(
         historical_revenue=extractor.revenue_history() or [0],
         historical_ebit=extractor.ebit_history() or [0],
@@ -481,6 +487,13 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
         da_ratio=request.da_ratio,
         capex_ratio=request.capex_ratio,
         wc_ratio=request.wc_ratio,
+        # P1 Fix: Full equity bridge
+        minority_interest=minority_interest,
+        preferred_stock=preferred_stock,
+        deferred_tax_assets=deferred_tax_assets,
+        pension_deficit=pension_deficit,
+        # P1 Fix: Dilution support
+        annual_dilution_rate=request.annual_dilution_rate,
     )
     
     if request.scenarios:
@@ -506,6 +519,15 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
         "current_price": result.current_price,
         "wacc": base_wacc,
         "projection_years": request.projection_years,
+        # P1 Fix: Expose equity bridge for transparency
+        "equity_bridge": {
+            "net_debt": total_debt - cash,
+            "minority_interest": minority_interest,
+            "preferred_stock": preferred_stock,
+            "deferred_tax_assets": deferred_tax_assets,
+            "pension_deficit": pension_deficit,
+        },
+        "annual_dilution_rate": request.annual_dilution_rate,
         "scenarios": [
             {
                 "name": s.name,

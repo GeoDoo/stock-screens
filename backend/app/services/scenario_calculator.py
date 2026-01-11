@@ -99,6 +99,13 @@ class ScenarioCalculator:
         da_ratio: Optional[float] = None,
         capex_ratio: Optional[float] = None,
         wc_ratio: Optional[float] = None,
+        # P1 Fix: Full equity bridge (match main valuation)
+        minority_interest: float = 0.0,
+        preferred_stock: float = 0.0,
+        deferred_tax_assets: float = 0.0,
+        pension_deficit: float = 0.0,
+        # P1 Fix: Dilution support (match main valuation)
+        annual_dilution_rate: float = 0.0,
     ):
         self.historical_revenue = historical_revenue
         self.historical_ebit = historical_ebit
@@ -116,6 +123,13 @@ class ScenarioCalculator:
         self.da_ratio = da_ratio
         self.capex_ratio = capex_ratio
         self.wc_ratio = wc_ratio
+        # P1 Fix: Full equity bridge
+        self.minority_interest = minority_interest
+        self.preferred_stock = preferred_stock
+        self.deferred_tax_assets = deferred_tax_assets
+        self.pension_deficit = pension_deficit
+        # P1 Fix: Dilution
+        self.annual_dilution_rate = annual_dilution_rate
     
     def get_default_scenarios(self, hints: dict) -> List[Scenario]:
         """
@@ -201,12 +215,22 @@ class ScenarioCalculator:
         
         enterprise_value = pv_fcf + pv_terminal
         
-        # Net debt adjustment
+        # P1 Fix: Full equity bridge (match main valuation service)
+        # Equity = EV - Net Debt - Minority Interest - Preferred + NOLs - Pension
         net_debt = self.total_debt - self.cash
-        equity_value = enterprise_value - net_debt
+        equity_value = (
+            enterprise_value
+            - net_debt
+            - self.minority_interest
+            - self.preferred_stock
+            + self.deferred_tax_assets
+            - self.pension_deficit
+        )
         
-        # Intrinsic value per share
-        intrinsic_value = equity_value / self.shares_outstanding if self.shares_outstanding > 0 else 0
+        # P1 Fix: Apply dilution to per-share value (match main valuation service)
+        # Terminal shares = current shares * (1 + dilution_rate)^years
+        terminal_shares = self.shares_outstanding * ((1 + self.annual_dilution_rate) ** self.projection_years)
+        intrinsic_value = equity_value / terminal_shares if terminal_shares > 0 else 0
         
         return ScenarioResult(
             name=scenario.name,
