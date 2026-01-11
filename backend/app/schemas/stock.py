@@ -1,5 +1,5 @@
 """Stock-related request/response schemas."""
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 
 from app.constants import DEFAULT_TAX_RATE, DEFAULT_TERMINAL_GROWTH, DEFAULT_MARKET_RISK_PREMIUM
@@ -120,7 +120,8 @@ class ValuationRequest(BaseModel):
     growth_stages: Optional[List[GrowthStageInput]] = None
     # SBC dilution - annual share growth rate from stock-based compensation
     # E.g., 0.02 means 2% more shares issued each year (dilutes per-share value)
-    annual_dilution_rate: float = 0.0
+    # Validated to -0.5 to 0.5 range (50% buyback to 50% dilution max)
+    annual_dilution_rate: float = Field(default=0.0, ge=-0.5, le=0.5)
     # Exit Multiple cross-check - sector/peer median EV/EBITDA multiple
     # If provided, compares Gordon Growth TV with Exit Multiple TV and warns if >20% divergence
     sector_ev_ebitda_multiple: Optional[float] = None
@@ -210,7 +211,8 @@ class ScenarioRequest(BaseModel):
     capex_ratio: Optional[float] = None
     wc_ratio: Optional[float] = None
     # P1 Fix: Dilution support (consistency with main valuation)
-    annual_dilution_rate: float = 0.0
+    # Validated to -0.5 to 0.5 range (50% buyback to 50% dilution max)
+    annual_dilution_rate: float = Field(default=0.0, ge=-0.5, le=0.5)
 
 
 class MonteCarloRequest(BaseModel):
