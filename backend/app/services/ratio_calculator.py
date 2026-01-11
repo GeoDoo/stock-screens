@@ -27,6 +27,10 @@ class DividendMetrics:
     # NEW: Total Shareholder Yield (Alpha Layer)
     buyback_yield: Optional[float] = None  # Share Repurchases / Market Cap
     total_shareholder_yield: Optional[float] = None  # Dividend Yield + Buyback Yield
+    # NOTES2.md P0: Debt-Funded Returns Check (Value Trap Detection)
+    # If (Dividends + Buybacks) > FCF, company is borrowing to pay shareholders
+    is_debt_funded_returns: Optional[bool] = None  # True = unsustainable (value trap signal)
+    capital_returns_coverage: Optional[float] = None  # FCF / (Dividends + Buybacks), >1 = healthy
 
 
 @dataclass
@@ -228,7 +232,8 @@ class RatioCalculator:
                 price, market_cap, shares, net_income, revenue, equity, ev, ebitda
             ),
             dividend=self._calc_dividend(
-                price, shares, dividends_paid, net_income, market_cap, share_repurchases
+                price, shares, dividends_paid, net_income, market_cap, share_repurchases,
+                free_cash_flow=free_cash_flow,
             ),
             profitability=self._calc_profitability(
                 revenue, gross_profit, operating_income, net_income,
@@ -308,6 +313,7 @@ class RatioCalculator:
         net_income: Optional[float],
         market_cap: Optional[float],
         share_repurchases: float,
+        free_cash_flow: Optional[float] = None,
     ) -> DividendMetrics:
         """
         Calculate dividend and total shareholder yield metrics.
@@ -316,6 +322,10 @@ class RatioCalculator:
         
         This captures the true "cash return" to shareholders, as modern
         tech companies often return more via buybacks than dividends.
+        
+        NOTES2.md P0: Debt-Funded Returns Check
+        If (Dividends + Buybacks) > FCF, the company is borrowing to pay
+        shareholders — a classic "value trap" signal. This is unsustainable.
         """
         metrics = DividendMetrics()
         
@@ -334,6 +344,7 @@ class RatioCalculator:
         # Note: In cash flow, repurchases are typically negative (cash outflow)
         # A negative shareRepurchases means money spent on buybacks (good for shareholders)
         # A positive shareRepurchases means shares issued (dilution)
+        buyback_amount = 0.0
         if market_cap and market_cap > 0:
             # Convert to positive for buybacks (negate the negative cash flow)
             buyback_amount = -share_repurchases if share_repurchases else 0
@@ -347,6 +358,26 @@ class RatioCalculator:
             buy_yield = metrics.buyback_yield or 0.0
             metrics.total_shareholder_yield = div_yield + buy_yield
         # else: total_shareholder_yield remains None (insufficient data)
+        
+        # NOTES2.md P0: Debt-Funded Returns Check (Value Trap Detection)
+        # If (Dividends + Buybacks) > FCF, company is borrowing to pay shareholders
+        # This is a classic "value trap" signal — yields look attractive but unsustainable
+        total_capital_returns = dividends_paid + buyback_amount
+        
+        if total_capital_returns > 0 and free_cash_flow is not None:
+            # Calculate coverage ratio: FCF / Total Returns
+            # > 1.0 = healthy (FCF covers returns)
+            # < 1.0 = borrowing to pay returns (unsustainable)
+            metrics.capital_returns_coverage = free_cash_flow / total_capital_returns
+            
+            # Flag as debt-funded if FCF doesn't cover returns
+            # Use a small buffer (0.95) to avoid false positives from rounding
+            metrics.is_debt_funded_returns = free_cash_flow < (total_capital_returns * 0.95)
+        elif total_capital_returns == 0:
+            # No returns = not applicable
+            metrics.is_debt_funded_returns = None
+            metrics.capital_returns_coverage = None
+        # else: free_cash_flow is None, can't determine
         
         return metrics
     

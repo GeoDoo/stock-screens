@@ -2402,3 +2402,189 @@ class TestRiskMetricsGating:
         
         # Should calculate Z-Score (sector unknown, default to calculating)
         assert ratios.risk.altman_z_score is not None
+
+
+class TestDebtFundedReturnsCheck:
+    """
+    Tests for debt-funded returns sustainability check.
+    
+    NOTES2.md P0: "Dividend-Debt" Liquidity Time Bomb
+    
+    Many "Value Traps" pay dividends by issuing debt:
+    - Negative FCF + Positive Dividend = Debt-Funded Returns
+    
+    If (Dividends + Buybacks) > FCF, the company is funding shareholder
+    returns with debt, which is unsustainable.
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_healthy_returns_not_flagged(self, calculator):
+        """
+        When FCF covers dividends + buybacks, should NOT flag as debt-funded.
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,
+                "sharesOutstanding": 1_000_000_000,
+            },
+            "income_statement": [{
+                "revenue": 50_000_000_000,
+                "netIncome": 10_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 8_000_000_000,    # $8B FCF
+                "dividendsPaid": -3_000_000_000,   # $3B dividends
+                "shareRepurchases": -2_000_000_000, # $2B buybacks
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Total returns = $3B + $2B = $5B < $8B FCF
+        assert ratios.dividend.is_debt_funded_returns is False
+    
+    def test_debt_funded_returns_flagged(self, calculator):
+        """
+        When (Dividends + Buybacks) > FCF, should flag as debt-funded.
+        
+        This is the classic "value trap" signal.
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,
+                "sharesOutstanding": 1_000_000_000,
+            },
+            "income_statement": [{
+                "revenue": 50_000_000_000,
+                "netIncome": 5_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 2_000_000_000,     # $2B FCF (low)
+                "dividendsPaid": -4_000_000_000,   # $4B dividends
+                "shareRepurchases": -1_000_000_000, # $1B buybacks
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Total returns = $4B + $1B = $5B > $2B FCF = DEBT FUNDED
+        assert ratios.dividend.is_debt_funded_returns is True
+    
+    def test_negative_fcf_always_flagged(self, calculator):
+        """
+        Negative FCF with any dividends = always debt-funded.
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,
+                "sharesOutstanding": 1_000_000_000,
+            },
+            "income_statement": [{
+                "revenue": 50_000_000_000,
+                "netIncome": -2_000_000_000,  # Loss
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": -5_000_000_000,   # Negative FCF
+                "dividendsPaid": -1_000_000_000,   # Still paying dividends!
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # FCF < 0 but paying dividends = definitely debt funded
+        assert ratios.dividend.is_debt_funded_returns is True
+    
+    def test_no_returns_not_flagged(self, calculator):
+        """
+        No dividends or buybacks = not debt-funded (nothing to fund).
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,
+                "sharesOutstanding": 1_000_000_000,
+            },
+            "income_statement": [{
+                "revenue": 50_000_000_000,
+                "netIncome": 5_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": -5_000_000_000,   # Negative FCF
+                "dividendsPaid": 0,                # No dividends
+                # No buybacks
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # No returns = not applicable
+        assert ratios.dividend.is_debt_funded_returns is None
+    
+    def test_capital_returns_coverage_ratio(self, calculator):
+        """
+        Should calculate how well FCF covers capital returns.
+        
+        FCF Coverage = FCF / (Dividends + Buybacks)
+        - > 1.0: Healthy (FCF covers returns)
+        - < 1.0: Unsustainable (borrowing to pay returns)
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,
+                "sharesOutstanding": 1_000_000_000,
+            },
+            "income_statement": [{
+                "revenue": 50_000_000_000,
+                "netIncome": 10_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 8_000_000_000,    # $8B FCF
+                "dividendsPaid": -4_000_000_000,   # $4B dividends
+                "shareRepurchases": -2_000_000_000, # $2B buybacks
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Coverage = $8B / $6B = 1.33
+        assert ratios.dividend.capital_returns_coverage is not None
+        assert abs(ratios.dividend.capital_returns_coverage - 1.33) < 0.01
+    
+    def test_missing_fcf_no_flag(self, calculator):
+        """
+        If FCF is not available, cannot determine if debt-funded.
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": 100_000_000_000,
+                "sharesOutstanding": 1_000_000_000,
+            },
+            "income_statement": [{
+                "revenue": 50_000_000_000,
+                "netIncome": 10_000_000_000,
+            }],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                # No freeCashFlow
+                "dividendsPaid": -4_000_000_000,
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Missing data = None (unknown)
+        assert ratios.dividend.is_debt_funded_returns is None
+        assert ratios.dividend.capital_returns_coverage is None

@@ -280,8 +280,39 @@ export function FinancialRatiosTable({ ratios }: Props) {
                   </td>
                 </tr>
               )}
+              {ratios.dividend.capital_returns_coverage != null && (
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-sm text-gray-500">
+                    FCF Coverage
+                    <GlossaryRef id="capital-returns-coverage" />
+                  </td>
+                  <td className="py-2 text-sm font-mono font-medium text-right">
+                    <span className={
+                      ratios.dividend.capital_returns_coverage >= 1 ? 'text-green-600' :
+                      ratios.dividend.capital_returns_coverage >= 0.5 ? 'text-amber-600' :
+                      'text-red-600'
+                    }>
+                      {ratios.dividend.capital_returns_coverage.toFixed(2)}x
+                    </span>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+          {/* Debt-Funded Returns Warning (Value Trap) */}
+          {ratios.dividend.is_debt_funded_returns === true && (
+            <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <span className="text-red-600 text-lg">⚠️</span>
+                <div>
+                  <p className="text-xs font-semibold text-red-700">Debt-Funded Returns</p>
+                  <p className="text-xs text-red-600">
+                    Dividends + Buybacks exceed Free Cash Flow. Company may be borrowing to fund shareholder returns — a classic value trap signal.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

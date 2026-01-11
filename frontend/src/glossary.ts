@@ -254,6 +254,12 @@ export const glossaryTerms: GlossaryTerm[] = [
     definition: "The proportion of earnings paid out as dividends to shareholders. A sustainable payout ratio (typically under 60%) suggests dividends can be maintained or grown.",
     investopediaUrl: "https://www.investopedia.com/terms/d/dividendpayoutratio.asp",
   },
+  {
+    id: "capital-returns-coverage",
+    term: "FCF Coverage (Capital Returns)",
+    definition: "Measures how well Free Cash Flow covers shareholder returns (dividends + buybacks). Coverage > 1.0x means FCF fully funds returns; < 1.0x suggests the company is borrowing or depleting cash to pay shareholders — a 'value trap' warning sign.",
+    investopediaUrl: "https://www.investopedia.com/terms/f/freecashflow.asp",
+  },
 
   // Profitability Ratios
   {
