@@ -62,6 +62,10 @@ class TechnicalAnalysisResult:
     mfi_14: Optional[List[IndicatorValue]] = None  # Money Flow Index
     mfi_signal: str = "neutral"  # "overbought", "oversold", "neutral"
     obv_trend: str = "neutral"  # "accumulation", "distribution", "neutral"
+    
+    # NEW: Momentum Bridge (Value + Momentum convergence)
+    vwma_200: Optional[List[IndicatorValue]] = None  # 200-day VWMA for long-term trend
+    vwma_trend: str = "flat"  # "uptrend", "downtrend", "flat"
 
 
 class TechnicalIndicators:
@@ -571,5 +575,112 @@ class TechnicalIndicators:
             return "distribution"
         else:
             return "neutral"
+    
+    @staticmethod
+    def analyze_vwma_trend(
+        vwma_values: List[Optional[float]], 
+        period: int = 200,
+        lookback: int = 20,
+    ) -> str:
+        """
+        Analyze the trend of the 200-day VWMA.
+        
+        This is the "Momentum Bridge" - a key convergence signal for
+        combining Value (DCF) with Momentum (trend).
+        
+        A cheap valuation should only trigger a "Buy" if the VWMA
+        is flattening or trending up. Buying into a downtrend is
+        "catching a falling knife" and creates "Dead Money" risk.
+        
+        Args:
+            vwma_values: 200-day VWMA values (with None for initial period)
+            period: VWMA period (default 200)
+            lookback: Days to check trend slope (default 20)
+        
+        Returns:
+            "uptrend": VWMA rising - momentum supports entry
+            "downtrend": VWMA falling - wait for reversal
+            "flat": VWMA relatively stable - cautiously acceptable
+        """
+        # Get valid VWMA values (exclude None)
+        valid_values = [v for v in vwma_values if v is not None]
+        
+        if len(valid_values) < lookback:
+            return "flat"  # Not enough data - assume neutral
+        
+        # Use last 'lookback' values to determine slope
+        recent = valid_values[-lookback:]
+        
+        # Calculate percentage change over the lookback period
+        start_val = recent[0]
+        end_val = recent[-1]
+        
+        if start_val == 0:
+            return "flat"
+        
+        pct_change = (end_val - start_val) / start_val
+        
+        # Threshold: ±1% over 20 days is considered "flat"
+        # More than +1% = uptrend, less than -1% = downtrend
+        if pct_change > 0.01:  # >1% rise over lookback
+            return "uptrend"
+        elif pct_change < -0.01:  # >1% fall over lookback
+            return "downtrend"
+        else:
+            return "flat"
+    
+    @staticmethod
+    def momentum_bridge_signal(
+        intrinsic_value: float,
+        current_price: float,
+        vwma_trend: str,
+        undervalued_threshold: float = 0.15,  # 15% margin of safety
+        overvalued_threshold: float = -0.10,  # 10% overvalued
+    ) -> str:
+        """
+        Momentum Bridge: Combine Value and Momentum for entry signal.
+        
+        This bridges the gap between Intrinsic Value (DCF) and Market
+        Psychology (trend). Buying cheap stocks in downtrends often
+        leads to "Dead Money" - value traps that take years to recover.
+        
+        Signal Logic:
+        - BUY: Undervalued AND (uptrend OR flat) - momentum supports entry
+        - WAIT: Undervalued AND downtrend - don't catch falling knife
+        - HOLD: Fair value (within ±15%) - no strong action
+        - AVOID: Overvalued - don't buy regardless of trend
+        
+        Args:
+            intrinsic_value: Calculated DCF value per share
+            current_price: Current market price
+            vwma_trend: "uptrend", "downtrend", or "flat"
+            undervalued_threshold: % below which stock is "cheap" (default 15%)
+            overvalued_threshold: % above which stock is "expensive" (default -10%)
+        
+        Returns:
+            "buy": Value + Momentum aligned for entry
+            "wait": Value says cheap, momentum says wait
+            "hold": Fair value, no strong signal
+            "avoid": Overvalued, don't buy
+        """
+        if current_price <= 0 or intrinsic_value <= 0:
+            return "hold"
+        
+        # Calculate margin of safety (positive = undervalued)
+        margin = (intrinsic_value - current_price) / current_price
+        
+        # Overvalued - avoid regardless of trend
+        if margin < overvalued_threshold:
+            return "avoid"
+        
+        # Undervalued - check momentum
+        if margin > undervalued_threshold:
+            if vwma_trend in ("uptrend", "flat"):
+                return "buy"  # Value + Momentum aligned
+            else:
+                return "wait"  # Cheap but don't catch falling knife
+        
+        # Fair value range
+        return "hold"
 
 
