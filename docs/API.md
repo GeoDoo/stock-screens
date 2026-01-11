@@ -764,7 +764,8 @@ POST /api/stock/{symbol}/scenarios
   "operating_margin_hint": 0.0,
   "da_ratio": 0.0,
   "capex_ratio": 0.0,
-  "wc_ratio": 0.0
+  "wc_ratio": 0.0,
+  "annual_dilution_rate": 0.0
 }
 ```
 
@@ -779,6 +780,7 @@ POST /api/stock/{symbol}/scenarios
 | `da_ratio` | number | null | No |  |
 | `capex_ratio` | number | null | No |  |
 | `wc_ratio` | number | null | No |  |
+| `annual_dilution_rate` | number | No |  |
 
 
 ---

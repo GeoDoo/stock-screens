@@ -209,6 +209,8 @@ class ScenarioRequest(BaseModel):
     da_ratio: Optional[float] = None
     capex_ratio: Optional[float] = None
     wc_ratio: Optional[float] = None
+    # P1 Fix: Dilution support (consistency with main valuation)
+    annual_dilution_rate: float = 0.0
 
 
 class MonteCarloRequest(BaseModel):
