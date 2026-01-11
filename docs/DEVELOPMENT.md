@@ -2,7 +2,7 @@
 
 > **Auto-generated** from package files.
 > 
-> Last updated: 2026-01-11 09:56
+> Last updated: 2026-01-11 10:08
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -55,7 +55,7 @@ npm run dev
 
 ## Running Tests
 
-### Backend Tests (31 test files)
+### Backend Tests (32 test files)
 
 ```bash
 cd backend

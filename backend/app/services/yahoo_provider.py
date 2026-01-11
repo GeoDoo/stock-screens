@@ -1,6 +1,8 @@
 import asyncio
 import logging
+from datetime import datetime, timedelta
 from typing import List, Optional
+import pandas as pd
 import yfinance as yf
 
 from app.services.base_provider import (
@@ -18,6 +20,10 @@ from app.services.base_provider import (
 from app.constants import DEFAULT_TREASURY_RATE
 
 logger = logging.getLogger(__name__)
+
+# Maximum age for TTM data before it's considered stale (in days)
+# 6 months = ~180 days - if 2+ quarters are missed, data is unreliable
+TTM_STALENESS_THRESHOLD_DAYS = 180
 
 
 class YahooProvider(StockDataProvider):
@@ -168,6 +174,10 @@ class YahooProvider(StockDataProvider):
         
         - Income/Cash flow items: Sum last 4 quarters
         - Balance sheet items: Use most recent quarter
+        
+        IMPORTANT: Validates data freshness before returning.
+        Rejects data older than 6 months to prevent using stale data
+        from delisted/bankrupt companies.
         """
         try:
             # Get quarterly financials
@@ -177,6 +187,31 @@ class YahooProvider(StockDataProvider):
             
             if q_income is None or q_income.empty or len(q_income.columns) < 4:
                 return None
+            
+            # ========================================
+            # FRESHNESS CHECK (P0 Data Integrity Fix)
+            # ========================================
+            # Check the date of the most recent quarter
+            # If older than 6 months, reject as stale data
+            most_recent_quarter = q_income.columns[0]
+            
+            if isinstance(most_recent_quarter, pd.Timestamp):
+                now = pd.Timestamp.now()
+                days_old = (now - most_recent_quarter).days
+                
+                if days_old > TTM_STALENESS_THRESHOLD_DAYS:
+                    logger.warning(
+                        f"TTM data is {days_old} days old "
+                        f"(last quarter: {most_recent_quarter.date()}). "
+                        f"Rejecting as stale - possible delisted/bankrupt company."
+                    )
+                    return None
+                
+                # Use actual quarter end date, not hardcoded "TTM"
+                ttm_date = f"TTM-{most_recent_quarter.strftime('%Y-%m-%d')}"
+            else:
+                # If date parsing fails, still allow but use generic date
+                ttm_date = "TTM"
             
             # Helper to sum last 4 quarters (for income/cash flow)
             def sum_quarters(df, *keys):
@@ -203,7 +238,7 @@ class YahooProvider(StockDataProvider):
                 return None
             
             return FinancialStatement(
-                date="TTM",
+                date=ttm_date,  # Now includes actual date, not just "TTM"
                 period="ttm",
                 # Income Statement (sum 4 quarters)
                 revenue=sum_quarters(q_income, "Total Revenue", "Operating Revenue"),
