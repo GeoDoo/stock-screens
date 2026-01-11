@@ -644,4 +644,131 @@ class TestEconomicsScheduleIntegration:
         assert abs(projections[2]["da"] - 39.93) < 1
 
 
+class TestConservativeFCF:
+    """
+    NOTES2.md: Conservative FCF Toggle (FCF - SBC)
+    
+    Some investors treat Stock-Based Compensation as a real cash expense
+    because it represents value transferred from shareholders to employees.
+    
+    Conservative FCF = NOPAT + D&A - CapEx - ΔWC - SBC
+    
+    Where SBC is projected as a % of revenue (like other operating ratios).
+    """
+    
+    def test_sbc_ratio_calculation(self):
+        """
+        Calculate SBC as percentage of revenue from historical data.
+        """
+        projector = FCFProjector(
+            historical_revenue=[100, 110, 121],
+            historical_ebit=[20, 22, 24.2],
+            historical_da=[5, 5.5, 6.05],
+            historical_capex=[10, 11, 12.1],
+            historical_working_capital=[10, 11, 12.1],
+            historical_sbc=[5, 5.5, 6.05],  # 5% of revenue
+            tax_rate=0.25,
+        )
+        
+        sbc_ratio = projector.sbc_to_revenue_ratio()
+        assert abs(sbc_ratio - 0.05) < 0.01, "SBC should be ~5% of revenue"
+    
+    def test_sbc_ratio_defaults_to_zero(self):
+        """
+        When no historical SBC data, ratio should be 0.
+        """
+        projector = FCFProjector(
+            historical_revenue=[100, 110],
+            historical_ebit=[20, 22],
+            historical_da=[5, 5.5],
+            historical_capex=[10, 11],
+            historical_working_capital=[10, 11],
+            # No historical_sbc provided
+            tax_rate=0.25,
+        )
+        
+        sbc_ratio = projector.sbc_to_revenue_ratio()
+        assert sbc_ratio == 0.0, "SBC ratio should default to 0"
+    
+    def test_conservative_fcf_subtracts_sbc(self):
+        """
+        When subtract_sbc=True, FCF should be reduced by SBC.
+        """
+        projector = FCFProjector(
+            historical_revenue=[1000],
+            historical_ebit=[200],
+            historical_da=[50],
+            historical_capex=[80],
+            historical_working_capital=[100],
+            tax_rate=0.25,
+        )
+        
+        # Without SBC (standard FCF)
+        standard_projections = projector.project(
+            years=1,
+            revenue_growth=0.10,
+            operating_margin=0.20,
+            da_ratio=0.05,
+            capex_ratio=0.08,
+            wc_ratio=0.10,
+            sbc_ratio=None,  # No SBC subtraction
+        )
+        
+        # With SBC (conservative FCF) - 5% of revenue
+        conservative_projections = projector.project(
+            years=1,
+            revenue_growth=0.10,
+            operating_margin=0.20,
+            da_ratio=0.05,
+            capex_ratio=0.08,
+            wc_ratio=0.10,
+            sbc_ratio=0.05,  # 5% SBC
+        )
+        
+        # Revenue = 1000 * 1.10 = 1100
+        # SBC = 1100 * 0.05 = 55
+        # Conservative FCF should be 55 less than standard FCF
+        expected_sbc = 1100 * 0.05
+        fcf_diff = standard_projections[0]["fcf"] - conservative_projections[0]["fcf"]
+        
+        assert abs(fcf_diff - expected_sbc) < 1, (
+            f"Conservative FCF should be {expected_sbc} less than standard. "
+            f"Actual diff: {fcf_diff}"
+        )
+        
+        # Verify SBC is tracked in projection
+        assert "sbc" in conservative_projections[0], "SBC should be in projection dict"
+        assert abs(conservative_projections[0]["sbc"] - expected_sbc) < 1
+    
+    def test_conservative_fcf_with_sbc_schedule(self):
+        """
+        SBC can also be provided as a per-year schedule (like other economics).
+        """
+        projector = FCFProjector(
+            historical_revenue=[1000],
+            historical_ebit=[200],
+            historical_da=[50],
+            historical_capex=[80],
+            historical_working_capital=[100],
+            tax_rate=0.25,
+        )
+        
+        # SBC schedule: 5%, 4%, 3% (declining as company matures)
+        sbc_schedule = [0.05, 0.04, 0.03]
+        growth_schedule = [0.10, 0.10, 0.10]
+        
+        projections = projector.project(
+            years=3,
+            growth_schedule=growth_schedule,
+            sbc_schedule=sbc_schedule,
+        )
+        
+        # Year 1: Revenue 1100, SBC = 55
+        # Year 2: Revenue 1210, SBC = 48.4
+        # Year 3: Revenue 1331, SBC = 39.93
+        assert abs(projections[0]["sbc"] - 55) < 1
+        assert abs(projections[1]["sbc"] - 48.4) < 1
+        assert abs(projections[2]["sbc"] - 39.93) < 1
+
+
 

@@ -427,6 +427,7 @@ async def run_valuation(symbol: str, provider: str, request: ValuationRequest):
             wc_schedule=wc_schedule,
             annual_dilution_rate=request.annual_dilution_rate,
             sector_ev_ebitda_multiple=request.sector_ev_ebitda_multiple,
+            sbc_ratio=request.sbc_ratio,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Valuation error: {str(e)}")

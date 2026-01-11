@@ -119,6 +119,7 @@ export default function App() {
   const [growthStages, setGrowthStages] = useState<GrowthStage[]>([]);
   const [annualDilutionRate, setAnnualDilutionRate] = useState('0');  // SBC dilution %
   const [sectorEvEbitdaMultiple, setSectorEvEbitdaMultiple] = useState('');  // Exit multiple cross-check
+  const [sbcRatio, setSbcRatio] = useState('');  // Conservative FCF: SBC as % of revenue
   
   // Valuation state (loading/error tracked but not displayed separately)
   const [_valuationLoading, setValuationLoading] = useState(false);
@@ -325,6 +326,8 @@ export default function App() {
       annual_dilution_rate: annualDilutionRate ? parseFloat(annualDilutionRate) / 100 : 0,
       // Exit Multiple cross-check (optional)
       sector_ev_ebitda_multiple: sectorEvEbitdaMultiple ? parseFloat(sectorEvEbitdaMultiple) : null,
+      // Conservative FCF: SBC as real expense (NOTES2.md)
+      sbc_ratio: sbcRatio ? parseFloat(sbcRatio) / 100 : null,
     };
     
     try {
@@ -1375,6 +1378,25 @@ export default function App() {
                     <span className="text-xs text-gray-400">%/year</span>
                     <span className="text-xs text-gray-400" title="Annual share issuance from stock-based compensation. Reduces per-share value.">
                       (share dilution)
+                    </span>
+                  </div>
+                  
+                  {/* Conservative FCF: SBC as real expense (NOTES2.md) */}
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-500">Conservative FCF:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="30"
+                      step="0.5"
+                      value={sbcRatio}
+                      onChange={(e) => setSbcRatio(e.target.value)}
+                      placeholder="Off"
+                      className="w-16 px-2 py-1 text-sm font-mono border border-gray-200 rounded bg-white text-gray-700 placeholder:text-gray-400"
+                    />
+                    <span className="text-xs text-gray-400">% SBC</span>
+                    <span className="text-xs text-gray-400" title="Treat SBC as a real expense. FCF = NOPAT + D&A - CapEx - ΔWC - SBC. Enter SBC as % of revenue.">
+                      (FCF - SBC)
                     </span>
                   </div>
                   

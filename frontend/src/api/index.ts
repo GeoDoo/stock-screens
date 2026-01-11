@@ -169,6 +169,7 @@ export interface RunValuationParams {
   growthStages?: GrowthStage[];
   annualDilutionRate?: number;  // SBC dilution - e.g. 0.02 for 2% annual share issuance
   sectorEvEbitdaMultiple?: number;  // Exit Multiple cross-check - sector/peer median
+  sbcRatio?: number;  // Conservative FCF: SBC as % of revenue to subtract from FCF
 }
 
 export async function runValuation(
@@ -189,6 +190,7 @@ export async function runValuation(
     growth_stages: params.growthStages,
     annual_dilution_rate: params.annualDilutionRate,
     sector_ev_ebitda_multiple: params.sectorEvEbitdaMultiple,
+    sbc_ratio: params.sbcRatio,
   };
 
   const res = await fetch(

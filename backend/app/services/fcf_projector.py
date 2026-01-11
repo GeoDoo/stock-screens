@@ -14,13 +14,15 @@ class FCFProjector:
     """
     Projects Free Cash Flow from first principles.
     
-    FCF = NOPAT + D&A - CapEx - ΔWorking Capital
+    Standard FCF = NOPAT + D&A - CapEx - ΔWorking Capital
+    Conservative FCF = NOPAT + D&A - CapEx - ΔWC - SBC (when sbc_ratio provided)
     
     Where:
     - NOPAT = EBIT × (1 - Tax Rate)
     - D&A = Depreciation & Amortization
     - CapEx = Capital Expenditures
     - ΔWC = Change in Working Capital
+    - SBC = Stock-Based Compensation (optional, projected as % of revenue)
     
     Working Capital Modes:
     - "level" (default): WC_t = Revenue_t × WC_ratio, ΔWC = WC_t - WC_{t-1}
@@ -29,12 +31,18 @@ class FCFProjector:
     - "incremental": ΔWC = ΔRevenue × WC_intensity
       This ties WC investment directly to revenue growth (institutional approach)
       Better for high-growth companies and more realistic for stable businesses
+    
+    Conservative FCF Mode (NOTES2.md):
+    Some investors treat SBC as a real cash expense because it represents
+    value transferred from shareholders to employees through dilution.
+    When sbc_ratio or sbc_schedule is provided, SBC is subtracted from FCF.
     """
     historical_revenue: List[float]
     historical_ebit: List[float]
     historical_da: List[float]
     historical_capex: List[float]
     historical_working_capital: List[float]
+    historical_sbc: Optional[List[float]] = None  # Historical Stock-Based Compensation
     tax_rate: Optional[float] = None  # Will use DEFAULT_TAX_RATE if None
     wc_mode: WCMode = "level"  # Default to level-based for backward compatibility
     
@@ -116,6 +124,25 @@ class FCFProjector:
             if rev > 0
         ]
         return sum(ratios) / len(ratios) if ratios else 0.0
+    
+    def sbc_to_revenue_ratio(self) -> float:
+        """
+        Calculate average Stock-Based Compensation as percentage of revenue.
+        
+        NOTES2.md: Conservative FCF treats SBC as a real expense because
+        it represents value transferred from shareholders to employees.
+        
+        Returns 0.0 if no historical SBC data available.
+        """
+        if not self.historical_revenue or not self.historical_sbc:
+            return 0.0
+        
+        ratios = [
+            sbc / rev 
+            for sbc, rev in zip(self.historical_sbc, self.historical_revenue)
+            if rev > 0 and sbc is not None
+        ]
+        return sum(ratios) / len(ratios) if ratios else 0.0
 
     def project_fcf_year(
         self,
@@ -127,6 +154,7 @@ class FCFProjector:
         capex_ratio: float,
         wc_ratio: float,
         wc_mode: Optional[str] = None,
+        sbc_ratio: Optional[float] = None,
     ) -> dict:
         """
         Project FCF for a single year.
@@ -134,6 +162,10 @@ class FCFProjector:
         Working capital calculation depends on wc_mode:
         - "level": WC = Revenue × wc_ratio (maintains WC as % of revenue)
         - "incremental": ΔWC = ΔRevenue × wc_ratio (ties WC to growth)
+        
+        Conservative FCF (when sbc_ratio provided):
+        - SBC = Revenue × sbc_ratio
+        - FCF = NOPAT + D&A - CapEx - ΔWC - SBC
         
         Returns dict with all components for transparency.
         """
@@ -169,6 +201,12 @@ class FCFProjector:
         # FCF = NOPAT + D&A - CapEx - ΔWC
         fcf = nopat + da - capex - delta_wc
         
+        # Conservative FCF: subtract SBC if provided (NOTES2.md)
+        sbc = 0.0
+        if sbc_ratio is not None and sbc_ratio > 0:
+            sbc = revenue * sbc_ratio
+            fcf = fcf - sbc
+        
         return {
             "revenue": revenue,
             "ebit": ebit,
@@ -177,6 +215,7 @@ class FCFProjector:
             "capex": capex,
             "working_capital": new_wc,
             "delta_wc": delta_wc,
+            "sbc": sbc,  # Always include for transparency
             "fcf": fcf,
         }
 
@@ -195,6 +234,9 @@ class FCFProjector:
         da_schedule: Optional[List[float]] = None,
         capex_schedule: Optional[List[float]] = None,
         wc_schedule: Optional[List[float]] = None,
+        # Conservative FCF: SBC as real expense (NOTES2.md)
+        sbc_ratio: Optional[float] = None,
+        sbc_schedule: Optional[List[float]] = None,
     ) -> List[dict]:
         """
         Project FCF for multiple years.
@@ -207,6 +249,7 @@ class FCFProjector:
         - da_schedule overrides da_ratio
         - capex_schedule overrides capex_ratio
         - wc_schedule overrides wc_ratio
+        - sbc_schedule overrides sbc_ratio
         
         When a schedule is shorter than the projection period, the last
         value is repeated for remaining years.
@@ -220,6 +263,8 @@ class FCFProjector:
             capex_schedule: List of CapEx ratios per year
             wc_schedule: List of WC ratios per year
             wc_mode: "level" (WC = Revenue × Ratio) or "incremental" (ΔWC = ΔRevenue × Intensity)
+            sbc_ratio: SBC as % of revenue (Conservative FCF mode)
+            sbc_schedule: Per-year SBC ratios (overrides sbc_ratio)
         """
         # Use historical averages as defaults for constant values
         _revenue_growth = revenue_growth if revenue_growth is not None else self.revenue_cagr()
@@ -227,6 +272,7 @@ class FCFProjector:
         _da_ratio = da_ratio if da_ratio is not None else self.da_to_revenue_ratio()
         _capex_ratio = capex_ratio if capex_ratio is not None else self.capex_to_revenue_ratio()
         _wc_ratio = wc_ratio if wc_ratio is not None else self.wc_to_revenue_ratio()
+        _sbc_ratio = sbc_ratio  # None means no SBC subtraction (standard FCF)
         
         # If growth_schedule provided, use it for variable growth rates
         if growth_schedule:
@@ -236,7 +282,7 @@ class FCFProjector:
             growth_schedule = [_revenue_growth] * num_years  # Constant growth
         
         # Helper to get schedule value with fallback to constant
-        def get_schedule_value(schedule: Optional[List[float]], index: int, constant: float) -> float:
+        def get_schedule_value(schedule: Optional[List[float]], index: int, constant: Optional[float]) -> Optional[float]:
             if schedule is None:
                 return constant
             if index < len(schedule):
@@ -256,6 +302,7 @@ class FCFProjector:
             year_da = get_schedule_value(da_schedule, year_idx, _da_ratio)
             year_capex = get_schedule_value(capex_schedule, year_idx, _capex_ratio)
             year_wc = get_schedule_value(wc_schedule, year_idx, _wc_ratio)
+            year_sbc = get_schedule_value(sbc_schedule, year_idx, _sbc_ratio)
             
             year_projection = self.project_fcf_year(
                 prior_revenue=prior_revenue,
@@ -266,6 +313,7 @@ class FCFProjector:
                 capex_ratio=year_capex,
                 wc_ratio=year_wc,
                 wc_mode=wc_mode,
+                sbc_ratio=year_sbc,
             )
             projections.append(year_projection)
             

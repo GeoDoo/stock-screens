@@ -704,7 +704,8 @@ POST /api/stock/{symbol}/valuation
     }
   ],
   "annual_dilution_rate": 0.0,
-  "sector_ev_ebitda_multiple": 0.0
+  "sector_ev_ebitda_multiple": 0.0,
+  "sbc_ratio": 0.0
 }
 ```
 
@@ -724,6 +725,7 @@ POST /api/stock/{symbol}/valuation
 | `growth_stages` | array | null | No |  |
 | `annual_dilution_rate` | number | No |  |
 | `sector_ev_ebitda_multiple` | number | null | No |  |
+| `sbc_ratio` | number | null | No |  |
 
 
 ---
