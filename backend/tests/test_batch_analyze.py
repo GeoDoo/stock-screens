@@ -635,3 +635,78 @@ class TestTTMWorkingCapitalFormula:
         assert abs(ttm_wc_ratio - expected_ratio) < 0.02, (
             f"TTM WC ratio should be ~{expected_ratio:.1%}, got {ttm_wc_ratio:.1%}"
         )
+    
+    def test_ttm_wc_ratio_returns_zero_not_none_when_wc_is_zero(self):
+        """
+        When operating WC is exactly zero, wc_ratio should be 0.0, not None.
+        
+        Bug: The condition `if ttm_wc` treats 0 as falsy, skipping the calculation.
+        Fix: Use `if ttm_wc is not None` instead.
+        
+        This is a valid scenario:
+        - Current Assets (excl cash) = 100B
+        - Current Liabilities (excl STD) = 100B
+        - Operating WC = 0 (balanced)
+        - WC ratio = 0.0 (not None!)
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_stock_data.financials = [
+            FinancialStatement(
+                date="2024-01-01", period="annual",
+                revenue=100_000_000_000,
+                operating_income=15_000_000_000,
+                net_income=10_000_000_000,
+                total_assets=200_000_000_000,
+                total_liabilities=100_000_000_000,
+                total_equity=100_000_000_000,
+            ),
+        ]
+        
+        # TTM where operating WC is exactly zero
+        # Non-cash CA = 100B - 20B = 80B
+        # Operating CL = 90B - 10B = 80B
+        # Operating WC = 80B - 80B = 0
+        mock_ttm = FinancialStatement(
+            date="TTM",
+            period="ttm",
+            revenue=110_000_000_000,
+            gross_profit=44_000_000_000,
+            operating_income=16_500_000_000,
+            net_income=11_000_000_000,
+            depreciation_amortization=5_000_000_000,
+            capital_expenditure=-8_000_000_000,
+            total_assets=220_000_000_000,
+            total_liabilities=110_000_000_000,
+            total_equity=110_000_000_000,
+            current_assets=100_000_000_000,  # 100B
+            current_liabilities=90_000_000_000,  # 90B
+            cash_and_equivalents=20_000_000_000,  # 20B cash
+            total_debt=40_000_000_000,
+            short_term_debt=10_000_000_000,  # 10B STD
+        )
+        
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+        
+        mock_yahoo = MagicMock()
+        mock_yahoo.get_ttm_financials = AsyncMock(return_value=mock_ttm)
+        mock_yahoo.get_dividends = AsyncMock(return_value=[])
+        
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client), \
+             patch("app.routers.stock.YahooProvider", return_value=mock_yahoo):
+            response = client.get("/api/stock/TEST/analyze?provider=yahoo")
+        
+        assert response.status_code == 200
+        data = response.json()
+        stock = data["stock"]
+        
+        ttm_wc_ratio = stock["hints_ttm"]["wc_ratio"]
+        
+        # WC = (100B - 20B) - (90B - 10B) = 80B - 80B = 0
+        # Ratio should be 0.0, NOT None
+        assert ttm_wc_ratio is not None, (
+            "WC ratio should be 0.0 when WC is zero, not None. "
+            "Bug: `if ttm_wc` treats 0 as falsy."
+        )
+        assert ttm_wc_ratio == 0.0, f"WC ratio should be exactly 0.0, got {ttm_wc_ratio}"
