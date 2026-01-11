@@ -1594,3 +1594,51 @@ class TestCapitalEfficiencyInValuationResponse:
         
         # High ROIC company should be value creating
         assert ce["is_value_creating"] is True
+    
+    @pytest.mark.asyncio
+    async def test_value_spread_uses_calculated_wacc_not_override(self, mock_client):
+        """
+        Bug fix: Value spread should use calculated_wacc, not discount_rate_override.
+        
+        When user provides a custom discount rate, the capital efficiency metrics
+        should still compare ROIC to the actual WACC (cost of capital), not to
+        the arbitrary discount rate chosen for the DCF.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Run with a very high custom discount rate
+        result = await service.value_stock("TEST", discount_rate_override=0.25)
+        
+        ce = result["capital_efficiency"]
+        calculated_wacc = result["wacc"]
+        
+        # Value spread should be ROIC - calculated_wacc, NOT ROIC - 0.25
+        if ce["roic"] is not None and calculated_wacc is not None:
+            expected_spread = ce["roic"] - calculated_wacc
+            assert abs(ce["value_spread"] - expected_spread) < 0.001
+            # And it should NOT equal ROIC - 0.25 (unless WACC happens to be 0.25)
+            if abs(calculated_wacc - 0.25) > 0.01:
+                wrong_spread = ce["roic"] - 0.25
+                assert abs(ce["value_spread"] - wrong_spread) > 0.01
+    
+    @pytest.mark.asyncio
+    async def test_capital_efficiency_includes_invested_capital_and_nopat(self, mock_client):
+        """
+        Bug fix: Both success and error paths should include invested_capital and nopat.
+        
+        This ensures consistent schema for frontend debugging and display.
+        """
+        service = ValuationService(client=mock_client)
+        result = await service.value_stock("TEST")
+        
+        ce = result["capital_efficiency"]
+        
+        # These should always be present (whether success or error)
+        assert "invested_capital" in ce
+        assert "nopat" in ce
+        
+        # And they should have actual values for valid data
+        assert ce["invested_capital"] is not None
+        assert ce["invested_capital"] > 0
+        assert ce["nopat"] is not None
+        assert ce["nopat"] > 0

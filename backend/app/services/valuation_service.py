@@ -316,9 +316,12 @@ class ValuationService:
 
         # 9. Capital Efficiency - ROIC, Value Spread, Economic Profit
         # NOTES4: Add capital efficiency metrics to main valuation response
+        # IMPORTANT: Use calculated_wacc (true cost of capital), not discount_rate
+        # (which may be a user override). Value creation should be measured against
+        # the actual WACC, not an arbitrary discount rate.
         capital_efficiency = self._calculate_capital_efficiency(
             extractor=extractor,
-            wacc=discount_rate,
+            wacc=calculated_wacc if calculated_wacc is not None else discount_rate,
             revenue_growth=effective_revenue_growth,
         )
 
@@ -854,10 +857,16 @@ class ValuationService:
             }
         
         # Use the capital efficiency module for calculations
-        return analyze_value_creation(
+        result = analyze_value_creation(
             nopat=nopat,
             invested_capital=invested_capital,
             revenue_growth=revenue_growth,
             wacc=wacc,
         )
+        
+        # Add invested_capital and nopat for consistent schema with error case
+        result["invested_capital"] = invested_capital
+        result["nopat"] = nopat
+        
+        return result
 
