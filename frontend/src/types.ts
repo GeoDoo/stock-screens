@@ -763,6 +763,7 @@ export interface FullMonteCarloResult {
   // P2: Simulation quality metrics
   warnings?: string[];  // Warnings about simulation quality (negative terminal FCF, etc.)
   negative_terminal_fcf_count?: number;  // How many simulations were skipped
+  zero_equity_count?: number;  // P0.3: How many simulations resulted in wipe-out (equity <= 0)
 }
 
 // =============================================================================

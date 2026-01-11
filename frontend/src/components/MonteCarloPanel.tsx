@@ -261,8 +261,9 @@ export function MonteCarloPanel({
               </>
             ) : (
               <>
-                <strong>Decision Mode:</strong> Full DCF engine with NOPAT, D&A, CapEx, WC, 
-                bounded distributions, and input correlations. Use for investment decisions.
+                <strong>Decision Mode:</strong> Uses the same DCF engine as the main valuation 
+                (FCFProjector with NOPAT, D&A, CapEx, WC, equity bridge, dilution support). 
+                Includes wipe-out scenarios (equity ≤ 0) in the distribution for honest risk assessment.
               </>
             )}
           </div>
@@ -641,6 +642,15 @@ export function MonteCarloPanel({
               <div className="bg-gray-50 rounded-lg p-4">
                 <div className="text-sm text-gray-500 mb-2">
                   {result?.valid_simulations?.toLocaleString() || 0} valid simulations
+                  {/* P0.3: Show wipe-out count if present */}
+                  {mode === 'decision' && fullResult?.zero_equity_count != null && fullResult.zero_equity_count > 0 && (
+                    <span 
+                      className="ml-2 text-amber-600" 
+                      title="Simulations where equity value ≤ 0 (bankruptcy scenario). These are included as $0 outcomes."
+                    >
+                      ({fullResult.zero_equity_count} wipe-out{fullResult.zero_equity_count !== 1 ? 's' : ''})
+                    </span>
+                  )}
                 </div>
                 
                 <div className="grid grid-cols-3 gap-4">
