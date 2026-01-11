@@ -834,3 +834,160 @@ class TestMarketCapFiltering:
         assert result.peer_selection_info["source"] == "industry"
         assert result.peer_selection_info["total_candidates"] == 7
         assert result.peer_selection_info["after_market_cap_filter"] == 4
+
+
+class TestDynamicPeerDiscovery:
+    """
+    NOTES2.md: Dynamic Peer Discovery using FMP's /stock-peers endpoint.
+    
+    Problem: Hardcoded INDUSTRY_PEERS suffer from survivorship bias (only
+    current winners listed) and regional bias (only US companies).
+    
+    Solution: Use FMP's /stock-peers endpoint to get dynamic peers based on
+    SIC/NAICS codes. Fall back to hardcoded lists if API unavailable.
+    """
+    
+    @pytest.mark.asyncio
+    async def test_uses_fmp_peers_when_available(self):
+        """
+        When provider is FMP and /stock-peers returns data, use those peers.
+        """
+        mock_client = MagicMock()
+        mock_client.get_stock_peers = AsyncMock(return_value=["MSFT", "GOOGL", "META"])
+        
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        # Get peers with dynamic discovery
+        peers = await analyzer._get_peers_dynamic(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        
+        # Should use FMP peers, not hardcoded
+        assert peers == ["MSFT", "GOOGL", "META"]
+        mock_client.get_stock_peers.assert_called_once_with("AAPL")
+    
+    @pytest.mark.asyncio
+    async def test_falls_back_to_hardcoded_when_api_fails(self):
+        """
+        When FMP /stock-peers fails, fall back to hardcoded INDUSTRY_PEERS.
+        """
+        mock_client = MagicMock()
+        mock_client.get_stock_peers = AsyncMock(side_effect=Exception("API Error"))
+        
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        peers = await analyzer._get_peers_dynamic(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        
+        # Should fall back to hardcoded industry peers
+        hardcoded = analyzer.INDUSTRY_PEERS.get("Consumer Electronics", [])
+        expected = [p for p in hardcoded if p != "AAPL"]
+        assert peers == expected
+    
+    @pytest.mark.asyncio
+    async def test_falls_back_to_hardcoded_when_api_returns_empty(self):
+        """
+        When FMP /stock-peers returns empty, fall back to hardcoded.
+        """
+        mock_client = MagicMock()
+        mock_client.get_stock_peers = AsyncMock(return_value=[])
+        
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        peers = await analyzer._get_peers_dynamic(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        
+        # Should fall back to hardcoded
+        hardcoded = analyzer.INDUSTRY_PEERS.get("Consumer Electronics", [])
+        expected = [p for p in hardcoded if p != "AAPL"]
+        assert peers == expected
+    
+    @pytest.mark.asyncio
+    async def test_non_fmp_provider_uses_hardcoded_only(self):
+        """
+        When provider is not FMP, only use hardcoded peers (no API call).
+        """
+        mock_client = MagicMock()
+        mock_client.get_stock_peers = AsyncMock(return_value=["X", "Y", "Z"])
+        
+        # Yahoo provider - can't use FMP's /stock-peers
+        analyzer = ComparableAnalyzer(mock_client, provider="yahoo")
+        
+        peers = await analyzer._get_peers_dynamic(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        
+        # Should use hardcoded, NOT call FMP API
+        mock_client.get_stock_peers.assert_not_called()
+        hardcoded = analyzer.INDUSTRY_PEERS.get("Consumer Electronics", [])
+        expected = [p for p in hardcoded if p != "AAPL"]
+        assert peers == expected
+    
+    @pytest.mark.asyncio
+    async def test_excludes_target_from_dynamic_peers(self):
+        """
+        Dynamic peers should exclude the target symbol.
+        """
+        mock_client = MagicMock()
+        # FMP might return the target in the peers list
+        mock_client.get_stock_peers = AsyncMock(return_value=["AAPL", "MSFT", "GOOGL"])
+        
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        peers = await analyzer._get_peers_dynamic(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        
+        # AAPL should be excluded
+        assert "AAPL" not in peers
+        assert peers == ["MSFT", "GOOGL"]
+    
+    @pytest.mark.asyncio
+    async def test_peer_selection_info_shows_dynamic_source(self):
+        """
+        When dynamic peers are used, peer_selection_info should indicate this.
+        """
+        mock_client = MagicMock()
+        mock_client.get_stock_peers = AsyncMock(return_value=["MSFT", "GOOGL"])
+        
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        peers, source = await analyzer._get_peers_with_source(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        
+        assert source == "fmp_dynamic", "Should indicate FMP dynamic source"
+        assert peers == ["MSFT", "GOOGL"]
+    
+    @pytest.mark.asyncio
+    async def test_peer_selection_info_shows_fallback_source(self):
+        """
+        When fallback is used, peer_selection_info should indicate this.
+        """
+        mock_client = MagicMock()
+        mock_client.get_stock_peers = AsyncMock(return_value=[])  # Empty triggers fallback
+        
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        peers, source = await analyzer._get_peers_with_source(
+            symbol="AAPL",
+            sector="Technology",
+            industry="Consumer Electronics",
+        )
+        
+        # Fell back to hardcoded industry peers
+        assert source == "industry", "Should indicate industry fallback"

@@ -142,5 +142,33 @@ class StockDataClient:
     def provider_names(self) -> List[str]:
         """List of configured provider names."""
         return [p.name for p in self.providers]
+    
+    async def get_stock_peers(self, symbol: str) -> List[str]:
+        """
+        Get peer company symbols for a stock.
+        
+        NOTES2.md: Dynamic peer discovery using FMP's /stock-peers endpoint.
+        Only available with FMP provider - returns empty list otherwise.
+        
+        Args:
+            symbol: Stock ticker symbol
+            
+        Returns:
+            List of peer ticker symbols, or empty list if unavailable
+        """
+        symbol = symbol.upper()
+        
+        for provider in self.providers:
+            # Only FMP supports /stock-peers endpoint
+            if hasattr(provider, 'get_stock_peers'):
+                try:
+                    peers = await provider.get_stock_peers(symbol)
+                    if peers:
+                        logger.info(f"Dynamic peers for {symbol}: {peers[:5]}...")
+                        return peers
+                except Exception as e:
+                    logger.debug(f"Peer discovery failed for {symbol}: {e}")
+        
+        return []
 
 

@@ -388,5 +388,26 @@ class FMPProvider(StockDataProvider):
             bars=bars,
             provider=self.name,
         )
+    
+    async def get_stock_peers(self, symbol: str) -> List[str]:
+        """
+        Get list of peer company symbols for a stock using FMP's /stock-peers.
+        
+        NOTES2.md: Dynamic peer discovery based on SIC/NAICS codes.
+        This helps avoid survivorship bias in hardcoded peer lists.
+        
+        Args:
+            symbol: Stock ticker symbol
+            
+        Returns:
+            List of peer ticker symbols, or empty list if unavailable
+        """
+        try:
+            result = await self._request("/stock_peers", symbol=symbol)
+            if result and len(result) > 0:
+                return result[0].get("peersList", [])
+        except Exception as e:
+            logger.warning(f"Failed to fetch peers for {symbol}: {e}")
+        return []
 
 
