@@ -1481,3 +1481,52 @@ class TestFatTailsDistribution:
         # Should complete without error and have valid results
         assert result is not None
         assert result.valid_simulations > 0
+    
+    def test_correlated_inputs_respect_fat_tails(self):
+        """
+        CorrelatedInputs.sample() should use fat tails when degrees_of_freedom is set.
+        
+        Bug fix verification: Previously, CorrelatedInputs.sample() generated
+        samples directly from Normal distribution, ignoring degrees_of_freedom.
+        This meant fat_tails_df was silently ignored for correlated inputs.
+        """
+        from app.services.monte_carlo_full import CorrelatedInputs
+        
+        random.seed(42)
+        
+        # Create correlated inputs WITH fat tails
+        fat_tail_inputs = CorrelatedInputs(
+            inputs=[
+                BoundedInput("growth", 0.10, 0.05, -0.50, 0.70, degrees_of_freedom=4),
+                BoundedInput("margin", 0.20, 0.05, -0.50, 0.70, degrees_of_freedom=4),
+            ],
+            correlation_matrix=[[1.0, -0.2], [-0.2, 1.0]],
+        )
+        
+        # Create correlated inputs WITHOUT fat tails (Normal)
+        normal_inputs = CorrelatedInputs(
+            inputs=[
+                BoundedInput("growth", 0.10, 0.05, -0.50, 0.70, degrees_of_freedom=None),
+                BoundedInput("margin", 0.20, 0.05, -0.50, 0.70, degrees_of_freedom=None),
+            ],
+            correlation_matrix=[[1.0, -0.2], [-0.2, 1.0]],
+        )
+        
+        n_samples = 10000
+        threshold = 3 * 0.05  # 3 standard deviations
+        
+        # Sample from fat tails
+        random.seed(42)
+        fat_samples = [fat_tail_inputs.sample()["growth"] for _ in range(n_samples)]
+        fat_extremes = sum(1 for s in fat_samples if abs(s - 0.10) > threshold)
+        
+        # Sample from normal
+        random.seed(42)
+        normal_samples = [normal_inputs.sample()["growth"] for _ in range(n_samples)]
+        normal_extremes = sum(1 for s in normal_samples if abs(s - 0.10) > threshold)
+        
+        # Fat tails should produce more extreme values
+        assert fat_extremes > normal_extremes, (
+            f"CorrelatedInputs should respect degrees_of_freedom. "
+            f"Fat tails: {fat_extremes} extremes, Normal: {normal_extremes} extremes"
+        )
