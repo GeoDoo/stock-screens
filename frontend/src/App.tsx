@@ -800,6 +800,9 @@ export default function App() {
                 <button
                   onClick={() => setFundamentalPeriod('ttm')}
                   disabled={!stockData.hints_ttm}
+                  title={!stockData.hints_ttm 
+                    ? "TTM data unavailable — provider doesn't support quarterly data for this stock" 
+                    : "Trailing Twelve Months (sum of last 4 quarters)"}
                   className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
                     fundamentalPeriod === 'ttm'
                       ? 'bg-white text-gray-900 shadow-sm'
@@ -809,9 +812,13 @@ export default function App() {
                   }`}
                 >
                   TTM
+                  {!stockData.hints_ttm && (
+                    <span className="ml-1 text-amber-400" title="TTM unavailable">⚠</span>
+                  )}
                 </button>
                 <button
                   onClick={() => setFundamentalPeriod('annual')}
+                  title="Most recent Annual Report data"
                   className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
                     fundamentalPeriod === 'annual'
                       ? 'bg-white text-gray-900 shadow-sm'
