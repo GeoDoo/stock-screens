@@ -151,4 +151,75 @@ describe('normalizeStockData', () => {
     expect(normalized?.hints_annual.revenue_growth).toBe(0.1);
     expect(normalized?.hints_annual.da_ratio).toBe(0.05);
   });
+
+  it('preserves is_using_ltm and provenance fields from backend', () => {
+    // P1 Fix: /analyze endpoint now includes provenance data
+    const backendData = {
+      symbol: 'AAPL',
+      company_name: 'Apple Inc.',
+      industry: 'Consumer Electronics',
+      sector: 'Technology',
+      data_provider: 'yahoo',
+      data: {},
+      hints_annual: {
+        revenue_growth: 0.05,
+        operating_margin: 0.30,
+        da_ratio: 0.03,
+        capex_ratio: 0.03,
+        wc_ratio: -0.03,
+      },
+      hints_ttm: null,
+      is_using_ltm: true,
+      provenance: {
+        tax_rate: { source: 'ttm', description: 'TTM effective tax rate', confidence: 'high' },
+        shares_outstanding: { source: 'diluted', description: 'Diluted shares', confidence: 'high' },
+        revenue_source: { source: 'fy_average', description: '3-year average', confidence: 'medium' },
+        cost_of_debt: null,
+      },
+      validation: {
+        has_errors: false,
+        has_warnings: false,
+        errors: [],
+        warnings: [],
+      },
+    } as unknown as StockDataResponse;
+
+    const normalized = normalizeStockData(backendData);
+
+    // is_using_ltm should be preserved
+    expect(normalized?.is_using_ltm).toBe(true);
+    
+    // provenance should be passed through unchanged
+    expect(normalized?.provenance).toBeDefined();
+    expect(normalized?.provenance?.tax_rate?.source).toBe('ttm');
+    expect(normalized?.provenance?.tax_rate?.confidence).toBe('high');
+    expect(normalized?.provenance?.shares_outstanding?.source).toBe('diluted');
+    expect(normalized?.provenance?.revenue_source?.source).toBe('fy_average');
+    expect(normalized?.provenance?.cost_of_debt).toBeNull();
+  });
+
+  it('defaults is_using_ltm to false when not provided', () => {
+    const backendData = {
+      symbol: 'TEST',
+      company_name: 'Test Corp',
+      industry: 'Tech',
+      sector: 'Technology',
+      data_provider: 'yahoo',
+      data: {},
+      hints_annual: { revenue_growth: 0.1, operating_margin: 0.2 },
+      hints_ttm: null,
+      // is_using_ltm NOT provided
+      validation: {
+        has_errors: false,
+        has_warnings: false,
+        errors: [],
+        warnings: [],
+      },
+    } as unknown as StockDataResponse;
+
+    const normalized = normalizeStockData(backendData);
+
+    // Should default to false
+    expect(normalized?.is_using_ltm).toBe(false);
+  });
 });
