@@ -1857,3 +1857,83 @@ class TestDilutionSupport:
             f"Dilution math should match ValuationService. "
             f"Expected ratio: {expected_ratio:.3f}, Actual: {actual_ratio:.3f}"
         )
+    
+    def test_dilution_uses_actual_projection_years_with_multi_stage(self):
+        """
+        When growth_stages is provided, dilution should use the actual projection
+        period (sum of stage years), not the original projection_years parameter.
+        
+        This test verifies the behavior is correct by comparing the ratio of
+        diluted to non-diluted values, which should match the dilution factor.
+        """
+        hist_revenue = [100e9, 110e9, 121e9]
+        hist_ebit = [15e9, 16.5e9, 18.15e9]
+        hist_da = [5e9, 5.5e9, 6.05e9]
+        hist_capex = [8e9, 8.8e9, 9.68e9]
+        hist_wc = [10e9, 11e9, 12.1e9]
+        
+        common_params = dict(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=1e9,
+            total_debt=50e9,
+            cash=20e9,
+            current_price=100.0,
+            base_margin=0.15,
+            base_da_ratio=0.05,
+            base_capex_ratio=0.08,
+            base_wc_ratio=0.10,
+            base_tax_rate=0.25,
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            iterations=1,
+            seed=42,
+        )
+        
+        # With multi-stage (3+7=10 years), run with and without dilution
+        growth_stages = [
+            {"name": "High Growth", "years": 3, "growth_rate": 0.15},
+            {"name": "Mature", "years": 7, "growth_rate": 0.05},
+        ]
+        
+        result_no_dilution = run_full_monte_carlo(
+            **common_params,
+            projection_years=5,  # Should be IGNORED
+            growth_stages=growth_stages,
+            annual_dilution_rate=0.0,
+        )
+        
+        result_with_dilution = run_full_monte_carlo(
+            **common_params,
+            projection_years=5,  # Should be IGNORED
+            growth_stages=growth_stages,
+            annual_dilution_rate=0.03,
+        )
+        
+        # Both should produce valid results
+        assert result_no_dilution.valid_simulations == 1
+        assert result_with_dilution.valid_simulations == 1
+        
+        # The ratio of diluted to non-diluted should match 10-year dilution factor
+        # (1/(1.03^10) ≈ 0.744), NOT 5-year (1/(1.03^5) ≈ 0.863)
+        expected_ratio_10y = 1 / (1.03 ** 10)  # ~0.744
+        expected_ratio_5y = 1 / (1.03 ** 5)    # ~0.863
+        
+        actual_ratio = result_with_dilution.mean / result_no_dilution.mean
+        
+        # Should match 10-year dilution (within tolerance)
+        assert abs(actual_ratio - expected_ratio_10y) < 0.01, (
+            f"Multi-stage (10 years via growth_stages) should use 10-year dilution. "
+            f"Expected ratio: {expected_ratio_10y:.3f}, Actual: {actual_ratio:.3f}. "
+            f"If 5-year dilution was used incorrectly, ratio would be ~{expected_ratio_5y:.3f}"
+        )

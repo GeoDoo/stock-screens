@@ -522,10 +522,11 @@ def run_full_monte_carlo(
     negative_terminal_fcf_count = 0  # Track simulations skipped due to negative terminal FCF
     
     # P0.2 Fix: Calculate terminal shares with dilution (same as ValuationService)
-    # This is done once outside the loop since dilution rate is deterministic
-    # (We could sample dilution_rate too, but ValuationService doesn't, so neither do we)
-    # Note: projection_years may be updated inside the loop for multi-stage, so we
-    # calculate terminal_shares inside each iteration
+    # Dilution is applied for the ACTUAL projection period, not the original parameter.
+    # When growth_stages is provided, projection_years is overwritten at line ~472
+    # to sum(stage.years), so the effective projection period changes.
+    # terminal_shares is calculated inside each iteration using actual_years
+    # (= len(growth_schedule)) to ensure consistency.
     
     for _ in range(iterations):
         # Sample correlated core inputs
