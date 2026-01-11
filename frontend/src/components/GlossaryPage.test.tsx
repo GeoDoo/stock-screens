@@ -33,7 +33,8 @@ describe('GlossaryPage', () => {
     renderWithRouter(<GlossaryPage />)
     
     expect(screen.getByText(/Discounted Cash Flow/)).toBeInTheDocument()
-    expect(screen.getByText(/Weighted Average Cost of Capital/)).toBeInTheDocument()
+    // Use getAllByText since WACC appears in multiple places (term and CEO efficiency definition)
+    expect(screen.getAllByText(/Weighted Average Cost of Capital/).length).toBeGreaterThan(0)
   })
 
   it('displays definitions for each term', () => {

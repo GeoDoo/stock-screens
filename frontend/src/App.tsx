@@ -20,6 +20,7 @@ import { MonteCarloPanel } from './components/MonteCarloPanel';
 import { MultiStageGrowth } from './components/MultiStageGrowth';
 import { ProvenanceDisplay } from './components/ProvenanceBadge';
 import { MomentumBridge } from './components/MomentumBridge';
+import { CEOEfficiencyWarning } from './components/CEOEfficiencyWarning';
 import { SensitivityMatrixPanel } from './components/SensitivityMatrixPanel';
 import { ValueDrivers } from './components/ValueDrivers';
 import { VolumeSignals } from './components/VolumeSignals';
@@ -1003,6 +1004,25 @@ export default function App() {
                 ) : (
                   <p className="text-gray-500">No ratios data available</p>
                 )}
+                
+                {/* CEO Efficiency Warning (Inc. ROIC vs WACC) */}
+                {result && (() => {
+                  const currentRatios = fundamentalPeriod === 'ttm' && ratiosResult.ttm 
+                    ? ratiosResult.ttm 
+                    : ratiosResult.annual || ratiosResult.ttm;
+                  const incRoic = currentRatios?.profitability?.incremental_roic;
+                  if (incRoic != null && result.wacc) {
+                    return (
+                      <div className="mt-6">
+                        <CEOEfficiencyWarning 
+                          incrementalRoic={incRoic}
+                          wacc={result.wacc}
+                        />
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </section>
             )}
 
