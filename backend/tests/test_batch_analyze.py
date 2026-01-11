@@ -460,3 +460,178 @@ class TestTTMRevenueGrowth:
         assert abs(ttm_growth - expected) < 0.01, (
             f"TTM growth should be {expected:.0%} (120B/100B - 1), got {ttm_growth:.1%}"
         )
+
+
+class TestTTMWorkingCapitalFormula:
+    """
+    P0 Fix: TTM working capital must use OPERATING WC formula,
+    not gross WC that includes cash and short-term debt.
+    
+    Bug: TTM WC = current_assets - current_liabilities (WRONG - includes cash/debt)
+    Fix: TTM WC = (current_assets - cash) - (current_liabilities - short_term_debt)
+    
+    This is critical because:
+    - Cash-rich companies (AAPL: $50B cash) show ~5x inflated WC needs
+    - WC ratio drives FCF projections
+    - Can cause 10-15% valuation error
+    """
+    
+    def test_ttm_wc_excludes_cash_and_debt(self):
+        """
+        TTM WC should use OPERATING working capital formula:
+        WC = (Current Assets - Cash) - (Current Liabilities - Short-term Debt)
+        
+        Example:
+        - Current Assets: 150B (including 50B cash)
+        - Current Liabilities: 100B (including 10B short-term debt)
+        - Gross WC: 150 - 100 = 50B (WRONG)
+        - Operating WC: (150-50) - (100-10) = 100 - 90 = 10B (CORRECT)
+        """
+        mock_stock_data = create_mock_stock_data()
+        
+        # Set up financials with known values
+        mock_stock_data.financials = [
+            FinancialStatement(
+                date="2024-01-01", period="annual",
+                revenue=400_000_000_000,  # 400B
+                operating_income=60_000_000_000,
+                net_income=40_000_000_000,
+                total_assets=500_000_000_000,
+                total_liabilities=250_000_000_000,
+                total_equity=250_000_000_000,
+                current_assets=150_000_000_000,  # 150B
+                current_liabilities=100_000_000_000,  # 100B
+                cash_and_equivalents=50_000_000_000,  # 50B cash
+                total_debt=60_000_000_000,
+            ),
+        ]
+        
+        # TTM with same structure - 50B cash, 10B short-term debt
+        mock_ttm = FinancialStatement(
+            date="TTM",
+            period="ttm",
+            revenue=420_000_000_000,  # 420B
+            gross_profit=180_000_000_000,
+            operating_income=63_000_000_000,
+            net_income=42_000_000_000,
+            depreciation_amortization=15_000_000_000,
+            capital_expenditure=-20_000_000_000,
+            total_assets=520_000_000_000,
+            total_liabilities=260_000_000_000,
+            total_equity=260_000_000_000,
+            current_assets=150_000_000_000,  # 150B (includes 50B cash)
+            current_liabilities=100_000_000_000,  # 100B (includes 10B short-term debt)
+            cash_and_equivalents=50_000_000_000,  # 50B cash
+            total_debt=60_000_000_000,
+            short_term_debt=10_000_000_000,  # 10B short-term debt
+        )
+        
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+        
+        mock_yahoo = MagicMock()
+        mock_yahoo.get_ttm_financials = AsyncMock(return_value=mock_ttm)
+        mock_yahoo.get_dividends = AsyncMock(return_value=[])
+        
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client), \
+             patch("app.routers.stock.YahooProvider", return_value=mock_yahoo):
+            response = client.get("/api/stock/TEST/analyze?provider=yahoo")
+        
+        assert response.status_code == 200
+        data = response.json()
+        stock = data["stock"]
+        
+        ttm_wc_ratio = stock["hints_ttm"]["wc_ratio"]
+        
+        # Expected OPERATING WC:
+        # Non-cash current assets = 150B - 50B = 100B
+        # Operating current liabilities = 100B - 10B = 90B
+        # Operating WC = 100B - 90B = 10B
+        # WC ratio = 10B / 420B = 2.38%
+        expected_wc = 10_000_000_000  # 10B
+        expected_ratio = expected_wc / 420_000_000_000  # ~2.38%
+        
+        # If bug exists (gross WC): 50B / 420B = 11.9%
+        # Correct (operating WC): 10B / 420B = 2.38%
+        
+        assert ttm_wc_ratio is not None
+        assert abs(ttm_wc_ratio - expected_ratio) < 0.01, (
+            f"TTM WC ratio should be ~{expected_ratio:.1%} (operating WC), "
+            f"got {ttm_wc_ratio:.1%}. "
+            "Bug: TTM is using gross WC (includes cash/debt) instead of operating WC."
+        )
+    
+    def test_ttm_wc_handles_missing_short_term_debt(self):
+        """
+        If short_term_debt is None, should default to 0 (not fail).
+        
+        Some providers don't break out short-term debt separately.
+        In this case, we can't exclude it, so we do our best.
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_stock_data.financials = [
+            FinancialStatement(
+                date="2024-01-01", period="annual",
+                revenue=100_000_000_000,
+                operating_income=15_000_000_000,
+                net_income=10_000_000_000,
+                total_assets=200_000_000_000,
+                total_liabilities=100_000_000_000,
+                total_equity=100_000_000_000,
+                current_assets=50_000_000_000,
+                current_liabilities=30_000_000_000,
+                cash_and_equivalents=10_000_000_000,
+            ),
+        ]
+        
+        # TTM with no short_term_debt field
+        mock_ttm = FinancialStatement(
+            date="TTM",
+            period="ttm",
+            revenue=110_000_000_000,
+            gross_profit=44_000_000_000,
+            operating_income=16_500_000_000,
+            net_income=11_000_000_000,
+            depreciation_amortization=5_000_000_000,
+            capital_expenditure=-8_000_000_000,
+            total_assets=220_000_000_000,
+            total_liabilities=110_000_000_000,
+            total_equity=110_000_000_000,
+            current_assets=55_000_000_000,
+            current_liabilities=33_000_000_000,
+            cash_and_equivalents=12_000_000_000,
+            total_debt=40_000_000_000,
+            short_term_debt=None,  # Not available from provider
+        )
+        
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+        
+        mock_yahoo = MagicMock()
+        mock_yahoo.get_ttm_financials = AsyncMock(return_value=mock_ttm)
+        mock_yahoo.get_dividends = AsyncMock(return_value=[])
+        
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client), \
+             patch("app.routers.stock.YahooProvider", return_value=mock_yahoo):
+            response = client.get("/api/stock/TEST/analyze?provider=yahoo")
+        
+        assert response.status_code == 200
+        data = response.json()
+        stock = data["stock"]
+        
+        ttm_wc_ratio = stock["hints_ttm"]["wc_ratio"]
+        
+        # With missing short_term_debt (treated as 0):
+        # Non-cash CA = 55B - 12B = 43B
+        # Operating CL = 33B - 0 = 33B
+        # Operating WC = 43B - 33B = 10B
+        # Ratio = 10B / 110B = 9.1%
+        expected_wc = 10_000_000_000
+        expected_ratio = expected_wc / 110_000_000_000
+        
+        assert ttm_wc_ratio is not None
+        assert abs(ttm_wc_ratio - expected_ratio) < 0.02, (
+            f"TTM WC ratio should be ~{expected_ratio:.1%}, got {ttm_wc_ratio:.1%}"
+        )
