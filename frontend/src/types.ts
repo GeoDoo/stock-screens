@@ -96,6 +96,18 @@ export interface GrowthStage {
   years: number;
   growth_rate: number;  // e.g., 0.20 for 20%
   end_growth_rate?: number | null;  // If set, fade linearly to this rate
+  
+  // Multi-stage economics - fade operating margin as company matures
+  operating_margin?: number | null;  // e.g., 0.15 for 15% margin
+  end_operating_margin?: number | null;  // If set, fade to this margin
+  
+  // CapEx ratio (as % of revenue) - typically declines as growth slows
+  capex_ratio?: number | null;  // e.g., 0.10 for 10%
+  end_capex_ratio?: number | null;  // If set, fade to this ratio
+  
+  // Working capital ratio - efficiency often improves with scale
+  wc_ratio?: number | null;  // e.g., 0.15 for 15%
+  end_wc_ratio?: number | null;  // If set, fade to this ratio
 }
 
 export interface ValuationRequest {
