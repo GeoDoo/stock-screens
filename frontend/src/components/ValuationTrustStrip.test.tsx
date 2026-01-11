@@ -209,4 +209,21 @@ describe('ValuationTrustStrip', () => {
     );
     expect(screen.queryByText('Data Age:')).not.toBeInTheDocument();
   });
+
+  it('does not show data age when null (unparseable dates)', () => {
+    // Bug fix: Backend may return null for unparseable statement dates
+    // The condition should handle both null and undefined
+    render(
+      <ValuationTrustStrip 
+        result={createMockResult()} 
+        period="ttm"
+        dataFreshnessDays={null as unknown as number}
+        dataIsStale={false}
+        latestStatementDate={null as unknown as string}
+      />
+    );
+    // Should NOT render broken text like "nulld ago"
+    expect(screen.queryByText(/null/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Data Age:')).not.toBeInTheDocument();
+  });
 });
