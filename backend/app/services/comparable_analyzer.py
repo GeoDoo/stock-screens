@@ -238,8 +238,10 @@ class ComparableAnalyzer:
         sector = data.get("profile", {}).get("sector", "Unknown")
         industry = data.get("profile", {}).get("industry", "Unknown")
         
-        # Get peer companies - prefer industry-level, fall back to sector
-        peer_symbols = self._get_peers(symbol, sector, industry)[:max_peers]
+        # NOTES2.md: Get peer companies using dynamic discovery (FMP API)
+        # with fallback to hardcoded industry/sector peers
+        peer_symbols, peer_source = await self._get_peers_with_source(symbol, sector, industry)
+        peer_symbols = peer_symbols[:max_peers]
         
         # Fetch metrics for all peers using the SAME provider
         raw_peers = []
@@ -295,7 +297,7 @@ class ComparableAnalyzer:
         
         # P2 #9: Track peer selection info for transparency
         total_candidates = len(peers)
-        peer_source = self._get_peer_source(sector, industry)
+        # peer_source already set from _get_peers_with_source()
         
         # P2 #9: Filter peers by market cap band (0.1x to 10x of target)
         # This ensures we compare with similarly-sized companies
@@ -417,7 +419,10 @@ class ComparableAnalyzer:
     
     def _get_peers(self, symbol: str, sector: str, industry: str) -> List[str]:
         """
-        Get peer companies, preferring industry-level over sector-level.
+        Get peer companies from hardcoded lists, preferring industry-level over sector-level.
+        
+        Note: This is the synchronous fallback. For dynamic discovery, use
+        _get_peers_dynamic() which calls FMP's /stock-peers endpoint.
         
         Args:
             symbol: Target stock ticker
@@ -445,6 +450,71 @@ class ComparableAnalyzer:
         # Fall back to sector-level peers
         sector_peers = self.SECTOR_PEERS.get(sector, [])
         return [p for p in sector_peers if p != symbol_upper]
+    
+    async def _get_peers_dynamic(
+        self,
+        symbol: str,
+        sector: str,
+        industry: str,
+    ) -> List[str]:
+        """
+        Get peers dynamically via FMP API, falling back to hardcoded lists.
+        
+        NOTES2.md: Dynamic peer discovery helps avoid survivorship bias
+        in hardcoded peer lists (only current winners are listed).
+        
+        Args:
+            symbol: Target stock ticker
+            sector: Company sector (fallback)
+            industry: Company industry (fallback)
+            
+        Returns:
+            List of peer symbols, excluding the target
+        """
+        symbol_upper = symbol.upper()
+        
+        # Only try FMP API if provider is FMP
+        if self.provider == "fmp" and hasattr(self.client, 'get_stock_peers'):
+            try:
+                peers = await self.client.get_stock_peers(symbol_upper)
+                if peers:
+                    # Exclude target and return
+                    return [p for p in peers if p.upper() != symbol_upper]
+            except Exception:
+                pass  # Fall through to hardcoded
+        
+        # Fall back to hardcoded peers
+        return self._get_peers(symbol, sector, industry)
+    
+    async def _get_peers_with_source(
+        self,
+        symbol: str,
+        sector: str,
+        industry: str,
+    ) -> tuple:
+        """
+        Get peers and track the source (for transparency).
+        
+        Returns:
+            Tuple of (peers_list, source_string)
+            source_string is one of: "fmp_dynamic", "industry", "sector"
+        """
+        symbol_upper = symbol.upper()
+        
+        # Only try FMP API if provider is FMP
+        if self.provider == "fmp" and hasattr(self.client, 'get_stock_peers'):
+            try:
+                peers = await self.client.get_stock_peers(symbol_upper)
+                if peers:
+                    filtered = [p for p in peers if p.upper() != symbol_upper]
+                    return (filtered, "fmp_dynamic")
+            except Exception:
+                pass
+        
+        # Fall back to hardcoded - determine if industry or sector
+        source = self._get_peer_source(sector, industry)
+        peers = self._get_peers(symbol, sector, industry)
+        return (peers, source)
     
     def _get_peer_source(self, sector: str, industry: str) -> str:
         """

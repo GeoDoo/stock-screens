@@ -361,8 +361,9 @@ export interface ComparableResult {
   // P2 #8: Business-type valuation notes for financials/cyclicals
   valuation_notes?: string[];  // Notes about metric applicability for this business type
   // P2 #9: Peer selection transparency (market cap filtering info)
+  // NOTES2.md: Added 'fmp_dynamic' source for dynamic peer discovery
   peer_selection_info?: {
-    source: 'industry' | 'sector';
+    source: 'industry' | 'sector' | 'fmp_dynamic';  // fmp_dynamic = FMP API peers
     total_candidates: number;
     after_market_cap_filter: number;
     market_cap_range: string;

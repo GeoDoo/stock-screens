@@ -2160,7 +2160,11 @@ export default function App() {
                     <div className="flex items-center gap-4">
                       <span>
                         <span className="font-semibold">Peers:</span>{' '}
-                        {comparableResult.peer_selection_info.source === 'industry' ? 'Industry-level' : 'Sector-level'}
+                        {comparableResult.peer_selection_info.source === 'fmp_dynamic' 
+                          ? <span className="text-emerald-600">FMP Dynamic (SIC/NAICS)</span>
+                          : comparableResult.peer_selection_info.source === 'industry' 
+                            ? 'Industry-level' 
+                            : 'Sector-level'}
                       </span>
                       <span className="text-gray-400">•</span>
                       <span>
