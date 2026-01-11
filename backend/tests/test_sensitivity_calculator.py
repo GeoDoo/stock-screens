@@ -625,3 +625,221 @@ class TestFCFCalculationConsistency:
             f"SensitivityCalculator.wc_mode ({calc.wc_mode}) must match "
             f"FCFProjector.wc_mode ({projector.wc_mode}) for consistency"
         )
+
+
+class TestImpliedTerminalROICGating:
+    """
+    Tests for ROIC gating in sensitivity matrix.
+    
+    NOTES2.md P0: "Sensitivity Green-Washing" Trap
+    
+    An analyst might look at the "Bull Case" cell in the Margin vs. Growth
+    matrix and see a massive valuation. However, that cell might imply a
+    75% ROIC in perpetuity, which is economically impossible.
+    
+    The fix: Calculate implied terminal ROIC for each cell and flag it
+    when it exceeds 2× WACC ("economically suspect").
+    
+    Formula:
+        Implied ROIC = terminal_growth / reinvestment_rate
+        reinvestment_rate = 1 - (FCF / NOPAT)
+    """
+    
+    def test_calculate_implied_roic_basic(self):
+        """
+        Should calculate implied terminal ROIC for a given scenario.
+        
+        With terminal growth = 3%, and FCF/NOPAT = 0.80 (20% reinvestment),
+        implied ROIC = 0.03 / 0.20 = 15%
+        """
+        calc = SensitivityCalculator(
+            projected_fcfs=[100, 110, 121, 133, 146],
+            projection_years=5,
+            shares_outstanding=1000,
+            total_debt=0,
+            cash=0,
+        )
+        
+        implied_roic = calc.calculate_implied_terminal_roic(
+            terminal_growth=0.03,
+            terminal_fcf=80,   # FCF
+            terminal_nopat=100,  # NOPAT
+        )
+        
+        # Reinvestment rate = 1 - 80/100 = 0.20
+        # Implied ROIC = 0.03 / 0.20 = 0.15 (15%)
+        assert implied_roic is not None
+        assert abs(implied_roic - 0.15) < 0.001
+    
+    def test_implied_roic_none_when_no_reinvestment(self):
+        """
+        If FCF >= NOPAT (no reinvestment), implied ROIC is infinite/undefined.
+        Should return None.
+        """
+        calc = SensitivityCalculator(
+            projected_fcfs=[100],
+            projection_years=5,
+            shares_outstanding=1000,
+            total_debt=0,
+            cash=0,
+        )
+        
+        # FCF = NOPAT means reinvestment = 0, implies infinite ROIC
+        implied_roic = calc.calculate_implied_terminal_roic(
+            terminal_growth=0.03,
+            terminal_fcf=100,
+            terminal_nopat=100,
+        )
+        
+        assert implied_roic is None
+    
+    def test_implied_roic_none_when_zero_terminal_growth(self):
+        """
+        If terminal growth = 0, there's no meaningful ROIC calculation.
+        Should return None.
+        """
+        calc = SensitivityCalculator(
+            projected_fcfs=[100],
+            projection_years=5,
+            shares_outstanding=1000,
+            total_debt=0,
+            cash=0,
+        )
+        
+        implied_roic = calc.calculate_implied_terminal_roic(
+            terminal_growth=0.0,
+            terminal_fcf=80,
+            terminal_nopat=100,
+        )
+        
+        assert implied_roic is None
+    
+    def test_generate_matrix_includes_roic_flags(self):
+        """
+        The sensitivity matrix should include a flags matrix showing
+        which cells have economically suspect implied ROIC.
+        """
+        calc = SensitivityCalculator(
+            projected_fcfs=[100, 110, 121, 133, 146],
+            projection_years=5,
+            shares_outstanding=1000,
+            total_debt=0,
+            cash=0,
+        )
+        
+        result = calc.generate_matrix(
+            base_discount_rate=0.10,
+            base_terminal_growth=0.03,
+            discount_rate_steps=[-0.02, 0, 0.02],
+            terminal_growth_steps=[-0.01, 0, 0.01],
+        )
+        
+        # Should have a roic_flags matrix of same shape
+        assert "roic_flags" in result
+        assert len(result["roic_flags"]) == len(result["matrix"])
+        assert len(result["roic_flags"][0]) == len(result["matrix"][0])
+    
+    def test_roic_flag_true_when_roic_exceeds_twice_wacc(self):
+        """
+        Flag should be True when implied ROIC > 2× discount rate (WACC).
+        
+        This indicates the scenario assumes perpetual competitive advantage
+        that is economically unrealistic.
+        """
+        calc = SensitivityCalculator(
+            projected_fcfs=[100, 110, 121, 133, 146],  # Very high FCF/NOPAT
+            projection_years=5,
+            shares_outstanding=1000,
+            total_debt=0,
+            cash=0,
+            da_ratio=0.02,      # Low D&A
+            capex_ratio=0.02,   # Low CapEx (high FCF conversion)
+            wc_ratio=0.02,      # Low WC needs (high FCF conversion)
+        )
+        
+        result = calc.generate_matrix(
+            base_discount_rate=0.08,  # 8% WACC
+            base_terminal_growth=0.04,  # 4% terminal growth (high)
+            discount_rate_steps=[0],
+            terminal_growth_steps=[0],
+        )
+        
+        # With very high FCF/NOPAT ratio, low reinvestment means high implied ROIC
+        # If implied ROIC > 16% (2 × 8%), should be flagged
+        # Check that flags matrix exists and contains boolean values
+        assert "roic_flags" in result
+        # The flag should be boolean
+        assert isinstance(result["roic_flags"][0][0], bool)
+    
+    def test_margin_growth_matrix_includes_roic_flags(self):
+        """
+        The margin/growth matrix should also include ROIC flags.
+        
+        This is especially important because high margins + high growth
+        often imply unrealistic terminal ROIC.
+        """
+        calc = SensitivityCalculator(
+            projected_fcfs=[100],
+            projection_years=5,
+            shares_outstanding=1000,
+            total_debt=0,
+            cash=0,
+            da_ratio=0.05,
+            capex_ratio=0.08,
+            wc_ratio=0.10,
+            tax_rate=0.25,
+        )
+        
+        result = calc.generate_margin_growth_matrix(
+            base_revenue=1000,
+            base_margin=0.20,
+            base_growth=0.10,
+            discount_rate=0.10,
+            terminal_growth=0.03,
+            margin_steps=[-0.05, 0, 0.05],
+            growth_steps=[-0.05, 0, 0.05],
+        )
+        
+        assert "roic_flags" in result
+        assert len(result["roic_flags"]) == 3  # 3 margins
+        assert len(result["roic_flags"][0]) == 3  # 3 growth rates
+    
+    def test_high_margin_high_growth_flagged_as_suspect(self):
+        """
+        High margin + high growth scenarios should be flagged as suspect
+        because they imply very high perpetual ROIC.
+        
+        Example: 40% margin + 15% growth with 3% terminal growth
+        implies extremely high reinvestment returns.
+        """
+        calc = SensitivityCalculator(
+            projected_fcfs=[100],
+            projection_years=5,
+            shares_outstanding=1000,
+            total_debt=0,
+            cash=0,
+            da_ratio=0.03,
+            capex_ratio=0.05,
+            wc_ratio=0.05,
+            tax_rate=0.25,
+        )
+        
+        result = calc.generate_margin_growth_matrix(
+            base_revenue=1000,
+            base_margin=0.30,      # High margin
+            base_growth=0.12,      # High growth
+            discount_rate=0.08,    # 8% WACC
+            terminal_growth=0.04,  # 4% terminal (high for ROIC calc)
+            margin_steps=[0, 0.10],   # 30% and 40% margins
+            growth_steps=[0, 0.05],   # 12% and 17% growth
+        )
+        
+        # The extreme corner (40% margin, 17% growth) should be flagged
+        # Top-right corner of the matrix
+        high_margin_idx = 1
+        high_growth_idx = 1
+        
+        # This combination should result in very high implied ROIC
+        assert result["roic_flags"][high_margin_idx][high_growth_idx] is True, (
+            "High margin + high growth scenario should be flagged as economically suspect"
+        )

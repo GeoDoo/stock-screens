@@ -129,17 +129,47 @@ export function SensitivityMatrixPanel({
   const baseColIdx = colLabels.findIndex(v => Math.abs(v - baseColValue) < 0.001);
 
   // Color function for cells
-  function getSimpleCellColor(value: number | null): string {
-    if (value === null) return 'bg-gray-100 text-gray-400';
+  // If ROIC flag is set, the cell is "economically suspect" and should be grayed out
+  function getCellStyle(value: number | null, rowIdx: number, colIdx: number): {
+    colorClass: string;
+    isSuspect: boolean;
+    tooltip: string | null;
+  } {
+    // Check if this cell is flagged as economically suspect
+    const isSuspect = data?.roic_flags?.[rowIdx]?.[colIdx] === true;
+    
+    if (value === null) {
+      return { 
+        colorClass: 'bg-gray-100 text-gray-400', 
+        isSuspect: false, 
+        tooltip: null 
+      };
+    }
+    
+    // If economically suspect, gray it out with a warning indicator
+    if (isSuspect) {
+      return {
+        colorClass: 'bg-gray-200 text-gray-400 opacity-60',
+        isSuspect: true,
+        tooltip: 'Economically suspect: This scenario implies a terminal ROIC > 2× WACC, ' +
+                 'which assumes perpetual competitive advantage that is unrealistic.',
+      };
+    }
     
     const normalized = (value - minValue) / range;
     
-    if (normalized < 0.2) return 'bg-red-100 text-red-700';
-    if (normalized < 0.4) return 'bg-orange-100 text-orange-700';
-    if (normalized < 0.6) return 'bg-amber-100 text-amber-700';
-    if (normalized < 0.8) return 'bg-lime-100 text-lime-700';
-    return 'bg-emerald-100 text-emerald-700';
+    let colorClass: string;
+    if (normalized < 0.2) colorClass = 'bg-red-100 text-red-700';
+    else if (normalized < 0.4) colorClass = 'bg-orange-100 text-orange-700';
+    else if (normalized < 0.6) colorClass = 'bg-amber-100 text-amber-700';
+    else if (normalized < 0.8) colorClass = 'bg-lime-100 text-lime-700';
+    else colorClass = 'bg-emerald-100 text-emerald-700';
+    
+    return { colorClass, isSuspect: false, tooltip: null };
   }
+  
+  // Check if any cells are flagged
+  const hasSuspectCells = data?.roic_flags?.some(row => row?.some(flag => flag === true)) ?? false;
 
   const rowLabel = matrixType === 'margin_growth' ? 'Margin' : 'WACC';
   const colLabel = matrixType === 'margin_growth' ? 'Growth' : 'Terminal Growth';
@@ -202,14 +232,19 @@ export function SensitivityMatrixPanel({
                 </td>
                 {data.matrix[rowIdx].map((value, colIdx) => {
                   const isBaseCase = rowIdx === baseRowIdx && colIdx === baseColIdx;
+                  const cellStyle = getCellStyle(value, rowIdx, colIdx);
                   return (
                     <td
                       key={colIdx}
                       role="cell"
-                      className={`p-2 text-center text-xs font-mono ${getSimpleCellColor(value)} ${
+                      className={`p-2 text-center text-xs font-mono relative ${cellStyle.colorClass} ${
                         isBaseCase ? 'ring-2 ring-gray-900 ring-inset' : ''
                       }`}
+                      title={cellStyle.tooltip || undefined}
                     >
+                      {cellStyle.isSuspect && (
+                        <span className="absolute top-0.5 right-0.5 text-[8px] text-amber-600" title="Economically suspect">⚠</span>
+                      )}
                       {value !== null ? `$${value.toFixed(2)}` : '-'}
                     </td>
                   );
@@ -221,7 +256,7 @@ export function SensitivityMatrixPanel({
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-gray-500">
+      <div className="flex items-center flex-wrap gap-4 text-xs text-gray-500">
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 bg-red-100 border border-red-200 rounded"></span>
           Lower
@@ -234,10 +269,26 @@ export function SensitivityMatrixPanel({
           <span className="w-3 h-3 bg-emerald-100 border border-emerald-200 rounded"></span>
           Higher
         </span>
+        {hasSuspectCells && (
+          <span className="flex items-center gap-1" title="These scenarios imply terminal ROIC > 2× WACC (economically unrealistic)">
+            <span className="w-3 h-3 bg-gray-200 border border-gray-300 rounded opacity-60 flex items-center justify-center text-[8px] text-amber-600">⚠</span>
+            Suspect
+          </span>
+        )}
         <span className="ml-auto text-gray-400">
           ◼ Base case highlighted
         </span>
       </div>
+      
+      {/* ROIC Warning Banner */}
+      {hasSuspectCells && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+          <span className="font-semibold">⚠️ Economically Suspect Cells:</span>{' '}
+          Grayed cells imply <strong>terminal ROIC &gt; 2× WACC</strong>, 
+          meaning perpetual competitive advantage. In a competitive economy, 
+          ROIC should fade toward WACC. Treat these scenarios with skepticism.
+        </div>
+      )}
     </div>
   );
 }

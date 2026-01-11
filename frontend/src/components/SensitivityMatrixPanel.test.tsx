@@ -209,4 +209,120 @@ describe('SensitivityMatrixPanel', () => {
       expect(screen.getByText(/error/i)).toBeInTheDocument();
     });
   });
+
+  describe('ROIC Gating', () => {
+    it('shows warning banner when ROIC flags are present', async () => {
+      const responseWithRoicFlags: SensitivityMatrixResponse = {
+        ...mockMarginGrowthResponse,
+        roic_flags: [
+          [false, false, false, false, true],
+          [false, false, false, true, true],
+          [false, false, false, false, true],
+          [false, false, false, false, true],
+          [false, false, true, true, true],
+        ],
+      };
+      vi.mocked(api.fetchSensitivityMatrix).mockResolvedValue(responseWithRoicFlags);
+
+      render(
+        <SensitivityMatrixPanel
+          symbol="AAPL"
+          provider="fmp"
+          baseGrowth={0.10}
+          baseMargin={0.14}
+          baseDiscountRate={0.10}
+          terminalGrowth={0.025}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText(/Economically Suspect Cells/i)).toBeInTheDocument();
+        expect(screen.getByText(/terminal ROIC.*2× WACC/i)).toBeInTheDocument();
+      });
+    });
+
+    it('grays out cells flagged as economically suspect', async () => {
+      const responseWithRoicFlags: SensitivityMatrixResponse = {
+        ...mockMarginGrowthResponse,
+        roic_flags: [
+          [false, false, false, false, true],
+          [false, false, false, false, false],
+          [false, false, false, false, false],
+          [false, false, false, false, false],
+          [false, false, false, false, false],
+        ],
+      };
+      vi.mocked(api.fetchSensitivityMatrix).mockResolvedValue(responseWithRoicFlags);
+
+      render(
+        <SensitivityMatrixPanel
+          symbol="AAPL"
+          provider="fmp"
+          baseGrowth={0.10}
+          baseMargin={0.14}
+          baseDiscountRate={0.10}
+          terminalGrowth={0.025}
+        />
+      );
+
+      await waitFor(() => {
+        // The grayed out cell should have opacity class
+        const cells = screen.getAllByRole('cell');
+        const suspectCell = cells.find(cell => cell.className.includes('opacity-60'));
+        expect(suspectCell).toBeTruthy();
+      });
+    });
+
+    it('shows suspect legend when ROIC flags are present', async () => {
+      const responseWithRoicFlags: SensitivityMatrixResponse = {
+        ...mockMarginGrowthResponse,
+        roic_flags: [
+          [false, false, false, false, true],
+          [false, false, false, false, false],
+          [false, false, false, false, false],
+          [false, false, false, false, false],
+          [false, false, false, false, false],
+        ],
+      };
+      vi.mocked(api.fetchSensitivityMatrix).mockResolvedValue(responseWithRoicFlags);
+
+      render(
+        <SensitivityMatrixPanel
+          symbol="AAPL"
+          provider="fmp"
+          baseGrowth={0.10}
+          baseMargin={0.14}
+          baseDiscountRate={0.10}
+          terminalGrowth={0.025}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Suspect')).toBeInTheDocument();
+      });
+    });
+
+    it('does not show warning when no ROIC flags', async () => {
+      // Default mock has no roic_flags
+      vi.mocked(api.fetchSensitivityMatrix).mockResolvedValue(mockMarginGrowthResponse);
+
+      render(
+        <SensitivityMatrixPanel
+          symbol="AAPL"
+          provider="fmp"
+          baseGrowth={0.10}
+          baseMargin={0.14}
+          baseDiscountRate={0.10}
+          terminalGrowth={0.025}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Margin vs Growth')).toBeInTheDocument();
+      });
+
+      // Should not show warning
+      expect(screen.queryByText(/Economically Suspect Cells/i)).not.toBeInTheDocument();
+    });
+  });
 });
