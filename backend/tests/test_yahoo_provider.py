@@ -171,3 +171,89 @@ class TestTTMFreshnessValidation:
         assert result.date != "TTM" or "20" in result.date, (
             f"TTM date should reflect actual quarter date, got: {result.date}"
         )
+    
+    def test_handles_datetime_columns_not_just_timestamp(self, yahoo_provider):
+        """
+        Freshness validation must work for all date types, not just pd.Timestamp.
+        
+        yfinance may return datetime.datetime, numpy datetime64, or strings.
+        The freshness check must handle all of these.
+        """
+        from datetime import datetime as dt
+        
+        # Create data with regular datetime objects (not pd.Timestamp)
+        recent_date = dt.now() - timedelta(days=60)
+        dates = [recent_date - timedelta(days=90 * i) for i in range(4)]
+        
+        # Use datetime objects directly as columns (not pd.Timestamp)
+        income_data = {
+            d: [100_000_000, 40_000_000, 60_000_000, 15_000_000, 10_000_000, 1_000_000, 3_000_000]
+            for d in dates
+        }
+        income_df = pd.DataFrame(
+            income_data,
+            index=["Total Revenue", "Cost Of Revenue", "Gross Profit", 
+                   "Operating Income", "Net Income", "Interest Expense", "Tax Provision"]
+        )
+        
+        balance_data = {dates[0]: [500_000_000, 200_000_000, 300_000_000, 100_000_000, 
+                                   50_000_000, 150_000_000, 80_000_000]}
+        balance_df = pd.DataFrame(
+            balance_data,
+            index=["Total Assets", "Total Liabilities Net Minority Interest", 
+                   "Total Equity Gross Minority Interest", "Total Debt",
+                   "Cash And Cash Equivalents", "Current Assets", "Current Liabilities"]
+        )
+        
+        cash_data = {
+            d: [20_000_000, -5_000_000, 15_000_000, 8_000_000, -2_000_000]
+            for d in dates
+        }
+        cash_df = pd.DataFrame(
+            cash_data,
+            index=["Operating Cash Flow", "Capital Expenditure", "Free Cash Flow",
+                   "Depreciation And Amortization", "Cash Dividends Paid"]
+        )
+        
+        mock_ticker = MagicMock()
+        mock_ticker.quarterly_financials = income_df
+        mock_ticker.quarterly_balance_sheet = balance_df
+        mock_ticker.quarterly_cashflow = cash_df
+        
+        # Should work - datetime objects should be converted to Timestamp
+        result = yahoo_provider._get_ttm_financials(mock_ticker)
+        
+        assert result is not None, (
+            "Freshness check should handle datetime objects, not just pd.Timestamp"
+        )
+    
+    def test_rejects_unparseable_date_columns(self, yahoo_provider):
+        """
+        If date column cannot be parsed, reject the data rather than
+        silently skipping freshness validation.
+        """
+        # Create data with unparseable column names (strings that aren't dates)
+        income_data = {
+            "Q1": [100_000_000, 40_000_000, 60_000_000, 15_000_000, 10_000_000, 1_000_000, 3_000_000],
+            "Q2": [100_000_000, 40_000_000, 60_000_000, 15_000_000, 10_000_000, 1_000_000, 3_000_000],
+            "Q3": [100_000_000, 40_000_000, 60_000_000, 15_000_000, 10_000_000, 1_000_000, 3_000_000],
+            "Q4": [100_000_000, 40_000_000, 60_000_000, 15_000_000, 10_000_000, 1_000_000, 3_000_000],
+        }
+        income_df = pd.DataFrame(
+            income_data,
+            index=["Total Revenue", "Cost Of Revenue", "Gross Profit", 
+                   "Operating Income", "Net Income", "Interest Expense", "Tax Provision"]
+        )
+        
+        mock_ticker = MagicMock()
+        mock_ticker.quarterly_financials = income_df
+        mock_ticker.quarterly_balance_sheet = pd.DataFrame()
+        mock_ticker.quarterly_cashflow = pd.DataFrame()
+        
+        # Should reject - can't validate freshness with unparseable dates
+        result = yahoo_provider._get_ttm_financials(mock_ticker)
+        
+        assert result is None, (
+            "Should reject data with unparseable date columns - "
+            "cannot validate freshness, so fail safe"
+        )
