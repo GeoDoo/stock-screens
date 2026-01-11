@@ -1653,8 +1653,9 @@ async def get_sensitivity_matrix(
         cost_of_debt = extractor.cost_of_debt(risk_free_rate=risk_free_rate) or 0.06
         tax_rate_for_wacc = extractor.tax_rate() or 0.25
         
-        # Only compute WACC if we have valid capital structure data
-        if market_cap > 0 or total_debt_for_wacc > 0:
+        # Only compute WACC if we have valid equity (market_cap > 0)
+        # 100% debt / 0% equity is invalid for WACC (matches line 436 precedent)
+        if market_cap > 0:
             wacc_calc = WACCCalculator(
                 market_cap=market_cap,
                 total_debt=total_debt_for_wacc,
