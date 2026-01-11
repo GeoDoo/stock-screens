@@ -1662,7 +1662,9 @@ async def get_sensitivity_matrix(
             cost_of_debt=cost_of_debt,
             tax_rate=tax_rate_for_wacc,
         )
-        base_discount_rate = wacc_calc.calculate() or 0.10  # Fallback only if calc fails
+        # Use explicit None check - 0.0 is falsy but shouldn't trigger fallback
+        computed_wacc = wacc_calc.calculate()
+        base_discount_rate = computed_wacc if computed_wacc is not None else 0.10
     
     da_ratio = request.da_ratio or fcf_projector.da_to_revenue_ratio() or 0.03
     capex_ratio = request.capex_ratio or fcf_projector.capex_to_revenue_ratio() or 0.04
