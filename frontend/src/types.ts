@@ -189,6 +189,20 @@ export interface ValueDriver {
   description: string;     // Human-readable description of the sensitivity
 }
 
+// Capital Efficiency metrics - NOTES4
+export interface CapitalEfficiency {
+  roic: number | null;  // Return on Invested Capital
+  value_spread: number | null;  // ROIC - WACC (positive = value creation)
+  economic_profit: number | null;  // Value Spread × Invested Capital
+  is_value_creating: boolean | null;  // ROIC > WACC
+  invested_capital?: number | null;  // Total invested capital
+  nopat?: number | null;  // Net Operating Profit After Tax
+  assessment?: string;  // Human-readable interpretation
+  incremental_assessment?: string | null;  // Incremental ROIC assessment
+  reinvestment_rate?: number | null;  // % of earnings needed for growth
+  data_issue?: string;  // Why metrics couldn't be calculated
+}
+
 export interface ValuationResult {
   symbol: string;
   intrinsic_value_per_share: number;
@@ -230,6 +244,7 @@ export interface ValuationResult {
   terminal_value_check?: TerminalValueCheck;  // Exit Multiple cross-check and dominance warnings
   value_drivers?: ValueDriver[];  // Ranked list of inputs by impact on valuation
   business_type_warning?: string | null;  // P2.8: Warning for financial companies where DCF is less appropriate
+  capital_efficiency?: CapitalEfficiency;  // NOTES4: ROIC, Value Spread, Economic Profit
 }
 
 // Scenario Analysis Types

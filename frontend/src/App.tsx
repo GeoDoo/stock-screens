@@ -21,6 +21,7 @@ import { MultiStageGrowth } from './components/MultiStageGrowth';
 import { ProvenanceDisplay } from './components/ProvenanceBadge';
 import { ValuationTrustStrip } from './components/ValuationTrustStrip';
 import { MomentumBridge } from './components/MomentumBridge';
+import { CapitalEfficiencyPanel } from './components/CapitalEfficiencyPanel';
 import { CEOEfficiencyWarning } from './components/CEOEfficiencyWarning';
 import { SensitivityMatrixPanel } from './components/SensitivityMatrixPanel';
 import { ValueDrivers } from './components/ValueDrivers';
@@ -1862,6 +1863,16 @@ export default function App() {
             {result.value_drivers && result.value_drivers.length > 0 && (
               <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
                 <ValueDrivers drivers={result.value_drivers} />
+              </div>
+            )}
+
+            {/* Capital Efficiency - ROIC, Value Spread, EVA */}
+            {result.capital_efficiency && (
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
+                <CapitalEfficiencyPanel 
+                  data={result.capital_efficiency} 
+                  wacc={result.wacc} 
+                />
               </div>
             )}
 
