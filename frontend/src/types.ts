@@ -732,6 +732,9 @@ export interface FullMonteCarloResult {
       growth_capex: number;
     };
   };
+  // P2: Simulation quality metrics
+  warnings?: string[];  // Warnings about simulation quality (negative terminal FCF, etc.)
+  negative_terminal_fcf_count?: number;  // How many simulations were skipped
 }
 
 // =============================================================================

@@ -568,6 +568,26 @@ export function MonteCarloPanel({
                       </div>
                     </div>
                   </div>
+                  
+                  {/* P2: Simulation Quality Warnings */}
+                  {fullResult.warnings && fullResult.warnings.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-gray-700 space-y-2">
+                      {fullResult.warnings.map((warning, idx) => (
+                        <div 
+                          key={idx} 
+                          className={`text-xs rounded px-2 py-1 ${
+                            warning.includes('CRITICAL') 
+                              ? 'bg-red-900 text-red-200' 
+                              : warning.includes('WARNING') 
+                                ? 'bg-amber-900 text-amber-200' 
+                                : 'bg-gray-700 text-gray-300'
+                          }`}
+                        >
+                          {warning}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               
