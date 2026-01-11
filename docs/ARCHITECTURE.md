@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-11 21:32
+> Last updated: 2026-01-11 21:47
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -38,7 +38,7 @@ Stock Screens is a full-stack stock analysis application with:
 | `memo_repository.py` | SQLite-based repository for investment memos. |
 | `monte_carlo.py` | Configuration for a single Monte Carlo input variable. |
 | `monte_carlo_full.py` | Input parameter with bounded distribution. |
-| `multi_stage_growth.py` | A single growth phase in a multi-stage model. |
+| `multi_stage_growth.py` | How values transition from start to end over a growth stage. |
 | `rate_limiter_sqlite.py` | When the rate limit resets. |
 | `ratio_calculator.py` | Valuation metrics. |
 | `scenario_calculator.py` | A single scenario with its assumptions. |
