@@ -54,8 +54,10 @@ export function CEOEfficiencyWarning({ incrementalRoic, wacc }: CEOEfficiencyWar
     description = 'New investments roughly break even vs cost of capital';
   }
   
-  // Flag extreme values that may be distorted
-  const isDistorted = Math.abs(incrementalRoic) > 1.0;  // > 100% or < -100%
+  // Flag extreme positive values that may be distorted by buybacks
+  // Only applies to high positive ROIC (buybacks shrink capital base while profits grow)
+  // Negative extreme values have different causes and this explanation doesn't apply
+  const isDistorted = incrementalRoic > 1.0;  // > 100%
   
   return (
     <div className={`p-4 rounded-lg border ${borderColor} ${bgColor}`}>
