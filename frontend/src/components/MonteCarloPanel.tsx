@@ -25,6 +25,8 @@ interface MonteCarloInputs {
   // Correlations
   growthMarginCorr: number;
   growthCapexCorr: number;
+  // Fat tails (Student's t-distribution)
+  fatTailsDf: number | null;
 }
 
 interface MonteCarloPanelProps {
@@ -83,6 +85,7 @@ export function MonteCarloPanel({
     projectionYears: defaultInputs.projectionYears,
     growthMarginCorr: -0.2,
     growthCapexCorr: 0.3,
+    fatTailsDf: null,  // null = Normal distribution
   });
   
   const [quickResult, setQuickResult] = useState<MonteCarloResult | null>(null);
@@ -149,6 +152,7 @@ export function MonteCarloPanel({
           iterations: 5000,
           growth_margin_correlation: inputs.growthMarginCorr,
           growth_capex_correlation: inputs.growthCapexCorr,
+          fat_tails_df: inputs.fatTailsDf,
         };
         
         const response = await fetch(
@@ -470,6 +474,48 @@ export function MonteCarloPanel({
                       max="1"
                     />
                   </div>
+                </div>
+                
+                {/* Fat Tails (Risk Model) */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="fatTails"
+                      checked={inputs.fatTailsDf !== null}
+                      onChange={(e) => setInputs(prev => ({ 
+                        ...prev, 
+                        fatTailsDf: e.target.checked ? 4 : null 
+                      }))}
+                      className="rounded"
+                    />
+                    <label htmlFor="fatTails" className="text-xs text-gray-500 cursor-pointer">
+                      Fat Tails (Student's t)
+                    </label>
+                  </div>
+                  {inputs.fatTailsDf !== null && (
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-gray-500">df:</label>
+                      <input
+                        type="number"
+                        value={inputs.fatTailsDf}
+                        onChange={(e) => setInputs(prev => ({ 
+                          ...prev, 
+                          fatTailsDf: parseFloat(e.target.value) || 4 
+                        }))}
+                        className="w-16 px-2 py-1 text-sm border rounded"
+                        step="1"
+                        min="1"
+                        max="100"
+                      />
+                      <span 
+                        className="text-xs text-gray-400 cursor-help" 
+                        title="Degrees of freedom. Lower = fatter tails (more extreme events). Recommended: 3-5 for realistic market crashes."
+                      >
+                        (1-100)
+                      </span>
+                    </div>
+                  )}
                 </div>
               </>
             )}
