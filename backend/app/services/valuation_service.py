@@ -19,6 +19,20 @@ class ValuationService:
     4. Project FCF using FCFProjector
     5. Run DCF to get intrinsic value
     """
+    
+    # P2.8: Financial sectors/industries where DCF is less appropriate
+    # These companies have different capital structures where the balance sheet
+    # IS the business (banks lend deposits, insurers hold float, etc.)
+    FINANCIAL_SECTORS = {"Financial Services", "Financials", "Financial"}
+    FINANCIAL_INDUSTRIES = {
+        "Banks—Regional", "Banks—Diversified", "Banks - Regional", "Banks - Diversified",
+        "Insurance—Life", "Insurance—Property & Casualty", "Insurance—Diversified",
+        "Insurance - Life", "Insurance - Property & Casualty", "Insurance - Diversified",
+        "Insurance—Reinsurance", "Insurance - Reinsurance",
+        "Asset Management", "Capital Markets",
+        "Credit Services", "Mortgage Finance",
+        "Savings & Cooperative Banks",
+    }
 
     def __init__(self, client: StockDataClient):
         """
@@ -82,6 +96,12 @@ class ValuationService:
         # 2. Convert to legacy format and extract inputs
         data = stock_data_to_legacy(stock_data)
         extractor = DataExtractor(data, market_risk_premium=market_risk_premium)
+        
+        # P2.8: Check for financial companies and generate warning
+        business_type_warning = self._get_business_type_warning(
+            sector=stock_data.profile.sector,
+            industry=stock_data.profile.industry,
+        )
 
         # 3. Calculate WACC (only if all required components are available)
         beta = extractor.beta()
@@ -327,6 +347,7 @@ class ValuationService:
             "sensitivity": sensitivity,
             "value_drivers": value_drivers,
             "terminal_value_check": terminal_value_check,
+            "business_type_warning": business_type_warning,
         }
     
     def _calculate_value_drivers(
@@ -704,4 +725,59 @@ class ValuationService:
             result["implied_terminal_roic"] = None
         
         return result
+    
+    def _get_business_type_warning(
+        self,
+        sector: Optional[str],
+        industry: Optional[str],
+    ) -> Optional[str]:
+        """
+        P2.8: Generate a warning for financial companies where DCF is less appropriate.
+        
+        Banks, insurers, and other financial services companies have fundamentally
+        different business models where:
+        - The balance sheet IS the product (banks lend deposits, insurers invest float)
+        - Interest income is revenue, not a financing cost
+        - Working capital and CapEx concepts don't apply traditionally
+        - Book value and P/B ratio are the primary metrics
+        
+        Returns:
+            Warning message if financial company, None otherwise
+        """
+        if not sector and not industry:
+            return None
+        
+        # Normalize industry name (hyphen vs em-dash variants)
+        normalized_industry = industry.replace("-", "—") if industry else ""
+        
+        # Check if this is a financial company
+        is_financial_sector = sector in self.FINANCIAL_SECTORS if sector else False
+        is_financial_industry = (
+            industry in self.FINANCIAL_INDUSTRIES or
+            normalized_industry in self.FINANCIAL_INDUSTRIES
+        ) if industry else False
+        
+        if not (is_financial_sector or is_financial_industry):
+            return None
+        
+        # Build descriptive warning
+        classification = []
+        if sector:
+            classification.append(f"Sector: {sector}")
+        if industry:
+            classification.append(f"Industry: {industry}")
+        classification_str = " | ".join(classification)
+        
+        return (
+            f"⚠️ Financial Company Detected ({classification_str}). "
+            "Traditional DCF may be less appropriate for banks, insurers, and other "
+            "financial services companies because: "
+            "(1) The balance sheet IS the business — banks lend deposits, insurers invest float. "
+            "(2) Interest income is operating revenue, not a financing cost, so EBIT and FCF are distorted. "
+            "(3) Working capital and CapEx concepts don't apply in the traditional sense. "
+            "Consider using: "
+            "• Price/Book (P/B) ratio as the primary valuation metric, "
+            "• Dividend Discount Model (DDM) for stable dividend payers, "
+            "• Excess Returns / Residual Income Model for banks."
+        )
 

@@ -1547,6 +1547,16 @@ export default function App() {
                   latestStatementDate={stockData?.latest_statement_date}
                 />
               </div>
+              
+              {/* P2.8: Business Type Warning for Financial Companies */}
+              {result.business_type_warning && (
+                <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                  <div className="font-semibold mb-2">Methodology Notice</div>
+                  <div className="leading-relaxed">
+                    {result.business_type_warning}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Details */}
