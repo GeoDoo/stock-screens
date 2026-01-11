@@ -514,3 +514,291 @@ class TestProbabilityNormalization:
         
         assert result.probability_weighted_value is None
         assert result.probabilities_normalized is False
+
+
+class TestEquityBridgeConsistency:
+    """
+    P1 Fix: ScenarioCalculator should use full equity bridge
+    matching the main valuation (ValuationService).
+    
+    Bug: ScenarioCalculator uses net_debt only:
+        equity_value = enterprise_value - (total_debt - cash)
+    
+    Main valuation uses:
+        equity_value = EV - net_debt - MI - preferred + NOLs - pension
+    
+    This creates "two truths" for the same company.
+    """
+    
+    def test_equity_bridge_includes_minority_interest(self):
+        """
+        Minority interest should be deducted from equity value.
+        
+        Companies with subsidiaries have minority interest that
+        doesn't belong to common shareholders.
+        """
+        # Without minority interest
+        calc_simple = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+        )
+        
+        # With minority interest
+        calc_with_mi = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+            minority_interest=50,  # 50 units of minority interest
+        )
+        
+        scenario = Scenario(
+            name="Test",
+            revenue_growth=0.08,
+            operating_margin=0.20,
+            terminal_growth=0.03,
+        )
+        
+        result_simple = calc_simple.run_scenario(scenario)
+        result_with_mi = calc_with_mi.run_scenario(scenario)
+        
+        # Same EV, but equity value should be lower with minority interest
+        assert result_with_mi.equity_value < result_simple.equity_value
+        # Difference should be exactly minority_interest (50)
+        assert abs(result_simple.equity_value - result_with_mi.equity_value - 50) < 0.01
+    
+    def test_equity_bridge_includes_preferred_stock(self):
+        """
+        Preferred stock should be deducted from equity value.
+        
+        Preferred equity has priority over common equity.
+        """
+        calc_simple = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+        )
+        
+        calc_with_preferred = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+            preferred_stock=30,  # 30 units of preferred stock
+        )
+        
+        scenario = Scenario(
+            name="Test",
+            revenue_growth=0.08,
+            operating_margin=0.20,
+            terminal_growth=0.03,
+        )
+        
+        result_simple = calc_simple.run_scenario(scenario)
+        result_with_preferred = calc_with_preferred.run_scenario(scenario)
+        
+        # Equity value should be lower with preferred stock
+        assert result_with_preferred.equity_value < result_simple.equity_value
+        assert abs(result_simple.equity_value - result_with_preferred.equity_value - 30) < 0.01
+    
+    def test_equity_bridge_adds_deferred_tax_assets(self):
+        """
+        Deferred tax assets (NOLs) should be ADDED to equity value.
+        
+        NOLs represent future tax savings that benefit shareholders.
+        """
+        calc_simple = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+        )
+        
+        calc_with_nol = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+            deferred_tax_assets=40,  # 40 units of NOLs
+        )
+        
+        scenario = Scenario(
+            name="Test",
+            revenue_growth=0.08,
+            operating_margin=0.20,
+            terminal_growth=0.03,
+        )
+        
+        result_simple = calc_simple.run_scenario(scenario)
+        result_with_nol = calc_with_nol.run_scenario(scenario)
+        
+        # Equity value should be HIGHER with NOLs
+        assert result_with_nol.equity_value > result_simple.equity_value
+        assert abs(result_with_nol.equity_value - result_simple.equity_value - 40) < 0.01
+    
+    def test_equity_bridge_deducts_pension_deficit(self):
+        """
+        Pension deficit should be deducted from equity value.
+        
+        Underfunded pension obligations are a debt to employees.
+        """
+        calc_simple = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+        )
+        
+        calc_with_pension = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=5,
+            pension_deficit=25,  # 25 units of underfunded pension
+        )
+        
+        scenario = Scenario(
+            name="Test",
+            revenue_growth=0.08,
+            operating_margin=0.20,
+            terminal_growth=0.03,
+        )
+        
+        result_simple = calc_simple.run_scenario(scenario)
+        result_with_pension = calc_with_pension.run_scenario(scenario)
+        
+        # Equity value should be lower with pension deficit
+        assert result_with_pension.equity_value < result_simple.equity_value
+        assert abs(result_simple.equity_value - result_with_pension.equity_value - 25) < 0.01
+
+
+class TestDilutionInScenarios:
+    """
+    P1 Fix: ScenarioCalculator should support annual_dilution_rate
+    for per-share intrinsic value calculation.
+    
+    Bug: ScenarioCalculator uses static shares_outstanding.
+    Main valuation applies dilution: terminal_shares = shares * (1 + rate)^years
+    
+    This causes scenarios to overstate per-share value for companies
+    with heavy stock-based compensation.
+    """
+    
+    def test_dilution_reduces_per_share_value(self):
+        """
+        Annual dilution should reduce intrinsic value per share.
+        
+        Tech companies with 2-3% annual SBC issuance will see
+        meaningful dilution over a 10-year projection.
+        """
+        # No dilution
+        calc_no_dilution = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=10,
+        )
+        
+        # 3% annual dilution
+        calc_with_dilution = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            base_wacc=0.10,
+            projection_years=10,
+            annual_dilution_rate=0.03,  # 3% annual dilution
+        )
+        
+        scenario = Scenario(
+            name="Test",
+            revenue_growth=0.08,
+            operating_margin=0.20,
+            terminal_growth=0.03,
+        )
+        
+        result_no_dilution = calc_no_dilution.run_scenario(scenario)
+        result_with_dilution = calc_with_dilution.run_scenario(scenario)
+        
+        # Same equity value (dilution doesn't affect EV)
+        assert abs(result_no_dilution.equity_value - result_with_dilution.equity_value) < 0.01
+        
+        # But per-share value should be lower with dilution
+        assert result_with_dilution.intrinsic_value < result_no_dilution.intrinsic_value
+        
+        # Calculate expected reduction
+        # Terminal shares = 1000 * (1.03)^10 = ~1344
+        # Value reduction should be ~25%
+        reduction = (result_no_dilution.intrinsic_value - result_with_dilution.intrinsic_value) / result_no_dilution.intrinsic_value
+        assert 0.20 < reduction < 0.35, f"Dilution reduction {reduction:.1%} seems wrong"
