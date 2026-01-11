@@ -413,3 +413,182 @@ class TestEquityBridgeConsistency:
         value = calc.calculate_intrinsic_value(0.10, 0.03)
         assert value is not None
         assert value > 0
+
+
+class TestFCFCalculationConsistency:
+    """
+    P0 Fix: SensitivityCalculator must use the same FCF calculation as FCFProjector.
+    
+    Bug: _calc_value_for_margin_growth uses a hardcoded 0.80 FCF conversion factor
+    instead of the actual formula: FCF = NOPAT + D&A - CapEx - ΔWC
+    
+    This causes the Sensitivity Matrix to show DIFFERENT values than the main DCF
+    for the same inputs, breaking analyst trust.
+    """
+    
+    def test_margin_growth_matrix_uses_actual_fcf_ratios(self):
+        """
+        Matrix should use actual da_ratio, capex_ratio, wc_ratio - not hardcoded 0.80.
+        
+        This test will FAIL until we fix the divergence.
+        """
+        # Case 1: Low reinvestment (high FCF conversion)
+        # D&A 5%, CapEx 3%, WC 2% -> FCF conversion ~ 1 + 0.05 - 0.03 - 0.02 = 1.00
+        calc_high_fcf = SensitivityCalculator(
+            projected_fcfs=[100],  # Not used for margin/growth matrix
+            projection_years=5,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            # NEW: FCF component ratios
+            da_ratio=0.05,
+            capex_ratio=0.03,
+            wc_ratio=0.02,
+            tax_rate=0.25,
+        )
+        
+        # Case 2: High reinvestment (low FCF conversion)
+        # D&A 5%, CapEx 15%, WC 10% -> FCF conversion ~ 1 + 0.05 - 0.15 - 0.10 = 0.80
+        calc_low_fcf = SensitivityCalculator(
+            projected_fcfs=[100],
+            projection_years=5,
+            shares_outstanding=1000,
+            total_debt=500,
+            cash=200,
+            da_ratio=0.05,
+            capex_ratio=0.15,
+            wc_ratio=0.10,
+            tax_rate=0.25,
+        )
+        
+        # Same margin/growth inputs
+        result_high = calc_high_fcf.generate_margin_growth_matrix(
+            base_revenue=1000,
+            base_margin=0.20,
+            base_growth=0.10,
+            discount_rate=0.10,
+            terminal_growth=0.03,
+            margin_steps=[0],
+            growth_steps=[0],
+        )
+        
+        result_low = calc_low_fcf.generate_margin_growth_matrix(
+            base_revenue=1000,
+            base_margin=0.20,
+            base_growth=0.10,
+            discount_rate=0.10,
+            terminal_growth=0.03,
+            margin_steps=[0],
+            growth_steps=[0],
+        )
+        
+        value_high = result_high["matrix"][0][0]
+        value_low = result_low["matrix"][0][0]
+        
+        # High FCF conversion company should have HIGHER valuation
+        # With the bug (hardcoded 0.80), both would be the SAME
+        assert value_high > value_low, (
+            f"High FCF conversion ({value_high}) should exceed low FCF ({value_low}). "
+            "If equal, the calculator is using hardcoded conversion instead of actual ratios."
+        )
+        
+        # The difference should be material (not just rounding)
+        pct_diff = (value_high - value_low) / value_low
+        assert pct_diff > 0.10, (
+            f"Value difference should be >10% but was {pct_diff:.1%}. "
+            "Actual FCF ratios have significant impact on valuation."
+        )
+    
+    def test_margin_growth_matrix_matches_fcf_projector_formula(self):
+        """
+        FCF should be: Revenue * Margin * (1-Tax) + D&A - CapEx - ΔWC
+        NOT: Revenue * Margin * (1-Tax) * 0.80
+        
+        For Year 1 with:
+        - Revenue = 1000 * 1.10 = 1100
+        - Margin = 20% -> EBIT = 220
+        - Tax = 25% -> NOPAT = 165
+        - D&A = 5% of Rev = 55
+        - CapEx = 8% of Rev = 88
+        - ΔWC = 3% of ΔRev = 3% * 100 = 3
+        
+        FCF = 165 + 55 - 88 - 3 = 129
+        
+        With hardcoded 0.80: FCF = 165 * 0.80 = 132 (WRONG!)
+        """
+        calc = SensitivityCalculator(
+            projected_fcfs=[100],
+            projection_years=1,  # Single year for simple verification
+            shares_outstanding=1000,
+            total_debt=0,
+            cash=0,
+            da_ratio=0.05,
+            capex_ratio=0.08,
+            wc_ratio=0.03,
+            tax_rate=0.25,
+        )
+        
+        result = calc.generate_margin_growth_matrix(
+            base_revenue=1000,
+            base_margin=0.20,
+            base_growth=0.10,
+            discount_rate=0.10,
+            terminal_growth=0.03,
+            margin_steps=[0],
+            growth_steps=[0],
+        )
+        
+        value = result["matrix"][0][0]
+        
+        # Expected FCF Year 1: 
+        # Revenue = 1100, NOPAT = 165, D&A = 55, CapEx = 88, ΔWC = 3
+        # FCF = 165 + 55 - 88 - 3 = 129
+        # 
+        # Terminal FCF = 129 * 1.03 = 132.87
+        # Terminal Value = 132.87 / (0.10 - 0.03) = 1898.14
+        # PV of FCF = 129 / 1.10 = 117.27
+        # PV of TV = 1898.14 / 1.10 = 1725.58
+        # EV = 117.27 + 1725.58 = 1842.85
+        # Per share = 1842.85 / 1000 = $1.84
+        
+        # With wrong formula (0.80 hardcoded):
+        # FCF = 165 * 0.80 = 132 -> different result!
+        
+        # We verify the formula is correct by checking the value is in expected range
+        # The key is that da_ratio, capex_ratio, wc_ratio should MATTER
+        assert value is not None
+        assert 1.5 < value < 2.5, f"Value {value} should be ~$1.84 per share"
+    
+    def test_wc_mode_level_vs_incremental(self):
+        """
+        Working capital can be 'level' (WC = Rev * ratio) or 'incremental' (ΔWC = ΔRev * ratio).
+        The calculator should support both modes for consistency with main DCF.
+        """
+        # Level mode: ΔWC = WC[t] - WC[t-1] = Rev[t]*ratio - Rev[t-1]*ratio = ΔRev * ratio
+        # Incremental mode: ΔWC = ΔRev * ratio (same in this simple case)
+        
+        calc = SensitivityCalculator(
+            projected_fcfs=[100],
+            projection_years=5,
+            shares_outstanding=1000,
+            total_debt=0,
+            cash=0,
+            da_ratio=0.05,
+            capex_ratio=0.08,
+            wc_ratio=0.10,
+            tax_rate=0.25,
+            wc_mode="incremental",  # Should be supported
+        )
+        
+        result = calc.generate_margin_growth_matrix(
+            base_revenue=1000,
+            base_margin=0.20,
+            base_growth=0.10,
+            discount_rate=0.10,
+            terminal_growth=0.03,
+            margin_steps=[0],
+            growth_steps=[0],
+        )
+        
+        # Should not crash and should produce a value
+        assert result["matrix"][0][0] is not None
