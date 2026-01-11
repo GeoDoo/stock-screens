@@ -1970,4 +1970,34 @@ class TestTotalShareholderYield:
         # TSY = 2% - 3% = -1%
         assert ratios.dividend.total_shareholder_yield is not None
         assert abs(ratios.dividend.total_shareholder_yield - (-0.01)) < 0.001
+    
+    def test_buyback_yield_none_when_market_cap_unavailable(self, calculator):
+        """
+        When market_cap is unavailable, buyback_yield should be None.
+        
+        This distinguishes "no buyback data" from "zero buybacks".
+        Users should not confuse missing data with zero activity.
+        """
+        data = {
+            "profile": {
+                "price": 100.0,
+                "marketCap": None,  # No market cap data
+                "sharesOutstanding": 1_000_000_000,
+            },
+            "income_statement": [{"revenue": 50_000_000_000, "netIncome": 10_000_000_000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "dividendsPaid": -2_000_000_000,
+                "shareRepurchases": -5_000_000_000,
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # buyback_yield should be None, not 0.0
+        assert ratios.dividend.buyback_yield is None
+        
+        # But TSY can still be calculated from dividend yield alone
+        # (dividend_yield is calculated from price * shares, not market_cap)
+        assert ratios.dividend.total_shareholder_yield is not None
 
