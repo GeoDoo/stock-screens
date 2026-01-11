@@ -657,6 +657,8 @@ export interface MonteCarloResult {
     mean: number;
     percentiles: MonteCarloPercentiles;
   };
+  // P1: Full institutional equity bridge (not just net debt)
+  equity_bridge?: EquityBridge;
   inputs: {
     base_revenue: number;
     base_growth: number;

@@ -1381,10 +1381,31 @@ async def run_monte_carlo(
     )
     
     shares = extractor.shares_outstanding() or 1
+    
+    # P1 Fix: Use full equity bridge, not just net debt
+    # This matches the institutional equity bridge in ValuationService
     net_debt = (extractor.total_debt() or 0) - (extractor.cash() or 0)
+    minority_interest = extractor.minority_interest() or 0
+    preferred_stock = extractor.preferred_stock() or 0
+    deferred_tax_assets = extractor.deferred_tax_assets() or 0
+    pension_deficit = extractor.pension_liability() or 0
+    
+    # EV → Equity bridge:
+    # - Net debt (reduces equity)
+    # - Minority interest (reduces equity - belongs to minority shareholders)
+    # - Preferred stock (reduces equity - senior claim to common)
+    # + Deferred tax assets (adds to equity - future tax benefit)
+    # - Pension deficit (reduces equity - unfunded liability)
+    total_bridge_adjustment = (
+        net_debt
+        + minority_interest
+        + preferred_stock
+        - deferred_tax_assets
+        + pension_deficit
+    )
     
     def ev_to_per_share(ev: float) -> float:
-        equity = ev - net_debt
+        equity = ev - total_bridge_adjustment
         return equity / shares
     
     return {
@@ -1401,6 +1422,14 @@ async def run_monte_carlo(
             "percentiles": {
                 k: ev_to_per_share(v) for k, v in result.percentiles.items()
             },
+        },
+        # P1: Include equity bridge for transparency
+        "equity_bridge": {
+            "net_debt": net_debt,
+            "minority_interest": minority_interest,
+            "preferred_stock": preferred_stock,
+            "deferred_tax_assets": deferred_tax_assets,
+            "pension_deficit": pension_deficit,
         },
         "inputs": {
             "base_revenue": base_revenue,
