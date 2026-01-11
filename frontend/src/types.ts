@@ -163,6 +163,12 @@ export interface TerminalValueCheck {
   warning?: string;  // High implied multiple warning
   dominance_warning?: string;  // Terminal value dominance warning
   method_divergence_warning?: string;  // Gordon vs Exit Multiple divergence warning
+  // P0 Economic Terminal State (ROIC convergence)
+  implied_terminal_roic?: number | null;  // Implied ROIC in perpetuity
+  terminal_roic_warning?: string;  // Warning if ROIC >> WACC
+  // P1 CapEx convergence (Maintenance vs Growth)
+  terminal_capex_to_da?: number;  // CapEx/D&A ratio in terminal year
+  capex_convergence_warning?: string;  // Warning if CapEx >> D&A
 }
 
 // Value driver impact - shows which inputs have the largest effect on intrinsic value

@@ -641,6 +641,24 @@ class ValuationService:
                 "(3) validating terminal assumptions carefully."
             )
         
+        # P1 Fix: CapEx/D&A convergence check
+        # In terminal (steady-state), Growth CapEx should be ~0 and Maintenance CapEx ≈ D&A
+        # If CapEx >> D&A, the model implies perpetual growth investment, which is inconsistent
+        terminal_capex = terminal_year_projection.get("capex", 0)
+        if terminal_da > 0:
+            capex_da_ratio = terminal_capex / terminal_da
+            result["terminal_capex_to_da"] = capex_da_ratio
+            
+            # Warn if CapEx/D&A > 1.3x (30% above maintenance)
+            if capex_da_ratio > 1.3:
+                result["capex_convergence_warning"] = (
+                    f"Terminal CapEx ({capex_da_ratio:.2f}x D&A) exceeds maintenance level. "
+                    "In perpetuity, CapEx should converge to D&A (1.0x) as Growth CapEx → 0. "
+                    f"Current assumption implies {(capex_da_ratio - 1):.0%} perpetual growth investment. "
+                    "Consider reducing terminal CapEx/Revenue ratio, or using multi-stage "
+                    "with declining CapEx intensity in the mature phase."
+                )
+        
         # P0 Fix: Calculate implied terminal ROIC and warn if >> WACC
         # In perpetuity: g = Reinvestment Rate × ROIC
         # Reinvestment Rate = 1 - (FCF / NOPAT)

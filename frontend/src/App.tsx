@@ -1723,6 +1723,21 @@ export default function App() {
                         </div>
                       )}
                       
+                      {/* Terminal CapEx/D&A (P1 - Maintenance vs Growth) */}
+                      {result.terminal_value_check.terminal_capex_to_da != null && (
+                        <div className="text-xs text-gray-500">
+                          <span>Terminal CapEx/D&A: </span>
+                          <span className={`font-mono font-medium ${
+                            result.terminal_value_check.terminal_capex_to_da > 1.3 
+                              ? 'text-amber-600' 
+                              : 'text-gray-600'
+                          }`} title="In perpetuity, CapEx should converge to D&A (1.0×) as Growth CapEx → 0">
+                            {result.terminal_value_check.terminal_capex_to_da.toFixed(2)}×
+                          </span>
+                          <span className="text-gray-400 ml-1">(target: ~1.0× for maintenance)</span>
+                        </div>
+                      )}
+                      
                       {/* Warning Alerts */}
                       {result.terminal_value_check.method_divergence_warning && (
                         <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
@@ -1742,6 +1757,22 @@ export default function App() {
                         <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
                           <span className="font-semibold">⚠️ High Implied Multiple:</span>
                           <span className="block mt-1">{result.terminal_value_check.warning}</span>
+                        </div>
+                      )}
+                      
+                      {/* Terminal ROIC Warning (P0) */}
+                      {result.terminal_value_check.terminal_roic_warning && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+                          <span className="font-semibold">⚠️ Implied Terminal ROIC:</span>
+                          <span className="block mt-1">{result.terminal_value_check.terminal_roic_warning}</span>
+                        </div>
+                      )}
+                      
+                      {/* CapEx Convergence Warning (P1) */}
+                      {result.terminal_value_check.capex_convergence_warning && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                          <span className="font-semibold">⚠️ Terminal CapEx:</span>
+                          <span className="block mt-1">{result.terminal_value_check.capex_convergence_warning}</span>
                         </div>
                       )}
                     </div>
