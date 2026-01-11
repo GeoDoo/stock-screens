@@ -522,6 +522,7 @@ export interface YearlyMetrics {
 
 export interface HistoricalValuationResult {
   symbol: string;
+  uses_true_historical_prices: boolean;  // P1.7: True if actual historical prices used, false if proxy (current market cap)
   current: {
     pe: number | null;
     ps: number | null;
