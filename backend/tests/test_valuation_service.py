@@ -1642,3 +1642,75 @@ class TestCapitalEfficiencyInValuationResponse:
         assert ce["invested_capital"] > 0
         assert ce["nopat"] is not None
         assert ce["nopat"] > 0
+    
+    @pytest.mark.asyncio
+    async def test_capital_efficiency_handles_unavailable_wacc(self):
+        """
+        Bug fix: When WACC cannot be calculated (missing beta, market cap, etc.),
+        capital efficiency should return ROIC but not value spread or EVA.
+        
+        Previously, the code would fall back to discount_rate (which could be a
+        user override or default 10%), violating the design intent that value
+        creation should be measured against actual WACC, not arbitrary rates.
+        
+        Note: When WACC can't be calculated, ValuationService requires a
+        discount_rate_override to proceed with the DCF. But even with an override,
+        capital efficiency should NOT use that arbitrary rate for value spread.
+        """
+        # Create stock data without market_cap (WACC can't be calculated)
+        stock_data = StockData(
+            profile=CompanyProfile(
+                symbol="TEST",
+                name="Test Corp",
+                sector="Technology",
+                industry="Software",
+                market_cap=None,  # Missing - WACC can't be calculated
+                price=100.0,
+                beta=None,  # Also missing
+                shares_outstanding=1_000_000_000,
+            ),
+            financials=[
+                FinancialStatement(
+                    date="2024-12-31",
+                    period="annual",
+                    revenue=50_000_000_000,
+                    operating_income=15_000_000_000,
+                    net_income=12_000_000_000,
+                    income_tax_expense=3_000_000_000,
+                    depreciation_amortization=2_000_000_000,
+                    capital_expenditure=3_000_000_000,
+                    total_assets=80_000_000_000,
+                    total_equity=40_000_000_000,
+                    total_debt=10_000_000_000,
+                    cash_and_equivalents=5_000_000_000,
+                    current_assets=20_000_000_000,
+                    current_liabilities=15_000_000_000,
+                    weighted_avg_shares_diluted=1_050_000_000,
+                )
+            ],
+            provider="test",
+        )
+        
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=stock_data)
+        client.get_treasury_rate = AsyncMock(return_value=0.04)
+        
+        service = ValuationService(client=client)
+        # Must provide discount_rate_override since WACC can't be calculated
+        # But capital efficiency should NOT use this arbitrary 15% as WACC
+        result = await service.value_stock("TEST", discount_rate_override=0.15)
+        
+        ce = result["capital_efficiency"]
+        
+        # ROIC should still be calculated (doesn't need WACC)
+        assert ce["roic"] is not None
+        assert ce["roic"] > 0
+        
+        # But value spread and EVA should be None (need WACC, not arbitrary override)
+        assert ce["value_spread"] is None
+        assert ce["economic_profit"] is None
+        assert ce["is_value_creating"] is None
+        
+        # Should explain why
+        assert ce["data_issue"] is not None
+        assert "WACC" in ce["data_issue"]

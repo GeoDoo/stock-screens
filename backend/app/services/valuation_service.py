@@ -319,9 +319,11 @@ class ValuationService:
         # IMPORTANT: Use calculated_wacc (true cost of capital), not discount_rate
         # (which may be a user override). Value creation should be measured against
         # the actual WACC, not an arbitrary discount rate.
+        # Pass calculated_wacc directly - if None, _calculate_capital_efficiency
+        # will return a data_issue rather than use an arbitrary rate.
         capital_efficiency = self._calculate_capital_efficiency(
             extractor=extractor,
-            wacc=calculated_wacc if calculated_wacc is not None else discount_rate,
+            wacc=calculated_wacc,
             revenue_growth=effective_revenue_growth,
         )
 
@@ -797,7 +799,7 @@ class ValuationService:
     def _calculate_capital_efficiency(
         self,
         extractor: DataExtractor,
-        wacc: float,
+        wacc: Optional[float],
         revenue_growth: float,
     ) -> dict:
         """
@@ -809,7 +811,7 @@ class ValuationService:
         
         Args:
             extractor: DataExtractor instance with financial data
-            wacc: Weighted Average Cost of Capital (used as discount rate)
+            wacc: Weighted Average Cost of Capital (can be None if unavailable)
             revenue_growth: Expected revenue growth rate
             
         Returns:
@@ -854,6 +856,23 @@ class ValuationService:
                 "invested_capital": invested_capital,
                 "nopat": nopat,
                 "data_issue": "Missing operating income or invested capital data",
+            }
+        
+        # Calculate ROIC even if WACC is unavailable
+        roic = nopat / invested_capital
+        
+        # If WACC is unavailable, we can still show ROIC but not value spread/EVA
+        # This is better than using an arbitrary discount rate as WACC
+        if wacc is None:
+            return {
+                "roic": roic,
+                "value_spread": None,
+                "economic_profit": None,
+                "is_value_creating": None,
+                "invested_capital": invested_capital,
+                "nopat": nopat,
+                "assessment": f"ROIC: {roic:.1%} (value spread unavailable - WACC could not be calculated)",
+                "data_issue": "WACC unavailable - missing market data (beta, market cap, or cost of debt)",
             }
         
         # Use the capital efficiency module for calculations
