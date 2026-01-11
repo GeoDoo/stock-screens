@@ -257,3 +257,65 @@ class TestTTMFreshnessValidation:
             "Should reject data with unparseable date columns - "
             "cannot validate freshness, so fail safe"
         )
+    
+    def test_ttm_extracts_stock_based_compensation(self, yahoo_provider):
+        """
+        P0 Fix: TTM financials must include stock_based_compensation
+        for accurate SBC metrics.
+        
+        Bug: _get_ttm_financials extracts D&A and dividends but NOT SBC.
+        This causes SBC metrics to be null in TTM ratios.
+        """
+        # Create fresh quarterly data (within 6 months)
+        dates = pd.date_range(end=pd.Timestamp.now(), periods=4, freq='QE')[::-1]
+        
+        income_data = {
+            d: [100_000_000, 40_000_000, 60_000_000, 15_000_000, 10_000_000, 1_000_000, 3_000_000]
+            for d in dates
+        }
+        income_df = pd.DataFrame(
+            income_data,
+            index=["Total Revenue", "Cost Of Revenue", "Gross Profit", 
+                   "Operating Income", "Net Income", "Interest Expense", "Tax Provision"]
+        )
+        
+        balance_data = {dates[0]: [500_000_000, 200_000_000, 300_000_000, 100_000_000, 
+                                   50_000_000, 150_000_000, 80_000_000]}
+        balance_df = pd.DataFrame(
+            balance_data,
+            index=["Total Assets", "Total Liabilities Net Minority Interest", 
+                   "Total Equity Gross Minority Interest", "Total Debt",
+                   "Cash And Cash Equivalents", "Current Assets", "Current Liabilities"]
+        )
+        
+        # Cash flow with SBC = 5M per quarter = 20M TTM
+        cash_data = {
+            d: [20_000_000, -5_000_000, 15_000_000, 8_000_000, -2_000_000, 5_000_000]
+            for d in dates
+        }
+        cash_df = pd.DataFrame(
+            cash_data,
+            index=["Operating Cash Flow", "Capital Expenditure", "Free Cash Flow",
+                   "Depreciation And Amortization", "Cash Dividends Paid",
+                   "Stock Based Compensation"]  # SBC included in cash flow!
+        )
+        
+        mock_ticker = MagicMock()
+        mock_ticker.quarterly_financials = income_df
+        mock_ticker.quarterly_balance_sheet = balance_df
+        mock_ticker.quarterly_cashflow = cash_df
+        
+        result = yahoo_provider._get_ttm_financials(mock_ticker)
+        
+        assert result is not None
+        
+        # SBC should be sum of 4 quarters = 5M * 4 = 20M
+        assert result.stock_based_compensation is not None, (
+            "TTM financials should extract stock_based_compensation. "
+            "Bug: _get_ttm_financials missing SBC extraction."
+        )
+        expected_sbc = 5_000_000 * 4  # 20M
+        assert result.stock_based_compensation == expected_sbc, (
+            f"TTM SBC should be {expected_sbc/1e6:.0f}M (4 quarters × 5M), "
+            f"got {result.stock_based_compensation/1e6:.0f}M"
+        )
