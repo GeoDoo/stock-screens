@@ -578,6 +578,7 @@ async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
                 "ev_to_ebitda": p.ev_to_ebitda,
                 "price_to_sales": p.price_to_sales,
                 "price_to_book": p.price_to_book,
+                "currency": p.currency,
             }
             for p in result.peers
         ],
@@ -595,6 +596,17 @@ async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
             "average_implied_price": result.average_implied_price,
             "average_upside_percent": result.average_upside,
         },
+        # Currency normalization info
+        "base_currency": result.base_currency,
+        "currency_conversions": [
+            {
+                "symbol": c.symbol,
+                "original_currency": c.original_currency,
+                "converted_to": c.converted_to,
+                "rate": c.rate,
+            }
+            for c in result.currency_conversions
+        ] if result.currency_conversions else None,
     }
 
 

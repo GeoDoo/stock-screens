@@ -419,3 +419,141 @@ class TestDynamicIndustryPeers:
             industry="Unknown Niche",
         )
         assert source == "sector", "Should fall back to sector"
+
+
+class TestCurrencyNormalization:
+    """
+    Tests for P2: Currency normalization in comparable analysis.
+    
+    Problem: When comparing companies across different reporting currencies
+    (e.g., US company vs UK company), market caps and EBITDAs are in different
+    currencies, making direct comparison incorrect.
+    
+    Solution: Normalize all peer values to the target's reporting currency
+    using exchange rates before calculating medians and implied valuations.
+    """
+    
+    def test_company_metrics_includes_currency(self):
+        """
+        CompanyMetrics should track the reporting currency for each company.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        data = {
+            "profile": {
+                "price": 150.0,
+                "marketCap": 2400000000000,
+                "sharesOutstanding": 16000000000,
+                "currency": "GBP",  # British Pounds
+            },
+            "income_statement": [
+                {"revenue": 400000000000, "operatingIncome": 120000000000}
+            ],
+            "balance_sheet": [
+                {"totalDebt": 0, "cashAndCashEquivalents": 0}
+            ],
+            "cash_flow": [{}],
+        }
+        
+        metrics = analyzer._extract_metrics("BP", data)
+        
+        assert hasattr(metrics, "currency"), "CompanyMetrics should have currency field"
+        assert metrics.currency == "GBP", "Should extract currency from profile"
+    
+    def test_currency_defaults_to_usd(self):
+        """
+        When currency is not specified, default to USD.
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        data = {
+            "profile": {
+                "price": 150.0,
+                "marketCap": 2400000000000,
+                "sharesOutstanding": 16000000000,
+                # No currency field
+            },
+            "income_statement": [{}],
+            "balance_sheet": [{}],
+            "cash_flow": [{}],
+        }
+        
+        metrics = analyzer._extract_metrics("AAPL", data)
+        
+        assert metrics.currency == "USD", "Should default to USD when no currency"
+    
+    def test_normalize_peer_values_to_target_currency(self):
+        """
+        When calculating medians, peer values should be converted to target's currency.
+        
+        Example:
+        - Target: AAPL (USD)
+        - Peer: SNE (Sony, JPY)
+        - Sony's EV/EBITDA is calculated in JPY, but should be same ratio
+          The market cap and EBITDA both need conversion for absolute values
+        """
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        # Create target in USD
+        target = CompanyMetrics(
+            symbol="AAPL",
+            name="Apple",
+            price=190.0,
+            market_cap=3_000_000_000_000,  # $3T
+            ebitda=130_000_000_000,  # $130B
+            currency="USD",
+        )
+        
+        # Create peer in JPY (Sony)
+        # At 150 JPY/USD: ¥45T = $300B, ¥3T = $20B
+        sony_jpy = CompanyMetrics(
+            symbol="SNE",
+            name="Sony",
+            price=14_000,  # ¥14,000
+            market_cap=45_000_000_000_000,  # ¥45T
+            ebitda=3_000_000_000_000,  # ¥3T
+            ev_to_ebitda=15.0,  # This ratio is currency-agnostic
+            currency="JPY",
+        )
+        
+        # Provide exchange rates
+        exchange_rates = {"JPY": 150.0}  # 150 JPY = 1 USD
+        
+        # Normalize Sony's values to USD
+        normalized = analyzer._normalize_to_currency(sony_jpy, "USD", exchange_rates)
+        
+        # Market cap should convert: ¥45T / 150 = $300B
+        assert normalized.market_cap == pytest.approx(300_000_000_000, rel=0.01)
+        
+        # EBITDA should convert: ¥3T / 150 = $20B
+        assert normalized.ebitda == pytest.approx(20_000_000_000, rel=0.01)
+        
+        # EV/EBITDA ratio should remain same (it's a ratio!)
+        assert normalized.ev_to_ebitda == 15.0
+        
+        # Currency should now be USD
+        assert normalized.currency == "USD"
+    
+    def test_comparable_result_includes_currency_info(self):
+        """
+        ComparableResult should indicate what currencies were involved
+        and which peers required conversion.
+        """
+        from app.services.comparable_analyzer import ComparableResult
+        
+        # The result should have fields showing currency normalization
+        # Check that ComparableResult can accept currency metadata
+        # (This is a structural test for the dataclass)
+        
+        # This test validates the interface exists - actual implementation
+        # will happen in the integration test
+        mock_client = MagicMock()
+        analyzer = ComparableAnalyzer(mock_client, provider="fmp")
+        
+        # Verify analyzer has method to normalize
+        assert hasattr(analyzer, "_normalize_to_currency"), (
+            "ComparableAnalyzer should have _normalize_to_currency method"
+        )

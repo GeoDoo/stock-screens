@@ -24,6 +24,8 @@ class CompanyMetrics:
     ebitda: Optional[float] = None
     net_debt: Optional[float] = None
     shares_outstanding: Optional[float] = None
+    # Currency for normalization in cross-currency comparisons
+    currency: str = "USD"
     
 
 @dataclass
@@ -37,6 +39,15 @@ class ImpliedValuation:
 
 
 @dataclass
+class CurrencyConversion:
+    """Currency conversion info for a peer."""
+    symbol: str
+    original_currency: str
+    converted_to: str
+    rate: float  # Units of original currency per unit of target currency
+
+
+@dataclass
 class ComparableResult:
     """Complete comparable analysis result."""
     target: CompanyMetrics
@@ -47,6 +58,9 @@ class ComparableResult:
     implied_valuations: List[ImpliedValuation]
     average_implied_price: Optional[float]
     average_upside: Optional[float]
+    # Currency normalization info
+    base_currency: str = "USD"  # Currency all values are normalized to
+    currency_conversions: Optional[List[CurrencyConversion]] = None  # Peers that needed conversion
 
 
 class ComparableAnalyzer:
@@ -204,6 +218,7 @@ class ComparableAnalyzer:
         data = stock_data_to_legacy(stock_data)
         
         target = self._extract_metrics(symbol, data)
+        target_currency = target.currency
         
         sector = data.get("profile", {}).get("sector", "Unknown")
         industry = data.get("profile", {}).get("industry", "Unknown")
@@ -212,18 +227,58 @@ class ComparableAnalyzer:
         peer_symbols = self._get_peers(symbol, sector, industry)[:max_peers]
         
         # Fetch metrics for all peers using the SAME provider
-        peers = []
+        raw_peers = []
         for peer_symbol in peer_symbols:
             try:
                 peer_stock_data = await self.client.get_stock_data(peer_symbol)
                 peer_data = stock_data_to_legacy(peer_stock_data)
                 peer = self._extract_metrics(peer_symbol, peer_data)
-                peers.append(peer)
+                raw_peers.append(peer)
             except Exception:
                 # Skip peers with missing data
                 continue
         
-        # Calculate peer medians
+        # Collect unique currencies that need conversion
+        currencies_needed = set()
+        for peer in raw_peers:
+            if peer.currency != target_currency:
+                currencies_needed.add(peer.currency)
+        if target_currency != "USD":
+            currencies_needed.add(target_currency)
+        
+        # Fetch exchange rates if we have cross-currency peers
+        exchange_rates = {"USD": 1.0}  # USD is always 1.0
+        if currencies_needed:
+            exchange_rates.update(await self._get_exchange_rates(list(currencies_needed)))
+        
+        # Normalize peers to target currency
+        peers = []
+        currency_conversions = []
+        for peer in raw_peers:
+            if peer.currency != target_currency:
+                # Track the conversion - store the actual conversion factor used
+                source_rate = exchange_rates.get(peer.currency, 1.0)
+                target_rate = exchange_rates.get(target_currency, 1.0)
+                if source_rate != 0:
+                    # Conversion factor: target_rate / source_rate
+                    # e.g., JPY→USD: 1/150 = 0.00667 (multiply JPY by this to get USD)
+                    effective_rate = target_rate / source_rate
+                else:
+                    effective_rate = 1.0
+                
+                currency_conversions.append(CurrencyConversion(
+                    symbol=peer.symbol,
+                    original_currency=peer.currency,
+                    converted_to=target_currency,
+                    rate=effective_rate,
+                ))
+                
+                # Normalize the peer
+                peer = self._normalize_to_currency(peer, target_currency, exchange_rates)
+            
+            peers.append(peer)
+        
+        # Calculate peer medians (now all in same currency)
         peer_medians = self._calculate_medians(peers)
         
         # Calculate implied valuations
@@ -247,7 +302,68 @@ class ComparableAnalyzer:
             implied_valuations=implied_valuations,
             average_implied_price=average_implied,
             average_upside=average_upside,
+            base_currency=target_currency,
+            currency_conversions=currency_conversions if currency_conversions else None,
         )
+    
+    async def _get_exchange_rates(self, currencies: List[str]) -> dict:
+        """
+        Get exchange rates for a list of currencies vs USD.
+        
+        Returns dict mapping currency code to rate (units per 1 USD).
+        For example: {"EUR": 0.92, "GBP": 0.79, "JPY": 150}
+        
+        Uses hardcoded approximate rates as fallback.
+        In production, this would call an FX API.
+        """
+        # Fallback rates (approximate, updated occasionally)
+        # These are "units per 1 USD"
+        fallback_rates = {
+            "EUR": 0.92,
+            "GBP": 0.79,
+            "JPY": 149.0,
+            "CHF": 0.88,
+            "CAD": 1.36,
+            "AUD": 1.53,
+            "CNY": 7.24,
+            "HKD": 7.82,
+            "KRW": 1320.0,
+            "INR": 83.0,
+            "BRL": 4.97,
+            "MXN": 17.2,
+            "SGD": 1.34,
+            "SEK": 10.4,
+            "NOK": 10.6,
+            "DKK": 6.87,
+            "NZD": 1.63,
+            "ZAR": 18.7,
+            "RUB": 92.0,
+            "TRY": 32.0,
+            "PLN": 4.0,
+            "TWD": 31.5,
+            "THB": 35.0,
+            "IDR": 15700.0,
+            "MYR": 4.7,
+            "PHP": 56.0,
+            "CZK": 23.0,
+            "ILS": 3.7,
+            "CLP": 900.0,
+            "COP": 4000.0,
+            "PEN": 3.7,
+            "ARS": 870.0,
+        }
+        
+        result = {}
+        for currency in currencies:
+            if currency == "USD":
+                result["USD"] = 1.0
+            elif currency in fallback_rates:
+                result[currency] = fallback_rates[currency]
+            else:
+                # Unknown currency - assume 1:1 with USD (will be wrong but safe)
+                result[currency] = 1.0
+        
+        return result
     
     def _get_peers(self, symbol: str, sector: str, industry: str) -> List[str]:
         """
@@ -377,6 +493,79 @@ class ComparableAnalyzer:
             ebitda=ebitda_calc,
             net_debt=net_debt_calc,
             shares_outstanding=shares,
+            # Currency for cross-currency normalization
+            currency=profile.get("currency", "USD"),
+        )
+    
+    def _normalize_to_currency(
+        self,
+        metrics: CompanyMetrics,
+        target_currency: str,
+        exchange_rates: dict,
+    ) -> CompanyMetrics:
+        """
+        Normalize a company's absolute values to a target currency.
+        
+        Args:
+            metrics: CompanyMetrics to normalize
+            target_currency: Currency to convert to (e.g., "USD")
+            exchange_rates: Dict mapping currency codes to rate vs USD
+                           e.g., {"EUR": 0.92, "GBP": 0.79, "JPY": 150}
+                           Rate = how many units of currency = 1 USD
+        
+        Returns:
+            New CompanyMetrics with absolute values converted to target currency
+        
+        Note:
+            - Ratios (P/E, EV/EBITDA, etc.) are currency-agnostic and unchanged
+            - Absolute values (market_cap, ebitda, etc.) are converted
+            - If currency matches target, no conversion needed
+            - If no rate available, values remain unchanged
+        """
+        source_currency = metrics.currency
+        
+        # No conversion needed if already in target currency
+        if source_currency == target_currency:
+            return metrics
+        
+        # Calculate conversion factor
+        # We convert: source → USD → target
+        # rate = how many units = 1 USD
+        source_rate = exchange_rates.get(source_currency, 1.0)  # 1.0 for USD
+        target_rate = exchange_rates.get(target_currency, 1.0)
+        
+        # For source currency: value_usd = value_source / source_rate
+        # For target currency: value_target = value_usd * target_rate
+        # Combined: value_target = value_source * (target_rate / source_rate)
+        
+        # If source is JPY (150/USD) and target is USD (1/USD):
+        # conversion = 1 / 150 = 0.00667 (divide JPY by 150 to get USD)
+        if source_rate == 0:
+            conversion_factor = 1.0  # Fallback to no conversion
+        else:
+            conversion_factor = target_rate / source_rate
+        
+        def convert(value: Optional[float]) -> Optional[float]:
+            return value * conversion_factor if value is not None else None
+        
+        return CompanyMetrics(
+            symbol=metrics.symbol,
+            name=metrics.name,
+            # Absolute values - need conversion
+            price=convert(metrics.price),
+            market_cap=convert(metrics.market_cap),
+            ebitda=convert(metrics.ebitda),
+            net_debt=convert(metrics.net_debt),
+            # Ratios - currency agnostic, no conversion
+            pe_ratio=metrics.pe_ratio,
+            ev_to_ebitda=metrics.ev_to_ebitda,
+            price_to_sales=metrics.price_to_sales,
+            price_to_book=metrics.price_to_book,
+            ev_to_revenue=metrics.ev_to_revenue,
+            # Shares - not a currency value
+            shares_outstanding=metrics.shares_outstanding,
+            # Update currency
+            currency=target_currency,
         )
     
     def _calculate_medians(self, peers: List[CompanyMetrics]) -> dict:
