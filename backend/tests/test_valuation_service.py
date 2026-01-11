@@ -1218,3 +1218,256 @@ class TestMultiStageEconomicsIntegration:
         assert result["intrinsic_value_per_share"] > 0
         # Verify projections were made
         assert len(result["projections"]) == 3
+
+
+class TestBusinessTypeWarning:
+    """
+    P2.8: Tests for DCF warnings on financial companies.
+    
+    Banks, insurers, and other financial services companies have
+    different capital structures where traditional DCF is less appropriate.
+    The system should warn users about this limitation.
+    """
+    
+    @pytest.fixture
+    def mock_client_bank(self):
+        """Create mock client returning a bank stock."""
+        bank_data = StockData(
+            profile=CompanyProfile(
+                symbol="JPM",
+                name="JPMorgan Chase & Co.",
+                price=180.0,
+                market_cap=500000000000,
+                beta=1.1,
+                shares_outstanding=2800000000,
+                currency="USD",
+                exchange="NYSE",
+                industry="Banks—Diversified",
+                sector="Financial Services",
+            ),
+            financials=[
+                FinancialStatement(
+                    date="2023-12-31",
+                    period="annual",
+                    revenue=160000000000,
+                    operating_income=50000000000,
+                    net_income=40000000000,
+                    interest_expense=80000000000,  # High interest expense (banks)
+                    income_tax_expense=12000000000,
+                    total_assets=3700000000000,  # Huge balance sheet
+                    total_liabilities=3400000000000,
+                    total_equity=300000000000,
+                    total_debt=400000000000,
+                    cash_and_equivalents=500000000000,
+                    current_assets=None,
+                    current_liabilities=None,
+                    operating_cash_flow=60000000000,
+                    capital_expenditure=-10000000000,
+                    free_cash_flow=50000000000,
+                    depreciation_amortization=5000000000,
+                ),
+                FinancialStatement(
+                    date="2022-12-31",
+                    period="annual",
+                    revenue=150000000000,
+                    operating_income=45000000000,
+                    net_income=38000000000,
+                    interest_expense=70000000000,
+                    income_tax_expense=11000000000,
+                    total_assets=3500000000000,
+                    total_liabilities=3200000000000,
+                    total_equity=300000000000,
+                    total_debt=380000000000,
+                    cash_and_equivalents=480000000000,
+                    current_assets=None,
+                    current_liabilities=None,
+                    operating_cash_flow=55000000000,
+                    capital_expenditure=-9000000000,
+                    free_cash_flow=46000000000,
+                    depreciation_amortization=4800000000,
+                ),
+                FinancialStatement(
+                    date="2021-12-31",
+                    period="annual",
+                    revenue=130000000000,
+                    operating_income=40000000000,
+                    net_income=35000000000,
+                    interest_expense=50000000000,
+                    income_tax_expense=10000000000,
+                    total_assets=3200000000000,
+                    total_liabilities=2900000000000,
+                    total_equity=300000000000,
+                    total_debt=350000000000,
+                    cash_and_equivalents=450000000000,
+                    current_assets=None,
+                    current_liabilities=None,
+                    operating_cash_flow=50000000000,
+                    capital_expenditure=-8000000000,
+                    free_cash_flow=42000000000,
+                    depreciation_amortization=4500000000,
+                ),
+            ],
+            provider="fmp",
+        )
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=bank_data)
+        client.get_treasury_rate = AsyncMock(return_value=0.045)
+        return client
+    
+    @pytest.fixture
+    def mock_client_insurer(self):
+        """Create mock client returning an insurance company stock."""
+        insurer_data = StockData(
+            profile=CompanyProfile(
+                symbol="BRK.B",
+                name="Berkshire Hathaway Inc.",
+                price=400.0,
+                market_cap=800000000000,
+                beta=0.9,
+                shares_outstanding=2000000000,
+                currency="USD",
+                exchange="NYSE",
+                industry="Insurance—Diversified",
+                sector="Financial Services",
+            ),
+            financials=[
+                FinancialStatement(
+                    date="2023-12-31",
+                    period="annual",
+                    revenue=300000000000,
+                    operating_income=80000000000,
+                    net_income=96000000000,
+                    interest_expense=2000000000,
+                    income_tax_expense=25000000000,
+                    total_assets=1000000000000,
+                    total_liabilities=500000000000,
+                    total_equity=500000000000,
+                    total_debt=100000000000,
+                    cash_and_equivalents=200000000000,
+                    current_assets=None,
+                    current_liabilities=None,
+                    operating_cash_flow=70000000000,
+                    capital_expenditure=-15000000000,
+                    free_cash_flow=55000000000,
+                    depreciation_amortization=10000000000,
+                ),
+                FinancialStatement(
+                    date="2022-12-31",
+                    period="annual",
+                    revenue=280000000000,
+                    operating_income=75000000000,
+                    net_income=90000000000,
+                    interest_expense=1800000000,
+                    income_tax_expense=22000000000,
+                    total_assets=950000000000,
+                    total_liabilities=475000000000,
+                    total_equity=475000000000,
+                    total_debt=95000000000,
+                    cash_and_equivalents=180000000000,
+                    current_assets=None,
+                    current_liabilities=None,
+                    operating_cash_flow=65000000000,
+                    capital_expenditure=-14000000000,
+                    free_cash_flow=51000000000,
+                    depreciation_amortization=9500000000,
+                ),
+                FinancialStatement(
+                    date="2021-12-31",
+                    period="annual",
+                    revenue=260000000000,
+                    operating_income=70000000000,
+                    net_income=85000000000,
+                    interest_expense=1600000000,
+                    income_tax_expense=20000000000,
+                    total_assets=900000000000,
+                    total_liabilities=450000000000,
+                    total_equity=450000000000,
+                    total_debt=90000000000,
+                    cash_and_equivalents=160000000000,
+                    current_assets=None,
+                    current_liabilities=None,
+                    operating_cash_flow=60000000000,
+                    capital_expenditure=-13000000000,
+                    free_cash_flow=47000000000,
+                    depreciation_amortization=9000000000,
+                ),
+            ],
+            provider="fmp",
+        )
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=insurer_data)
+        client.get_treasury_rate = AsyncMock(return_value=0.045)
+        return client
+    
+    @pytest.fixture
+    def mock_client_tech(self):
+        """Create mock client returning a normal tech stock (no warning)."""
+        from tests.test_valuation_service import create_mock_stock_data
+        tech_data = create_mock_stock_data()
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=tech_data)
+        client.get_treasury_rate = AsyncMock(return_value=0.045)
+        return client
+    
+    @pytest.mark.asyncio
+    async def test_bank_stock_returns_business_type_warning(self, mock_client_bank):
+        """
+        Banks should trigger a business type warning because DCF is less 
+        appropriate - their balance sheet IS their business.
+        """
+        service = ValuationService(client=mock_client_bank)
+        
+        result = await service.value_stock("JPM", projection_years=3)
+        
+        # Should have a business type warning
+        assert "business_type_warning" in result, (
+            "Bank stock should return business_type_warning field"
+        )
+        assert result["business_type_warning"] is not None
+        
+        # Warning should mention DCF limitations and alternatives
+        warning = result["business_type_warning"]
+        assert "DCF" in warning or "dcf" in warning.lower()
+        assert any(alt in warning for alt in ["P/B", "Book", "Dividend Discount"])
+    
+    @pytest.mark.asyncio
+    async def test_insurance_stock_returns_business_type_warning(self, mock_client_insurer):
+        """
+        Insurance companies should also trigger a business type warning.
+        """
+        service = ValuationService(client=mock_client_insurer)
+        
+        result = await service.value_stock("BRK.B", projection_years=3)
+        
+        assert "business_type_warning" in result
+        assert result["business_type_warning"] is not None
+        
+        # Warning should be meaningful
+        warning = result["business_type_warning"]
+        assert len(warning) > 50  # Not just a stub message
+    
+    @pytest.mark.asyncio
+    async def test_tech_stock_no_business_type_warning(self, mock_client_tech):
+        """
+        Normal tech companies should NOT have a business type warning.
+        """
+        service = ValuationService(client=mock_client_tech)
+        
+        result = await service.value_stock("AAPL", projection_years=3)
+        
+        # Should have the field but it should be None
+        assert "business_type_warning" in result
+        assert result["business_type_warning"] is None
+    
+    @pytest.mark.asyncio
+    async def test_warning_includes_sector_and_industry(self, mock_client_bank):
+        """
+        Warning should include the detected sector/industry for transparency.
+        """
+        service = ValuationService(client=mock_client_bank)
+        
+        result = await service.value_stock("JPM", projection_years=3)
+        
+        warning = result.get("business_type_warning", "")
+        # Should mention the detected classification
+        assert "Financial" in warning or "Bank" in warning

@@ -222,6 +222,7 @@ export interface ValuationResult {
   sensitivity: SensitivityMatrix;
   terminal_value_check?: TerminalValueCheck;  // Exit Multiple cross-check and dominance warnings
   value_drivers?: ValueDriver[];  // Ranked list of inputs by impact on valuation
+  business_type_warning?: string | null;  // P2.8: Warning for financial companies where DCF is less appropriate
 }
 
 // Scenario Analysis Types
