@@ -171,6 +171,45 @@ class TestStockEndpoint:
             assert result["industry"] is None
             assert result["sector"] is None
 
+    def test_stock_endpoint_returns_hints_annual_and_hints_ttm(self):
+        """
+        P0 Fix: /stock endpoint should return hints_annual and hints_ttm,
+        not just hints, for consistency with /analyze endpoint.
+        
+        Bug: /stock returns {"hints": {...}} but /analyze returns 
+        {"hints_annual": {...}, "hints_ttm": {...}}.
+        This breaks API consistency and forces frontend workarounds.
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            response = client.get("/api/stock/AAPL?provider=fmp")
+
+        assert response.status_code == 200
+        result = response.json()
+        
+        # Should have hints_annual (always present)
+        assert "hints_annual" in result, (
+            "Response should include 'hints_annual' for API consistency with /analyze. "
+            "Bug: /stock uses 'hints' while /analyze uses 'hints_annual'."
+        )
+        
+        # Should have hints_ttm (null is OK for this endpoint)
+        assert "hints_ttm" in result, (
+            "Response should include 'hints_ttm' for API consistency with /analyze."
+        )
+        
+        # hints_annual should have expected fields
+        hints_annual = result["hints_annual"]
+        assert "revenue_growth" in hints_annual
+        assert "operating_margin" in hints_annual
+        assert "da_ratio" in hints_annual
+        assert "capex_ratio" in hints_annual
+        assert "wc_ratio" in hints_annual
+
     def test_get_stock_unknown_provider(self):
         """Unknown provider should return 400."""
         response = client.get("/api/stock/AAPL?provider=invalid")
