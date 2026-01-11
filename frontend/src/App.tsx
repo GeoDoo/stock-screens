@@ -19,6 +19,7 @@ import { Layout } from './components/Layout';
 import { MonteCarloPanel } from './components/MonteCarloPanel';
 import { MultiStageGrowth } from './components/MultiStageGrowth';
 import { ProvenanceDisplay } from './components/ProvenanceBadge';
+import { ValuationTrustStrip } from './components/ValuationTrustStrip';
 import { MomentumBridge } from './components/MomentumBridge';
 import { CEOEfficiencyWarning } from './components/CEOEfficiencyWarning';
 import { SensitivityMatrixPanel } from './components/SensitivityMatrixPanel';
@@ -1501,6 +1502,15 @@ export default function App() {
                   </button>
                 </div>
               )}
+              
+              {/* P1.6: Valuation Trust Strip - shows critical context */}
+              <div className="mt-4">
+                <ValuationTrustStrip 
+                  result={result} 
+                  period={fundamentalPeriod}
+                  provenance={stockData?.provenance}
+                />
+              </div>
             </div>
 
             {/* Details */}

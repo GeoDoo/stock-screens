@@ -200,7 +200,21 @@ export interface ValuationResult {
     delta_wc: number;
     fcf: number;
   }>;
-  inputs: Record<string, unknown>;
+  inputs: {
+    revenue_growth?: number;
+    operating_margin?: number;
+    terminal_growth_rate?: number;
+    projection_years?: number;
+    discount_rate_override?: number | null;
+    shares_outstanding?: number;
+    shares_type?: 'diluted' | 'basic';
+    annual_dilution_rate?: number;
+    terminal_shares?: number;
+    da_ratio?: number;
+    capex_ratio?: number;
+    wc_ratio?: number;
+    [key: string]: unknown;  // Allow other properties
+  };
   sensitivity: SensitivityMatrix;
   terminal_value_check?: TerminalValueCheck;  // Exit Multiple cross-check and dominance warnings
   value_drivers?: ValueDriver[];  // Ranked list of inputs by impact on valuation
