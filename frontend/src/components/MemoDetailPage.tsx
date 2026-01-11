@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { InvestmentMemo, PostMortemAction, MemoStatus } from '../types';
 import { Layout } from './Layout';
-
-import { API_BASE } from '../config';
+import { fetchMemo as fetchMemoApi, addPostMortem, closeMemo } from '../api';
 
 interface MemoDetailPageProps {
   memoId: number;
@@ -21,11 +20,10 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
   const [closeReason, setCloseReason] = useState('');
 
   useEffect(() => {
-    const fetchMemo = async () => {
+    const loadMemo = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/memos/${memoId}`);
-        if (!response.ok) throw new Error('Memo not found');
-        const data = await response.json();
+        // P2 Fix: Use centralized API instead of raw fetch
+        const data = await fetchMemoApi(memoId);
         setMemo(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error loading memo');
@@ -33,7 +31,7 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
         setLoading(false);
       }
     };
-    fetchMemo();
+    loadMemo();
   }, [memoId]);
 
   const formatDate = (dateStr: string) => {
@@ -54,23 +52,17 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
 
     setSaving(true);
     try {
-      const response = await fetch(`${API_BASE}/api/memos/${memo.id}/post-mortems`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          note: postMortemContent.trim(),
-          action: postMortemAction,
-          price_at_time: memo.current_performance?.latest_price || memo.initial_market.price,
-          iv_at_time: memo.current_performance?.latest_iv || memo.initial_market.intrinsic_value,
-        }),
+      // P2 Fix: Use centralized API instead of raw fetch
+      await addPostMortem({
+        memoId: memo.id,
+        note: postMortemContent.trim(),
+        action: postMortemAction,
+        current_price: memo.current_performance?.latest_price || memo.initial_market.price,
       });
 
-      if (!response.ok) throw new Error('Failed to add note');
-
-      const refreshResponse = await fetch(`${API_BASE}/api/memos/${memoId}`);
-      if (refreshResponse.ok) {
-        setMemo(await refreshResponse.json());
-      }
+      // Refresh memo data
+      const refreshedMemo = await fetchMemoApi(memoId);
+      setMemo(refreshedMemo);
       setPostMortemContent('');
       setShowPostMortem(false);
     } catch (err) {
@@ -85,18 +77,17 @@ export function MemoDetailPage({ memoId }: MemoDetailPageProps) {
 
     setSaving(true);
     try {
-      const response = await fetch(`${API_BASE}/api/memos/${memo.id}/close`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: closeStatus, reason: closeReason.trim() }),
+      // P2 Fix: Use centralized API instead of raw fetch
+      // closeStatus is already a valid MemoStatus type
+      await closeMemo({
+        memoId: memo.id,
+        status: closeStatus as 'closed_win' | 'closed_loss' | 'closed_neutral',
+        reason: closeReason.trim(),
       });
 
-      if (!response.ok) throw new Error('Failed to close memo');
-
-      const refreshResponse = await fetch(`${API_BASE}/api/memos/${memoId}`);
-      if (refreshResponse.ok) {
-        setMemo(await refreshResponse.json());
-      }
+      // Refresh memo data
+      const refreshedMemo = await fetchMemoApi(memoId);
+      setMemo(refreshedMemo);
       setShowCloseModal(false);
       setCloseReason('');
       setCloseStatus('closed_neutral');

@@ -19,6 +19,8 @@ import type {
   ValuationRequest,
   GrowthStage,
   SensitivityMatrixResponse,
+  InvestmentMemo,
+  PostMortemAction,
 } from '../types';
 import {
   normalizeStockData,
@@ -294,6 +296,7 @@ export async function fetchSensitivityMatrix(
 
 // ============================================================================
 // Memo endpoints
+// P2 Fix: Centralize all memo fetch logic here (not scattered in components)
 // ============================================================================
 
 export async function createMemo(memo: CreateMemoRequest): Promise<{ id: number }> {
@@ -303,4 +306,49 @@ export async function createMemo(memo: CreateMemoRequest): Promise<{ id: number 
     body: JSON.stringify(memo),
   });
   return handleResponse<{ id: number }>(res);
+}
+
+export async function fetchMemos(): Promise<InvestmentMemo[]> {
+  const res = await fetch(`${API_BASE}/api/memos`);
+  return handleResponse<InvestmentMemo[]>(res);
+}
+
+export async function fetchMemo(memoId: string | number): Promise<InvestmentMemo> {
+  const res = await fetch(`${API_BASE}/api/memos/${memoId}`);
+  return handleResponse<InvestmentMemo>(res);
+}
+
+export interface AddPostMortemParams {
+  memoId: number;
+  note: string;
+  action: PostMortemAction;
+  current_price?: number;
+}
+
+export async function addPostMortem(params: AddPostMortemParams): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/memos/${params.memoId}/post-mortems`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      note: params.note,
+      action: params.action,
+      current_price: params.current_price,
+    }),
+  });
+  await handleResponse<void>(res);
+}
+
+export interface CloseMemoParams {
+  memoId: number;
+  status: 'closed_win' | 'closed_loss' | 'closed_neutral';
+  reason: string;
+}
+
+export async function closeMemo(params: CloseMemoParams): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/memos/${params.memoId}/close`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: params.status, reason: params.reason }),
+  });
+  await handleResponse<void>(res);
 }
