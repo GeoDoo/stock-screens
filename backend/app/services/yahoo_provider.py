@@ -272,6 +272,8 @@ class YahooProvider(StockDataProvider):
                 free_cash_flow=sum_quarters(q_cash, "Free Cash Flow"),
                 depreciation_amortization=sum_quarters(q_cash, "Depreciation And Amortization"),
                 dividends_paid=sum_quarters(q_cash, "Cash Dividends Paid", "Common Stock Dividend Paid"),
+                # P0 Fix: Include SBC for accurate SBC metrics in TTM ratios
+                stock_based_compensation=sum_quarters(q_cash, "Stock Based Compensation"),
             )
         except Exception as e:
             logger.warning(f"Failed to calculate TTM financials: {e}")
