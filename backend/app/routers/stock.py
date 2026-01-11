@@ -1653,18 +1653,24 @@ async def get_sensitivity_matrix(
         cost_of_debt = extractor.cost_of_debt(risk_free_rate=risk_free_rate) or 0.06
         tax_rate_for_wacc = extractor.tax_rate() or 0.25
         
-        wacc_calc = WACCCalculator(
-            market_cap=market_cap,
-            total_debt=total_debt_for_wacc,
-            beta=beta,
-            risk_free_rate=risk_free_rate,
-            market_risk_premium=0.06,
-            cost_of_debt=cost_of_debt,
-            tax_rate=tax_rate_for_wacc,
-        )
-        # Use explicit None check - 0.0 is falsy but shouldn't trigger fallback
-        computed_wacc = wacc_calc.calculate()
-        base_discount_rate = computed_wacc if computed_wacc is not None else 0.10
+        # Only compute WACC if we have valid capital structure data
+        if market_cap > 0 or total_debt_for_wacc > 0:
+            wacc_calc = WACCCalculator(
+                market_cap=market_cap,
+                total_debt=total_debt_for_wacc,
+                beta=beta,
+                risk_free_rate=risk_free_rate,
+                market_risk_premium=0.06,
+                cost_of_debt=cost_of_debt,
+                tax_rate=tax_rate_for_wacc,
+            )
+            computed_wacc = wacc_calc.calculate()
+            # Validate WACC is economically sensible (must exceed typical terminal growth)
+            # WACC of 0% or near-0% would break DCF math (discount_rate > terminal_growth)
+            base_discount_rate = computed_wacc if computed_wacc > 0.03 else 0.10
+        else:
+            # No capital structure data - use conservative default
+            base_discount_rate = 0.10
     
     da_ratio = request.da_ratio or fcf_projector.da_to_revenue_ratio() or 0.03
     capex_ratio = request.capex_ratio or fcf_projector.capex_to_revenue_ratio() or 0.04
