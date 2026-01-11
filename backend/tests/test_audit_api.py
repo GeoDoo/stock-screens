@@ -5,7 +5,7 @@ TDD: Written BEFORE endpoint implementation.
 """
 import pytest
 from fastapi.testclient import TestClient
-from datetime import datetime
+from datetime import datetime, timezone
 import tempfile
 import os
 
@@ -215,3 +215,33 @@ class TestAuditTrailAPI:
         
         assert response.status_code == 200
         assert len(response.json()) == 1
+    
+    def test_timestamps_are_utc_aware(self, client):
+        """
+        P0.3 Fix: Audit timestamps must be UTC-aware for forensic integrity.
+        
+        Naive timestamps (without timezone) create ambiguity in multi-machine
+        or later analysis scenarios. All timestamps should be UTC-aware.
+        """
+        response = client.post("/api/audit/AAPL", json={
+            "assumptions": {"revenue_growth": 0.05},
+            "note": "Test UTC timestamp",
+        })
+        
+        assert response.status_code == 201
+        data = response.json()
+        
+        # Timestamp should be a valid ISO format string with timezone
+        timestamp_str = data["timestamp"]
+        
+        # Parse the timestamp - it should have timezone info
+        parsed = datetime.fromisoformat(timestamp_str)
+        assert parsed.tzinfo is not None, (
+            f"Timestamp '{timestamp_str}' is naive (no timezone). "
+            "Audit timestamps must be UTC-aware for forensic integrity."
+        )
+        
+        # Verify it's actually UTC (offset should be 0)
+        assert parsed.utcoffset().total_seconds() == 0, (
+            f"Timestamp should be in UTC, got offset {parsed.utcoffset()}"
+        )

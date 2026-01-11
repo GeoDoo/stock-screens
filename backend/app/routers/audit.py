@@ -1,5 +1,5 @@
 """Audit endpoints for tracking assumption changes."""
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.schemas.audit import AuditRequest
@@ -52,10 +52,11 @@ async def record_assumptions(
         return {"message": "No changes detected", "changes": []}
     
     # Create and save the entry
+    # P0.3 Fix: Use UTC-aware timestamps for forensic integrity
     entry = AuditEntry(
         id=None,
         symbol=symbol,
-        timestamp=datetime.now(),
+        timestamp=datetime.now(timezone.utc),
         changes=changes,
         note=request.note,
         is_initial=is_initial,
