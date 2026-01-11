@@ -1053,7 +1053,8 @@ POST /api/stock/{symbol}/monte-carlo-full
       "end_wc_ratio": 0.0
     }
   ],
-  "use_mid_year_discounting": true
+  "use_mid_year_discounting": true,
+  "fat_tails_df": 0.0
 }
 ```
 
@@ -1081,6 +1082,7 @@ POST /api/stock/{symbol}/monte-carlo-full
 | `wacc_components` | WACCComponentsInput | null | No |  |
 | `growth_stages` | array | null | No |  |
 | `use_mid_year_discounting` | boolean | No |  |
+| `fat_tails_df` | number | null | No |  |
 
 
 ---
