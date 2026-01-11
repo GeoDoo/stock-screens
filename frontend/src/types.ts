@@ -278,6 +278,7 @@ export interface CurrencyConversion {
   original_currency: string;
   converted_to: string;
   rate: number;  // Units of original currency per unit of target currency
+  is_approximate?: boolean;  // P1.3: True if using hardcoded fallback rates
 }
 
 export interface ImpliedValuation {
@@ -315,6 +316,7 @@ export interface ComparableResult {
   // Currency normalization info
   base_currency?: string;  // Currency all values are normalized to (target's currency)
   currency_conversions?: CurrencyConversion[] | null;  // Peers that required currency conversion
+  fx_rates_approximate?: boolean;  // P1.3: True if any FX rates were approximate
 }
 
 // Technical Analysis Types

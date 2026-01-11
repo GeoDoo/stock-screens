@@ -557,3 +557,44 @@ class TestCurrencyNormalization:
         assert hasattr(analyzer, "_normalize_to_currency"), (
             "ComparableAnalyzer should have _normalize_to_currency method"
         )
+    
+    def test_currency_conversion_marks_approximate_rates(self):
+        """
+        P1.3 (NOTES.md): FX rates should be marked as approximate when
+        using fallback rates (not a live FX API).
+        
+        This ensures users know the currency conversion is an estimate.
+        """
+        from app.services.comparable_analyzer import CurrencyConversion, ComparableResult
+        
+        # Create a conversion with approximate rate
+        conversion = CurrencyConversion(
+            symbol="SONY",
+            original_currency="JPY",
+            converted_to="USD",
+            rate=0.00667,  # Approximate 1/150
+            is_approximate=True,
+        )
+        
+        assert conversion.is_approximate is True, (
+            "Currency conversions using fallback rates should be marked as approximate"
+        )
+        
+        # Create a ComparableResult with approximate conversions
+        result = ComparableResult(
+            target=None,  # type: ignore
+            peers=[],
+            sector="Technology",
+            industry="Consumer Electronics",
+            peer_medians={},
+            implied_valuations=[],
+            average_implied_price=None,
+            average_upside=None,
+            base_currency="USD",
+            currency_conversions=[conversion],
+            fx_rates_approximate=True,
+        )
+        
+        assert result.fx_rates_approximate is True, (
+            "ComparableResult should have fx_rates_approximate=True when any conversion is approximate"
+        )

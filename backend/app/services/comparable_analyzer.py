@@ -40,11 +40,16 @@ class ImpliedValuation:
 
 @dataclass
 class CurrencyConversion:
-    """Currency conversion info for a peer."""
+    """
+    Currency conversion info for a peer.
+    
+    P1.3 Fix: Conversions are marked as approximate when using fallback rates.
+    """
     symbol: str
     original_currency: str
     converted_to: str
     rate: float  # Units of original currency per unit of target currency
+    is_approximate: bool = True  # P1.3: True if using hardcoded fallback rates
 
 
 @dataclass
@@ -61,6 +66,8 @@ class ComparableResult:
     # Currency normalization info
     base_currency: str = "USD"  # Currency all values are normalized to
     currency_conversions: Optional[List[CurrencyConversion]] = None  # Peers that needed conversion
+    # P1.3: Warn if any FX rates were approximate
+    fx_rates_approximate: bool = False  # True if any peer used approximate FX rates
 
 
 class ComparableAnalyzer:
@@ -304,6 +311,8 @@ class ComparableAnalyzer:
             average_upside=average_upside,
             base_currency=target_currency,
             currency_conversions=currency_conversions if currency_conversions else None,
+            # P1.3: Mark if any conversions used approximate rates
+            fx_rates_approximate=any(c.is_approximate for c in currency_conversions) if currency_conversions else False,
         )
     
     async def _get_exchange_rates(self, currencies: List[str]) -> dict:
@@ -313,10 +322,12 @@ class ComparableAnalyzer:
         Returns dict mapping currency code to rate (units per 1 USD).
         For example: {"EUR": 0.92, "GBP": 0.79, "JPY": 150}
         
-        Uses hardcoded approximate rates as fallback.
-        In production, this would call an FX API.
+        P1.3 Note: Currently uses hardcoded APPROXIMATE rates.
+        These should be treated as rough estimates only.
+        For institutional use, integrate a live FX API (e.g., exchangerate-api.com).
         """
-        # Fallback rates (approximate, updated occasionally)
+        # APPROXIMATE fallback rates (last updated: January 2026)
+        # P1.3: These are approximate - all conversions using these are marked is_approximate=True
         # These are "units per 1 USD"
         fallback_rates = {
             "EUR": 0.92,
