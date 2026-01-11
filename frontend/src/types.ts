@@ -453,6 +453,9 @@ export interface FinancialRatiosPeriod {
     // NEW: Total Shareholder Yield (Alpha Layer)
     buyback_yield: number | null;  // Share Repurchases / Market Cap
     total_shareholder_yield: number | null;  // Dividend Yield + Buyback Yield
+    // NOTES2.md P0: Debt-Funded Returns Check (Value Trap Detection)
+    is_debt_funded_returns: boolean | null;  // True if (Dividends + Buybacks) > FCF
+    capital_returns_coverage: number | null;  // FCF / (Dividends + Buybacks), >1 = healthy
   };
   profitability: {
     gross_margin: number | null;
