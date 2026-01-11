@@ -54,6 +54,8 @@ class ValuationService:
         wc_schedule: Optional[List[float]] = None,
         # SBC dilution - annual share growth rate from stock-based compensation
         annual_dilution_rate: float = 0.0,
+        # Exit Multiple cross-check - sector/peer median EV/EBITDA for comparison
+        sector_ev_ebitda_multiple: Optional[float] = None,
     ) -> dict:
         """
         Perform full DCF valuation for a stock.
@@ -285,6 +287,7 @@ class ValuationService:
             terminal_year_projection=projections[-1],
             pv_terminal=pv_terminal,
             enterprise_value=enterprise_value,
+            sector_ev_ebitda_multiple=sector_ev_ebitda_multiple,
         )
 
         return {
@@ -517,6 +520,7 @@ class ValuationService:
         terminal_year_projection: Dict,
         pv_terminal: float,
         enterprise_value: float,
+        sector_ev_ebitda_multiple: Optional[float] = None,
     ) -> Dict:
         """
         Calculate implied exit multiple and terminal dominance as sanity checks.
@@ -526,6 +530,10 @@ class ValuationService:
         unrealistically high (> 25x for mature companies), it suggests the
         terminal growth assumption may be too aggressive.
         
+        Also cross-checks with Exit Multiple Method if sector multiple provided.
+        If Gordon Growth TV and Exit Multiple TV diverge by >20%, it indicates
+        inconsistency between growth assumptions and market multiples.
+        
         Also checks if terminal value dominates enterprise value (>70%),
         indicating the DCF is essentially a terminal value guess.
         
@@ -533,8 +541,12 @@ class ValuationService:
         - terminal_ebitda: EBIT + D&A in terminal year
         - implied_exit_multiple: Terminal Value / Terminal EBITDA
         - terminal_value_pct: PV(Terminal) / Enterprise Value
+        - gordon_growth_tv: Terminal value via Gordon Growth (for transparency)
+        - exit_multiple_tv: Terminal value via Exit Multiple (if sector multiple provided)
+        - method_divergence_pct: Divergence between methods (if both available)
         - warning: Optional warning if multiple seems unrealistic
         - dominance_warning: Optional warning if TV dominates EV
+        - method_divergence_warning: Optional warning if methods diverge >20%
         """
         # Terminal year EBITDA = EBIT + D&A
         terminal_ebit = terminal_year_projection.get("ebit", 0)
@@ -550,6 +562,7 @@ class ValuationService:
                 "terminal_ebitda": terminal_ebitda,
                 "implied_exit_multiple": None,
                 "terminal_value_pct": terminal_value_pct,
+                "gordon_growth_tv": terminal_value,
                 "warning": "Cannot calculate exit multiple - terminal EBITDA is zero or negative",
             }
         
@@ -560,7 +573,40 @@ class ValuationService:
             "terminal_ebitda": terminal_ebitda,
             "implied_exit_multiple": implied_multiple,
             "terminal_value_pct": terminal_value_pct,
+            "gordon_growth_tv": terminal_value,
         }
+        
+        # Exit Multiple Method cross-check (if sector multiple provided)
+        if sector_ev_ebitda_multiple is not None and sector_ev_ebitda_multiple > 0:
+            exit_multiple_tv = terminal_ebitda * sector_ev_ebitda_multiple
+            result["exit_multiple_tv"] = exit_multiple_tv
+            result["sector_ev_ebitda_multiple"] = sector_ev_ebitda_multiple
+            
+            # Calculate divergence: (Gordon - Exit Multiple) / Exit Multiple
+            divergence_pct = (terminal_value - exit_multiple_tv) / exit_multiple_tv
+            result["method_divergence_pct"] = divergence_pct
+            
+            # Warn if methods diverge by more than 20%
+            if abs(divergence_pct) > 0.20:
+                if divergence_pct > 0:
+                    direction = "higher"
+                    explanation = (
+                        "This suggests terminal growth assumption may be too aggressive, "
+                        "or the sector multiple is too conservative for this company's profile."
+                    )
+                else:
+                    direction = "lower"
+                    explanation = (
+                        "This suggests terminal growth assumption may be too conservative, "
+                        "or the sector multiple is too optimistic for this company's profile."
+                    )
+                
+                result["method_divergence_warning"] = (
+                    f"Gordon Growth terminal value (${terminal_value/1e9:.1f}B) is "
+                    f"{abs(divergence_pct):.0%} {direction} than Exit Multiple method "
+                    f"(${exit_multiple_tv/1e9:.1f}B at {sector_ev_ebitda_multiple:.1f}x). "
+                    f"{explanation}"
+                )
         
         # Add warning if multiple is unrealistically high
         # For mature companies, EV/EBITDA > 25x is aggressive

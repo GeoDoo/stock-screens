@@ -166,6 +166,7 @@ export interface RunValuationParams {
   wcMode?: 'level' | 'incremental';
   growthStages?: GrowthStage[];
   annualDilutionRate?: number;  // SBC dilution - e.g. 0.02 for 2% annual share issuance
+  sectorEvEbitdaMultiple?: number;  // Exit Multiple cross-check - sector/peer median
 }
 
 export async function runValuation(
@@ -185,6 +186,7 @@ export async function runValuation(
     wc_mode: params.wcMode,
     growth_stages: params.growthStages,
     annual_dilution_rate: params.annualDilutionRate,
+    sector_ev_ebitda_multiple: params.sectorEvEbitdaMultiple,
   };
 
   const res = await fetch(
