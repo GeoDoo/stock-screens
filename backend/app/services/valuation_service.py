@@ -71,6 +71,8 @@ class ValuationService:
         annual_dilution_rate: float = 0.0,
         # Exit Multiple cross-check - sector/peer median EV/EBITDA for comparison
         sector_ev_ebitda_multiple: Optional[float] = None,
+        # Conservative FCF: SBC as % of revenue to subtract from FCF (NOTES2.md)
+        sbc_ratio: Optional[float] = None,
     ) -> dict:
         """
         Perform full DCF valuation for a stock.
@@ -173,6 +175,8 @@ class ValuationService:
             da_schedule=da_schedule,
             capex_schedule=capex_schedule,
             wc_schedule=wc_schedule,
+            # Conservative FCF: SBC as real expense (NOTES2.md)
+            sbc_ratio=sbc_ratio,
         )
 
         # 5. Run DCF

@@ -129,6 +129,10 @@ class ValuationRequest(BaseModel):
     # Exit Multiple cross-check - sector/peer median EV/EBITDA multiple
     # If provided, compares Gordon Growth TV with Exit Multiple TV and warns if >20% divergence
     sector_ev_ebitda_multiple: Optional[float] = None
+    # Conservative FCF: SBC as % of revenue to subtract from FCF (NOTES2.md)
+    # When provided, treats SBC as a real expense: FCF = NOPAT + D&A - CapEx - ΔWC - SBC
+    # E.g., 0.05 means 5% of revenue is deducted as SBC expense
+    sbc_ratio: Optional[float] = Field(default=None, ge=0.0, le=0.30)
     
     @field_validator('terminal_growth_rate')
     @classmethod

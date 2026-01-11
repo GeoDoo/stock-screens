@@ -142,6 +142,9 @@ export interface ValuationRequest {
   // Exit Multiple cross-check - sector/peer median EV/EBITDA multiple
   // If provided, compares Gordon Growth TV with Exit Multiple TV and warns if >20% divergence
   sector_ev_ebitda_multiple?: number | null;
+  // Conservative FCF: SBC as % of revenue to subtract from FCF (NOTES2.md)
+  // When provided, treats SBC as a real expense: FCF = NOPAT + D&A - CapEx - ΔWC - SBC
+  sbc_ratio?: number | null;
 }
 
 export interface SensitivityMatrix {
@@ -238,6 +241,7 @@ export interface ValuationResult {
     da_ratio?: number;
     capex_ratio?: number;
     wc_ratio?: number;
+    sbc_ratio?: number | null;  // Conservative FCF: SBC as % of revenue
     [key: string]: unknown;  // Allow other properties
   };
   sensitivity: SensitivityMatrix;

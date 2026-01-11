@@ -521,6 +521,13 @@ export const glossaryTerms: GlossaryTerm[] = [
     investopediaUrl: "https://www.investopedia.com/terms/s/stockcompensation.asp",
   },
   {
+    id: "conservative-fcf",
+    term: "Conservative FCF",
+    fullName: "Conservative Free Cash Flow (FCF - SBC)",
+    definition: "A DCF valuation mode that treats Stock-Based Compensation as a real expense. The formula becomes FCF = NOPAT + D&A - CapEx - ΔWC - SBC. This is more conservative because SBC represents value transferred from shareholders to employees through equity dilution, even though it doesn't reduce cash. Enter SBC as a percentage of revenue to project it forward.",
+    investopediaUrl: "https://www.investopedia.com/terms/s/stockcompensation.asp",
+  },
+  {
     id: "vwap",
     term: "VWAP",
     fullName: "Volume Weighted Average Price",

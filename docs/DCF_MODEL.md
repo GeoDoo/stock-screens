@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code docstrings.
 > 
-> Last updated: 2026-01-11 23:31
+> Last updated: 2026-01-11 23:41
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -49,13 +49,15 @@ We add a size premium based on Duff & Phelps / Ibbotson SBBI data.
 
 Projects Free Cash Flow from first principles.
 
-FCF = NOPAT + D&A - CapEx - ΔWorking Capital
+Standard FCF = NOPAT + D&A - CapEx - ΔWorking Capital
+Conservative FCF = NOPAT + D&A - CapEx - ΔWC - SBC (when sbc_ratio provided)
 
 Where:
 - NOPAT = EBIT × (1 - Tax Rate)
 - D&A = Depreciation & Amortization
 - CapEx = Capital Expenditures
 - ΔWC = Change in Working Capital
+- SBC = Stock-Based Compensation (optional, projected as % of revenue)
 
 Working Capital Modes:
 - "level" (default): WC_t = Revenue_t × WC_ratio, ΔWC = WC_t - WC_{t-1}
@@ -64,6 +66,11 @@ Working Capital Modes:
 - "incremental": ΔWC = ΔRevenue × WC_intensity
   This ties WC investment directly to revenue growth (institutional approach)
   Better for high-growth companies and more realistic for stable businesses
+
+Conservative FCF Mode (NOTES2.md):
+Some investors treat SBC as a real cash expense because it represents
+value transferred from shareholders to employees through dilution.
+When sbc_ratio or sbc_schedule is provided, SBC is subtracted from FCF.
 
 ## Multi-Stage Growth
 
