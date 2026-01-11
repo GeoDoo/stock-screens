@@ -589,7 +589,14 @@ GET /api/stock/{symbol}
     "revenue": 0.0,
     "working_capital": 0.0
   },
-  "hints": {
+  "hints_annual": {
+    "revenue_growth": 0.0,
+    "operating_margin": 0.0,
+    "da_ratio": 0.0,
+    "capex_ratio": 0.0,
+    "wc_ratio": 0.0
+  },
+  "hints_ttm": {
     "revenue_growth": 0.0,
     "operating_margin": 0.0,
     "da_ratio": 0.0,

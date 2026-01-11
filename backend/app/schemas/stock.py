@@ -60,7 +60,9 @@ class StockDataResponse(BaseModel):
     sector: Optional[str]
     data_provider: str  # Which provider supplied the data (fmp, yahoo, etc.)
     data: CompanyData
-    hints: HistoricalHints
+    # P0 Fix: Use hints_annual + hints_ttm for consistency with /analyze endpoint
+    hints_annual: HistoricalHints  # Historical averages from annual statements
+    hints_ttm: Optional[HistoricalHints] = None  # TTM hints (null if not available)
     validation: ValidationResponse
     is_using_ltm: bool = False  # True if using Last Twelve Months (TTM) data
     provenance: Optional[DataProvenance] = None  # Source/confidence for key metrics

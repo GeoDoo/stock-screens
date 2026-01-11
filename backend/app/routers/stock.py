@@ -295,13 +295,15 @@ async def get_stock(symbol: str, provider: str):
             revenue=extractor.latest_revenue(),
             working_capital=extractor.latest_working_capital(),
         ),
-        hints=HistoricalHints(
+        # P0 Fix: Use hints_annual + hints_ttm for consistency with /analyze
+        hints_annual=HistoricalHints(
             revenue_growth=fcf_projector.revenue_cagr() if extractor.revenue_history() else None,
             operating_margin=fcf_projector.operating_margin() if extractor.ebit_history() else None,
             da_ratio=fcf_projector.da_to_revenue_ratio() if extractor.da_history() else None,
             capex_ratio=fcf_projector.capex_to_revenue_ratio() if extractor.capex_history() else None,
             wc_ratio=fcf_projector.wc_to_revenue_ratio() if extractor.working_capital_history() else None,
         ),
+        hints_ttm=None,  # TTM not fetched in this endpoint (use /analyze for TTM)
         validation=ValidationResponse(**validation_result.to_dict()),
         is_using_ltm=extractor.is_using_ltm(),
         provenance=DataProvenance(**{
