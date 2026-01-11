@@ -646,3 +646,137 @@ class TestMFI:
         # Should be 50 (neutral), not 100 (overbought)
         last_mfi = result[-1]
         assert last_mfi == 50.0, f"No price movement should give MFI=50, got {last_mfi}"
+
+
+class TestMomentumBridge:
+    """
+    Tests for Momentum Bridge (Value + Momentum convergence).
+    
+    From NOTES2.md Alpha Layer:
+    - A cheap valuation should only trigger a "Buy" signal if the
+      200-day VWMA is flattening or trending up.
+    - Reduces "Dead Money" risk when buying into downtrends.
+    """
+    
+    def test_vwma_200_calculated(self):
+        """
+        Should calculate 200-day VWMA for long-term trend detection.
+        """
+        # Create 250 days of price data (enough for 200-day VWMA)
+        prices = [100 + i * 0.1 for i in range(250)]  # Slight uptrend
+        volumes = [1000000] * 250  # Constant volume
+        
+        result = TechnicalIndicators.vwma(prices, volumes, period=200)
+        
+        # First 199 should be None (need 200 for period)
+        assert result[198] is None
+        # 200th value should exist
+        assert result[199] is not None
+        # Last value should exist
+        assert result[-1] is not None
+    
+    def test_analyze_vwma_trend_uptrend(self):
+        """
+        When VWMA is consistently rising, should detect uptrend.
+        """
+        # VWMA values trending up over 20 days
+        vwma_values = [None] * 180 + [100 + i * 0.5 for i in range(20)]
+        
+        trend = TechnicalIndicators.analyze_vwma_trend(vwma_values, period=200)
+        
+        assert trend == "uptrend"
+    
+    def test_analyze_vwma_trend_downtrend(self):
+        """
+        When VWMA is consistently falling, should detect downtrend.
+        """
+        # VWMA values trending down over 20 days
+        vwma_values = [None] * 180 + [110 - i * 0.5 for i in range(20)]
+        
+        trend = TechnicalIndicators.analyze_vwma_trend(vwma_values, period=200)
+        
+        assert trend == "downtrend"
+    
+    def test_analyze_vwma_trend_flat(self):
+        """
+        When VWMA is relatively flat, should detect flattening.
+        """
+        # VWMA values roughly flat (small oscillation)
+        vwma_values = [None] * 180 + [100 + (i % 2) * 0.1 for i in range(20)]
+        
+        trend = TechnicalIndicators.analyze_vwma_trend(vwma_values, period=200)
+        
+        assert trend == "flat"
+    
+    def test_momentum_bridge_signal_buy(self):
+        """
+        Cheap valuation + VWMA uptrend/flat = BUY signal.
+        
+        This is the key convergence: Value says cheap, Momentum says
+        the trend supports entry (not fighting the tape).
+        """
+        # Undervalued: IV > Price by 30%
+        intrinsic_value = 130.0
+        current_price = 100.0
+        vwma_trend = "uptrend"
+        
+        signal = TechnicalIndicators.momentum_bridge_signal(
+            intrinsic_value=intrinsic_value,
+            current_price=current_price,
+            vwma_trend=vwma_trend,
+        )
+        
+        assert signal == "buy"
+        
+    def test_momentum_bridge_signal_wait(self):
+        """
+        Cheap valuation + VWMA downtrend = WAIT signal.
+        
+        Value says cheap, but momentum says don't catch a falling knife.
+        """
+        # Undervalued: IV > Price by 30%
+        intrinsic_value = 130.0
+        current_price = 100.0
+        vwma_trend = "downtrend"
+        
+        signal = TechnicalIndicators.momentum_bridge_signal(
+            intrinsic_value=intrinsic_value,
+            current_price=current_price,
+            vwma_trend=vwma_trend,
+        )
+        
+        assert signal == "wait"
+    
+    def test_momentum_bridge_signal_overvalued(self):
+        """
+        Overvalued stock = AVOID regardless of momentum.
+        """
+        # Overvalued: IV < Price
+        intrinsic_value = 80.0
+        current_price = 100.0
+        vwma_trend = "uptrend"
+        
+        signal = TechnicalIndicators.momentum_bridge_signal(
+            intrinsic_value=intrinsic_value,
+            current_price=current_price,
+            vwma_trend=vwma_trend,
+        )
+        
+        assert signal == "avoid"
+    
+    def test_momentum_bridge_signal_fair_value(self):
+        """
+        Fair valued stock = HOLD signal.
+        """
+        # Fair value: IV ≈ Price (within 10%)
+        intrinsic_value = 105.0
+        current_price = 100.0
+        vwma_trend = "flat"
+        
+        signal = TechnicalIndicators.momentum_bridge_signal(
+            intrinsic_value=intrinsic_value,
+            current_price=current_price,
+            vwma_trend=vwma_trend,
+        )
+        
+        assert signal == "hold"
