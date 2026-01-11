@@ -382,6 +382,10 @@ def run_full_monte_carlo(
     da_schedule: Optional[List[float]] = None,  # Per-year D&A ratios
     capex_schedule: Optional[List[float]] = None,  # Per-year CapEx ratios
     wc_schedule: Optional[List[float]] = None,  # Per-year WC ratios
+    
+    # P0.2 Fix: SBC dilution support
+    # Same as ValuationService: terminal_shares = shares * (1 + rate)^years
+    annual_dilution_rate: float = 0.0,  # Annual share growth from SBC (e.g., 0.03 for 3%)
 ) -> FullMonteCarloResult:
     """
     Run Full-Model Monte Carlo using the complete DCF engine.
@@ -516,6 +520,12 @@ def run_full_monte_carlo(
     
     per_share_values = []
     negative_terminal_fcf_count = 0  # Track simulations skipped due to negative terminal FCF
+    
+    # P0.2 Fix: Calculate terminal shares with dilution (same as ValuationService)
+    # This is done once outside the loop since dilution rate is deterministic
+    # (We could sample dilution_rate too, but ValuationService doesn't, so neither do we)
+    # Note: projection_years may be updated inside the loop for multi-stage, so we
+    # calculate terminal_shares inside each iteration
     
     for _ in range(iterations):
         # Sample correlated core inputs
@@ -668,7 +678,11 @@ def run_full_monte_carlo(
             
             # EV → Equity → Per Share (full institutional equity bridge)
             equity_value = enterprise_value - net_debt + equity_bridge_adjustment
-            per_share = equity_value / shares_outstanding if shares_outstanding > 0 else 0
+            
+            # P0.2 Fix: Use terminal shares with dilution (same as ValuationService)
+            # terminal_shares = current_shares * ((1 + annual_dilution_rate) ** projection_years)
+            terminal_shares = shares_outstanding * ((1 + annual_dilution_rate) ** actual_years)
+            per_share = equity_value / terminal_shares if terminal_shares > 0 else 0
             
             per_share_values.append(per_share if per_share > 0 else None)
             
