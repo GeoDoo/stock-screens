@@ -1031,6 +1031,11 @@ async def batch_analyze(symbol: str, provider: str):
         "hints_ttm": None,
         "validation": validation_result.to_dict(),
         "data_provider": stock_data.provider,
+        # P1 Fix: Include provenance for transparency (matches /stock endpoint)
+        "is_using_ltm": extractor.is_using_ltm(),
+        "provenance": {
+            k: v for k, v in extractor.get_all_provenance().items()
+        },
     }
     
     financials = stock_data.financials
