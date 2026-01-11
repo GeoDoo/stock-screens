@@ -1146,9 +1146,18 @@ async def batch_analyze(symbol: str, provider: str):
             ttm_current_assets = ttm_financials.current_assets
             ttm_current_liabilities = ttm_financials.current_liabilities
             
+            # P0 Fix: Calculate OPERATING Working Capital (same formula as annual)
+            # Excludes cash (financing) and short-term debt (financing)
+            # This ensures consistency between Annual and TTM WC ratios
             ttm_wc = None
             if ttm_current_assets is not None and ttm_current_liabilities is not None:
-                ttm_wc = ttm_current_assets - ttm_current_liabilities
+                ttm_cash = ttm_financials.cash_and_equivalents or 0
+                ttm_short_term_debt = ttm_financials.short_term_debt or 0
+                
+                # Operating WC = (Current Assets - Cash) - (Current Liabilities - Short-term Debt)
+                non_cash_current_assets = ttm_current_assets - ttm_cash
+                operating_current_liabilities = ttm_current_liabilities - ttm_short_term_debt
+                ttm_wc = non_cash_current_assets - operating_current_liabilities
             
             # P0 Fix: Calculate TRUE TTM revenue growth (YoY), not copy annual CAGR
             # TTM growth = (TTM_revenue / prior_year_revenue) - 1
