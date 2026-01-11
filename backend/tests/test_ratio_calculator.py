@@ -1665,6 +1665,120 @@ class TestIncrementalROIC:
         
         assert ratios.profitability.incremental_roic is None
 
+    def test_incremental_roic_uses_3yr_rolling_when_available(self, calculator):
+        """
+        Enhancement (NOTES2.md): Incremental ROIC should use 3-year rolling data
+        to smooth out lumpy CapEx cycles.
+        
+        Formula: (NOPAT_T - NOPAT_T-3) / (IC_T - IC_T-3)
+        
+        This is more meaningful than 1-year change because:
+        - Big investments take time to generate returns
+        - 1-year ROIC can swing wildly due to lumpy CapEx timing
+        - 3-year rolling captures the full investment cycle
+        
+        Scenario: Big investment in Year T-2 (lumpy CapEx)
+        - Year T-3: Normal baseline
+        - Year T-2: BIG capital increase (but earnings haven't caught up yet)
+        - Year T-1: More capital, earnings still catching up
+        - Year T: Finally, high earnings on the invested capital
+        
+        1-year calculation would give ~24.5% (volatile, overstates performance)
+        3-year calculation gives ~9.7% (stable, captures full investment cycle)
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [
+                # Year T: Earnings finally high after investment matured
+                # NOPAT ≈ 50B × 0.75 = 37.5B
+                {"revenue": 200_000_000_000, "operatingIncome": 50_000_000_000, 
+                 "incomeBeforeTax": 48_000_000_000, "netIncome": 36_000_000_000},
+                # Year T-1: Modest improvement (investment still maturing)
+                # NOPAT ≈ 40B × 0.75 = 30B
+                {"revenue": 170_000_000_000, "operatingIncome": 40_000_000_000, 
+                 "incomeBeforeTax": 38_000_000_000, "netIncome": 28_500_000_000},
+                # Year T-2: Still lower earnings (just made big investment)
+                {"revenue": 140_000_000_000, "operatingIncome": 33_000_000_000, 
+                 "incomeBeforeTax": 31_000_000_000, "netIncome": 23_250_000_000},
+                # Year T-3 (base): Low baseline before big investment
+                # NOPAT ≈ 27B × 0.75 = 20.25B
+                {"revenue": 100_000_000_000, "operatingIncome": 27_000_000_000, 
+                 "incomeBeforeTax": 25_000_000_000, "netIncome": 18_750_000_000},
+            ],
+            "balance_sheet": [
+                # Year T: High IC (after investment fully deployed)
+                # IC = 250B + 100B - excess(~46B) = ~304B
+                {"totalStockholdersEquity": 250_000_000_000, "totalDebt": 100_000_000_000, 
+                 "cashAndCashEquivalents": 50_000_000_000},
+                # Year T-1: Also high IC (investment already deployed)
+                # IC = 220B + 90B - excess(~37B) = ~273B
+                {"totalStockholdersEquity": 220_000_000_000, "totalDebt": 90_000_000_000, 
+                 "cashAndCashEquivalents": 40_000_000_000},
+                # Year T-2: BIG JUMP in IC (this is where the investment happened)
+                {"totalStockholdersEquity": 180_000_000_000, "totalDebt": 75_000_000_000, 
+                 "cashAndCashEquivalents": 30_000_000_000},
+                # Year T-3 (base): Low IC before big investment
+                # IC = 100B + 40B - excess(~13B) = ~127B
+                {"totalStockholdersEquity": 100_000_000_000, "totalDebt": 40_000_000_000, 
+                 "cashAndCashEquivalents": 15_000_000_000},
+            ],
+            "cash_flow": [{}, {}, {}, {}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # 3-year rolling Incremental ROIC:
+        # ΔNOPAT(3yr) = 37.5B - 20.25B = 17.25B
+        # ΔIC(3yr) = 304B - 127B = 177B
+        # Incremental ROIC = 17.25B / 177B ≈ 9.7%
+        # (NOT 24.5% which is what 1-year would give)
+        assert ratios.profitability.incremental_roic is not None
+        assert ratios.profitability.incremental_roic == pytest.approx(0.097, rel=0.1)
+
+    def test_incremental_roic_falls_back_to_1yr_without_3yr_data(self, calculator):
+        """
+        When 3 years of data is not available, fall back to 1-year calculation.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [
+                # Current year
+                {
+                    "revenue": 110_000_000_000,
+                    "operatingIncome": 33_000_000_000,
+                    "incomeBeforeTax": 30_000_000_000,
+                    "netIncome": 22_500_000_000,
+                },
+                # Prior year (only 1 year back)
+                {
+                    "revenue": 100_000_000_000,
+                    "operatingIncome": 30_000_000_000,
+                    "incomeBeforeTax": 28_000_000_000,
+                    "netIncome": 21_000_000_000,
+                },
+            ],
+            "balance_sheet": [
+                # Current year
+                {
+                    "totalStockholdersEquity": 110_000_000_000,
+                    "totalDebt": 55_000_000_000,
+                    "cashAndCashEquivalents": 10_000_000_000,
+                },
+                # Prior year
+                {
+                    "totalStockholdersEquity": 100_000_000_000,
+                    "totalDebt": 50_000_000_000,
+                    "cashAndCashEquivalents": 8_000_000_000,
+                },
+            ],
+            "cash_flow": [{}, {}],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Should still calculate using 1-year change as fallback
+        assert ratios.profitability.incremental_roic is not None
+
 
 class TestCashConversionCycle:
     """
