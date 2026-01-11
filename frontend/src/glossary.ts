@@ -576,6 +576,13 @@ export const glossaryTerms: GlossaryTerm[] = [
     investopediaUrl: "https://www.investopedia.com/terms/b/buyback.asp",
   },
   {
+    id: "buyback-efficiency",
+    term: "Buyback Efficiency",
+    fullName: "Net Buyback Efficiency Ratio",
+    definition: "SBC Expense ÷ Cash Spent on Buybacks. Measures if buybacks genuinely return value or just offset SBC dilution. Ratio > 1.0 means SBC exceeds buybacks ('defensive buybacks' - a value trap). Ratio < 1.0 means buybacks exceed SBC (genuine value return). Many tech companies show high buyback yields but are actually just offsetting employee stock compensation.",
+    investopediaUrl: "https://www.investopedia.com/terms/b/buyback.asp",
+  },
+  {
     id: "total-shareholder-yield",
     term: "Total Shareholder Yield",
     fullName: "Dividend + Buyback Yield",

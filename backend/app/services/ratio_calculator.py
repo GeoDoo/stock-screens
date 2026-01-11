@@ -91,6 +91,14 @@ class SBCMetrics:
     fcf_margin_reported: Optional[float] = None  # FCF / Revenue
     fcf_margin_adjusted: Optional[float] = None  # (FCF - SBC) / Revenue
     sbc_level: Optional[str] = None  # "normal", "elevated", or "high"
+    # NOTES2.md P0: Net Buyback Efficiency (Defensive Buyback Detection)
+    # Many firms use buybacks just to offset SBC dilution - a "value trap"
+    # Ratio = SBC Expense / Cash Spent on Buybacks
+    # - > 1.0: Dilutive (SBC exceeds buybacks)
+    # - = 1.0: Neutral (buybacks exactly offset SBC)
+    # - < 1.0: Accretive (buybacks exceed SBC, genuine value return)
+    net_buyback_efficiency: Optional[float] = None
+    is_defensive_buyback: Optional[bool] = None  # True if efficiency >= 1.0
 
 
 @dataclass
@@ -259,7 +267,7 @@ class RatioCalculator:
                 sector=sector,
             ),
             sbc=self._calc_sbc(
-                stock_based_compensation, free_cash_flow, revenue
+                stock_based_compensation, free_cash_flow, revenue, share_repurchases
             ),
         )
     
@@ -791,6 +799,7 @@ class RatioCalculator:
         stock_based_compensation: Optional[float],
         free_cash_flow: Optional[float],
         revenue: Optional[float],
+        share_repurchases: Optional[float] = None,
     ) -> SBCMetrics:
         """
         Calculate Stock-Based Compensation metrics.
@@ -800,8 +809,30 @@ class RatioCalculator:
         employee compensation.
         
         SBC-Adjusted FCF = FCF - SBC (treats SBC as real expense)
+        
+        NOTES2.md P0: Net Buyback Efficiency
+        Many firms use buybacks just to offset SBC dilution - a "value trap".
+        Net Buyback Efficiency = SBC / Buyback Cash Spent
+        - > 1.0: SBC exceeds buybacks (dilutive, defensive buybacks)
+        - = 1.0: Buybacks exactly offset SBC (neutral)
+        - < 1.0: Buybacks exceed SBC (accretive, genuine value return)
         """
         metrics = SBCMetrics()
+        
+        # Calculate net buyback efficiency even if SBC is None (could be 0)
+        # share_repurchases: negative = buybacks, positive = issuance
+        if share_repurchases is not None and share_repurchases < 0:
+            # Convert to positive buyback amount
+            buyback_amount = abs(share_repurchases)
+            
+            # SBC defaults to 0 if None (no SBC expense)
+            sbc_amount = stock_based_compensation or 0.0
+            
+            # Efficiency = SBC / Buybacks
+            metrics.net_buyback_efficiency = sbc_amount / buyback_amount
+            
+            # Defensive buyback = SBC >= Buybacks (efficiency >= 1.0)
+            metrics.is_defensive_buyback = metrics.net_buyback_efficiency >= 1.0
         
         if stock_based_compensation is None:
             return metrics

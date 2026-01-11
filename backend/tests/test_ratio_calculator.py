@@ -1171,6 +1171,155 @@ class TestSBCAdjustment:
         assert ratios.sbc.sbc_level == "normal"
 
 
+class TestBuybackEfficiency:
+    """
+    NOTES2.md P0: The "Net Share Count" Illusion (Buyback Efficiency)
+    
+    Many firms (especially Big Tech) engage in "Defensive Buybacks"—spending
+    billions to buy back shares just to offset employee SBC issuance.
+    
+    A high Buyback Yield is a VALUE TRAP if Net Issuance is still positive.
+    
+    Net Buyback Efficiency = SBC Expense / Cash Spent on Buybacks
+    - If > 1.0: Company spends more on SBC than buying back (dilutive trap)
+    - If = 1.0: Buybacks exactly offset SBC (no net benefit)
+    - If < 1.0: Buybacks exceed SBC (genuine value return)
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        return RatioCalculator()
+    
+    def test_net_buyback_efficiency_calculated(self, calculator):
+        """
+        Net Buyback Efficiency = SBC / Buybacks
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{"revenue": 100_000_000_000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 20_000_000_000,
+                "stockBasedCompensation": 5_000_000_000,  # $5B SBC
+                "shareRepurchases": -10_000_000_000,  # $10B buybacks (negative = outflow)
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Efficiency = 5B / 10B = 0.5 (good - buybacks exceed SBC)
+        assert ratios.sbc.net_buyback_efficiency is not None
+        assert abs(ratios.sbc.net_buyback_efficiency - 0.5) < 0.01
+        assert ratios.sbc.is_defensive_buyback is False
+    
+    def test_defensive_buyback_flagged(self, calculator):
+        """
+        When SBC > Buybacks, company is "defensive buying" (dilutive).
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{"revenue": 100_000_000_000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 20_000_000_000,
+                "stockBasedCompensation": 12_000_000_000,  # $12B SBC
+                "shareRepurchases": -10_000_000_000,  # $10B buybacks
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Efficiency = 12B / 10B = 1.2 (bad - SBC exceeds buybacks)
+        assert ratios.sbc.net_buyback_efficiency is not None
+        assert abs(ratios.sbc.net_buyback_efficiency - 1.2) < 0.01
+        assert ratios.sbc.is_defensive_buyback is True
+    
+    def test_exact_offset_is_neutral(self, calculator):
+        """
+        When SBC = Buybacks, net effect is zero (no value return).
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{"revenue": 100_000_000_000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 20_000_000_000,
+                "stockBasedCompensation": 10_000_000_000,
+                "shareRepurchases": -10_000_000_000,
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # Efficiency = 1.0 (neutral)
+        assert ratios.sbc.net_buyback_efficiency is not None
+        assert abs(ratios.sbc.net_buyback_efficiency - 1.0) < 0.01
+        # Exact 1.0 is still "defensive" as no net value is created
+        assert ratios.sbc.is_defensive_buyback is True
+    
+    def test_no_buybacks_returns_none(self, calculator):
+        """
+        When no buybacks, efficiency ratio is undefined.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{"revenue": 100_000_000_000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 20_000_000_000,
+                "stockBasedCompensation": 5_000_000_000,
+                # No shareRepurchases
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        assert ratios.sbc.net_buyback_efficiency is None
+        assert ratios.sbc.is_defensive_buyback is None
+    
+    def test_no_sbc_with_buybacks_is_excellent(self, calculator):
+        """
+        If there's no SBC but there are buybacks, efficiency = 0 (best case).
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{"revenue": 100_000_000_000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 20_000_000_000,
+                # No SBC
+                "shareRepurchases": -10_000_000_000,
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # No SBC / 10B buybacks = 0 (excellent)
+        assert ratios.sbc.net_buyback_efficiency == 0.0
+        assert ratios.sbc.is_defensive_buyback is False
+    
+    def test_share_issuance_not_buyback(self, calculator):
+        """
+        Positive shareRepurchases means shares were ISSUED, not bought back.
+        """
+        data = {
+            "profile": {"price": 100, "marketCap": 500_000_000_000},
+            "income_statement": [{"revenue": 100_000_000_000}],
+            "balance_sheet": [{}],
+            "cash_flow": [{
+                "freeCashFlow": 20_000_000_000,
+                "stockBasedCompensation": 5_000_000_000,
+                "shareRepurchases": 2_000_000_000,  # Positive = shares issued (dilution)
+            }],
+        }
+        
+        ratios = calculator.calculate(data)
+        
+        # No buybacks (positive = issuance), so efficiency undefined
+        assert ratios.sbc.net_buyback_efficiency is None
+        assert ratios.sbc.is_defensive_buyback is None
+
+
 class TestBeneishMScore:
     """
     Tests for Beneish M-Score fraud detection.

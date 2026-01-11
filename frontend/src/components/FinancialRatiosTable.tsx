@@ -229,8 +229,33 @@ export function FinancialRatiosTable({ ratios }: Props) {
                   <td className="py-2 text-sm font-mono font-medium text-right">{formatNumber(ratios.sbc.fcf_adjusted / 1e9, 1)}B</td>
                 </tr>
               )}
+              {ratios.sbc.net_buyback_efficiency != null && (
+                <tr className="border-b border-gray-100">
+                  <td className="py-2 text-sm text-gray-500">
+                    Buyback Efficiency<GlossaryRef id="buyback-efficiency" />
+                  </td>
+                  <td className="py-2 text-sm font-mono font-medium text-right">
+                    <span className={
+                      ratios.sbc.is_defensive_buyback ? 'text-red-600' : 'text-green-600'
+                    }>
+                      {ratios.sbc.net_buyback_efficiency.toFixed(2)}x
+                    </span>
+                    {ratios.sbc.is_defensive_buyback && (
+                      <span className="ml-1 text-xs text-red-500" title="SBC exceeds buybacks - buybacks just offset dilution (value trap)">
+                        ⚠️
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+          {ratios.sbc.is_defensive_buyback && (
+            <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
+              ⚠️ <strong>Defensive Buyback Warning:</strong> SBC exceeds buyback spending. 
+              Buybacks are just offsetting employee dilution, not returning value to shareholders.
+            </div>
+          )}
         </div>
       )}
 
