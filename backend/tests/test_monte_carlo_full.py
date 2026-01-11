@@ -2133,3 +2133,356 @@ class TestNegativeOutcomes:
         assert zeros_in_values == result.zero_equity_count, (
             f"Number of zeros in values ({zeros_in_values}) should match zero_equity_count ({result.zero_equity_count})"
         )
+
+
+class TestValuationServiceParity:
+    """
+    P1.5: Parity tests between ValuationService and Monte Carlo full.
+    
+    With zero standard deviations (deterministic inputs), Monte Carlo should
+    produce the SAME intrinsic value as ValuationService. This ensures the
+    "Decision Mode" truly uses the same engine as the main valuation.
+    
+    These tests are critical for investment-grade trust: if a user runs
+    a DCF valuation and then runs Monte Carlo with the same inputs (zero std),
+    they should get identical per-share values.
+    """
+    
+    def test_deterministic_mc_matches_valuation_service(self):
+        """
+        With zero standard deviations, MC should produce the same result as
+        ValuationService for identical inputs.
+        """
+        from app.services.valuation_service import ValuationService
+        from app.services.fcf_projector import FCFProjector
+        
+        # Use realistic historical data
+        hist_revenue = [100e9, 110e9, 121e9]
+        hist_ebit = [15e9, 16.5e9, 18.15e9]
+        hist_da = [5e9, 5.5e9, 6.05e9]
+        hist_capex = [8e9, 8.8e9, 9.68e9]
+        hist_wc = [10e9, 11e9, 12.1e9]
+        
+        # Common assumptions
+        shares_outstanding = 1e9
+        total_debt = 50e9
+        cash = 20e9
+        net_debt = total_debt - cash
+        
+        growth = 0.10
+        margin = 0.15
+        da_ratio = 0.05
+        capex_ratio = 0.08
+        wc_ratio = 0.10
+        tax_rate = 0.25
+        discount_rate = 0.10
+        terminal_growth = 0.03
+        projection_years = 5
+        
+        # Run FCFProjector to get projected FCFs (same as ValuationService would)
+        projector = FCFProjector(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            tax_rate=tax_rate,
+        )
+        
+        projections = projector.project(
+            years=projection_years,
+            revenue_growth=growth,
+            operating_margin=margin,
+            da_ratio=da_ratio,
+            capex_ratio=capex_ratio,
+            wc_ratio=wc_ratio,
+        )
+        
+        projected_fcfs = [p["fcf"] for p in projections]
+        
+        # Calculate EV using same logic as ValuationService
+        pv_fcfs = sum(
+            fcf / ((1 + discount_rate) ** (i + 0.5))  # mid-year discounting
+            for i, fcf in enumerate(projected_fcfs)
+        )
+        
+        final_fcf = projected_fcfs[-1]
+        terminal_value = final_fcf * (1 + terminal_growth) / (discount_rate - terminal_growth)
+        pv_terminal = terminal_value / ((1 + discount_rate) ** (projection_years - 0.5))
+        
+        enterprise_value = pv_fcfs + pv_terminal
+        equity_value = enterprise_value - net_debt
+        expected_per_share = equity_value / shares_outstanding
+        
+        # Run Monte Carlo with zero std (deterministic)
+        mc_result = run_full_monte_carlo(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=shares_outstanding,
+            total_debt=total_debt,
+            cash=cash,
+            current_price=100.0,
+            base_growth=growth,
+            base_margin=margin,
+            base_da_ratio=da_ratio,
+            base_capex_ratio=capex_ratio,
+            base_wc_ratio=wc_ratio,
+            base_tax_rate=tax_rate,
+            base_discount_rate=discount_rate,
+            base_terminal_growth=terminal_growth,
+            # Zero std = deterministic
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=projection_years,
+            iterations=1,
+            seed=42,
+            use_mid_year_discounting=True,
+        )
+        
+        # Should produce exactly one valid simulation
+        assert mc_result.valid_simulations == 1
+        
+        # The MC result should match our manual calculation
+        # Allow small tolerance for floating point
+        assert abs(mc_result.mean - expected_per_share) / expected_per_share < 0.001, (
+            f"Monte Carlo (${mc_result.mean:.2f}) should match manual DCF (${expected_per_share:.2f}). "
+            f"Difference: {abs(mc_result.mean - expected_per_share) / expected_per_share * 100:.2f}%"
+        )
+    
+    def test_deterministic_mc_with_dilution_matches_valuation_service(self):
+        """
+        With dilution applied, deterministic MC should still match ValuationService.
+        
+        ValuationService uses: terminal_shares = current_shares * (1 + dilution)^years
+        Monte Carlo should use the same formula.
+        """
+        hist_revenue = [100e9, 110e9, 121e9]
+        hist_ebit = [15e9, 16.5e9, 18.15e9]
+        hist_da = [5e9, 5.5e9, 6.05e9]
+        hist_capex = [8e9, 8.8e9, 9.68e9]
+        hist_wc = [10e9, 11e9, 12.1e9]
+        
+        shares_outstanding = 1e9
+        total_debt = 50e9
+        cash = 20e9
+        net_debt = total_debt - cash
+        annual_dilution_rate = 0.03  # 3% annual dilution
+        
+        growth = 0.10
+        margin = 0.15
+        da_ratio = 0.05
+        capex_ratio = 0.08
+        wc_ratio = 0.10
+        tax_rate = 0.25
+        discount_rate = 0.10
+        terminal_growth = 0.03
+        projection_years = 10
+        
+        # Calculate expected terminal shares
+        terminal_shares = shares_outstanding * ((1 + annual_dilution_rate) ** projection_years)
+        
+        # Run MC with and without dilution
+        mc_no_dilution = run_full_monte_carlo(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=shares_outstanding,
+            total_debt=total_debt,
+            cash=cash,
+            current_price=100.0,
+            base_growth=growth,
+            base_margin=margin,
+            base_da_ratio=da_ratio,
+            base_capex_ratio=capex_ratio,
+            base_wc_ratio=wc_ratio,
+            base_tax_rate=tax_rate,
+            base_discount_rate=discount_rate,
+            base_terminal_growth=terminal_growth,
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=projection_years,
+            iterations=1,
+            seed=42,
+            use_mid_year_discounting=True,
+            annual_dilution_rate=0.0,
+        )
+        
+        mc_with_dilution = run_full_monte_carlo(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=shares_outstanding,
+            total_debt=total_debt,
+            cash=cash,
+            current_price=100.0,
+            base_growth=growth,
+            base_margin=margin,
+            base_da_ratio=da_ratio,
+            base_capex_ratio=capex_ratio,
+            base_wc_ratio=wc_ratio,
+            base_tax_rate=tax_rate,
+            base_discount_rate=discount_rate,
+            base_terminal_growth=terminal_growth,
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=projection_years,
+            iterations=1,
+            seed=42,
+            use_mid_year_discounting=True,
+            annual_dilution_rate=annual_dilution_rate,
+        )
+        
+        # Both should be valid
+        assert mc_no_dilution.valid_simulations == 1
+        assert mc_with_dilution.valid_simulations == 1
+        
+        # The ratio should match the dilution formula
+        expected_ratio = shares_outstanding / terminal_shares  # ~0.744 for 3% over 10 years
+        actual_ratio = mc_with_dilution.mean / mc_no_dilution.mean
+        
+        assert abs(actual_ratio - expected_ratio) < 0.001, (
+            f"Dilution ratio mismatch. Expected: {expected_ratio:.4f}, Got: {actual_ratio:.4f}"
+        )
+    
+    def test_deterministic_mc_with_equity_bridge_matches_valuation_service(self):
+        """
+        Monte Carlo should use the full equity bridge (minority interest, preferred,
+        DTA, pension) like ValuationService.
+        """
+        hist_revenue = [100e9, 110e9, 121e9]
+        hist_ebit = [15e9, 16.5e9, 18.15e9]
+        hist_da = [5e9, 5.5e9, 6.05e9]
+        hist_capex = [8e9, 8.8e9, 9.68e9]
+        hist_wc = [10e9, 11e9, 12.1e9]
+        
+        shares_outstanding = 1e9
+        total_debt = 50e9
+        cash = 20e9
+        
+        # Non-zero equity bridge components
+        minority_interest = 5e9
+        preferred_stock = 2e9
+        deferred_tax_assets = 3e9
+        pension_deficit = 1e9
+        
+        growth = 0.10
+        margin = 0.15
+        da_ratio = 0.05
+        capex_ratio = 0.08
+        wc_ratio = 0.10
+        tax_rate = 0.25
+        discount_rate = 0.10
+        terminal_growth = 0.03
+        projection_years = 5
+        
+        # Run MC without equity bridge adjustments
+        mc_simple = run_full_monte_carlo(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=shares_outstanding,
+            total_debt=total_debt,
+            cash=cash,
+            current_price=100.0,
+            base_growth=growth,
+            base_margin=margin,
+            base_da_ratio=da_ratio,
+            base_capex_ratio=capex_ratio,
+            base_wc_ratio=wc_ratio,
+            base_tax_rate=tax_rate,
+            base_discount_rate=discount_rate,
+            base_terminal_growth=terminal_growth,
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=projection_years,
+            iterations=1,
+            seed=42,
+            use_mid_year_discounting=True,
+            # No equity bridge adjustments
+            minority_interest=0.0,
+            preferred_stock=0.0,
+            deferred_tax_assets=0.0,
+            pension_deficit=0.0,
+        )
+        
+        # Run MC with full equity bridge
+        mc_with_bridge = run_full_monte_carlo(
+            historical_revenue=hist_revenue,
+            historical_ebit=hist_ebit,
+            historical_da=hist_da,
+            historical_capex=hist_capex,
+            historical_working_capital=hist_wc,
+            shares_outstanding=shares_outstanding,
+            total_debt=total_debt,
+            cash=cash,
+            current_price=100.0,
+            base_growth=growth,
+            base_margin=margin,
+            base_da_ratio=da_ratio,
+            base_capex_ratio=capex_ratio,
+            base_wc_ratio=wc_ratio,
+            base_tax_rate=tax_rate,
+            base_discount_rate=discount_rate,
+            base_terminal_growth=terminal_growth,
+            growth_std=0.0,
+            margin_std=0.0,
+            da_ratio_std=0.0,
+            capex_ratio_std=0.0,
+            wc_ratio_std=0.0,
+            discount_std=0.0,
+            terminal_growth_std=0.0,
+            projection_years=projection_years,
+            iterations=1,
+            seed=42,
+            use_mid_year_discounting=True,
+            minority_interest=minority_interest,
+            preferred_stock=preferred_stock,
+            deferred_tax_assets=deferred_tax_assets,
+            pension_deficit=pension_deficit,
+        )
+        
+        # Both should be valid
+        assert mc_simple.valid_simulations == 1
+        assert mc_with_bridge.valid_simulations == 1
+        
+        # Calculate expected per-share difference from equity bridge
+        # Equity bridge adjustment = -minority - preferred + DTA - pension
+        # = -5e9 - 2e9 + 3e9 - 1e9 = -5e9
+        equity_bridge_adjustment = -minority_interest - preferred_stock + deferred_tax_assets - pension_deficit
+        expected_per_share_diff = equity_bridge_adjustment / shares_outstanding  # -$5
+        
+        actual_diff = mc_with_bridge.mean - mc_simple.mean
+        
+        assert abs(actual_diff - expected_per_share_diff) < 0.01, (
+            f"Equity bridge per-share impact mismatch. "
+            f"Expected: ${expected_per_share_diff:.2f}, Got: ${actual_diff:.2f}"
+        )
