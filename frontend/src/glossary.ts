@@ -541,6 +541,13 @@ export const glossaryTerms: GlossaryTerm[] = [
     definition: "A moving average that weights prices by their trading volume. Higher volume days have more influence on the average. When price is above VWMA, trend is bullish; below VWMA, trend is bearish.",
     investopediaUrl: "https://www.investopedia.com/terms/v/vwap.asp",
   },
+  {
+    id: "momentum-bridge",
+    term: "Momentum Bridge",
+    fullName: "Value + Momentum Convergence",
+    definition: "Combines intrinsic value (DCF) with momentum (200-day VWMA trend) for entry timing. A cheap stock in a downtrend is a 'falling knife' that often becomes 'dead money'. The bridge signals BUY only when value and momentum align: undervalued + (uptrend or flat). Signals WAIT when cheap but still falling.",
+    investopediaUrl: "https://www.investopedia.com/articles/active-trading/052014/how-use-moving-average-buy-stocks.asp",
+  },
 ];
 
 // Create a lookup map for quick access by ID
