@@ -1040,6 +1040,93 @@ class TestImpliedTerminalROICWarning:
                 )
 
 
+class TestCapExConvergenceWarning:
+    """
+    P1 (NOTES2.md): Maintenance vs Growth CapEx warning.
+    
+    In the terminal year (perpetuity), Growth CapEx should converge to 0.
+    Only Maintenance CapEx remains, which should roughly equal D&A.
+    
+    If terminal CapEx >> D&A, the model implies perpetual growth investment,
+    which is economically inconsistent with a steady-state assumption.
+    """
+    
+    @pytest.fixture
+    def mock_client(self):
+        """Create mock client with realistic stock data."""
+        client = MagicMock()
+        client.get_stock_data = AsyncMock(return_value=create_mock_stock_data())
+        client.get_treasury_rate = AsyncMock(return_value=0.04)
+        return client
+    
+    @pytest.mark.asyncio
+    async def test_includes_terminal_capex_to_da_ratio(self, mock_client):
+        """
+        terminal_value_check should include CapEx/D&A ratio for the terminal year.
+        """
+        service = ValuationService(client=mock_client)
+        
+        result = await service.value_stock("AAPL")
+        
+        check = result["terminal_value_check"]
+        assert "terminal_capex_to_da" in check, (
+            "terminal_value_check must include terminal_capex_to_da ratio"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_warns_when_terminal_capex_exceeds_maintenance(self, mock_client):
+        """
+        Should warn when terminal CapEx >> D&A (> 1.3x).
+        
+        High CapEx/D&A implies perpetual growth investment, which is
+        inconsistent with steady-state economics.
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Use high capex ratio to trigger warning
+        result = await service.value_stock(
+            "AAPL",
+            capex_ratio=0.15,  # 15% of revenue as CapEx
+            da_ratio=0.05,    # 5% of revenue as D&A
+        )
+        
+        check = result["terminal_value_check"]
+        capex_da = check.get("terminal_capex_to_da")
+        
+        # CapEx/D&A = 15% / 5% = 3.0x
+        assert capex_da is not None
+        assert capex_da > 1.3, f"CapEx/D&A should be high: {capex_da}"
+        
+        assert "capex_convergence_warning" in check, (
+            "Should warn when terminal CapEx >> D&A (perpetual growth CapEx implied)"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_no_warning_when_capex_near_da(self, mock_client):
+        """
+        No warning when terminal CapEx ≈ D&A (maintenance level).
+        """
+        service = ValuationService(client=mock_client)
+        
+        # Use balanced capex/da ratios
+        result = await service.value_stock(
+            "AAPL",
+            capex_ratio=0.05,  # 5% of revenue as CapEx
+            da_ratio=0.05,     # 5% of revenue as D&A (1.0x ratio)
+        )
+        
+        check = result["terminal_value_check"]
+        capex_da = check.get("terminal_capex_to_da")
+        
+        # CapEx/D&A = 1.0x (at or below 1.3x threshold)
+        assert capex_da is not None
+        assert capex_da <= 1.3, f"CapEx/D&A should be at maintenance level: {capex_da}"
+        
+        assert check.get("capex_convergence_warning") is None, (
+            "No warning needed when CapEx ≈ D&A (maintenance level)"
+        )
+
+
 class TestMultiStageEconomicsIntegration:
     """
     Test that ValuationService correctly passes economics schedules
