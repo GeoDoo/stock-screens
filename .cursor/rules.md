@@ -103,6 +103,11 @@ All bugfixes must add a regression test for the exact failure mode:
   - Before final push: interactive rebase to clean commits (drop noise, fix messages), but **do not rewrite history** after review starts unless agreed.
   - Use `--force-with-lease` only when rebasing a PR branch.
 
+- **Commit discipline**
+  - **Do NOT amend commits** — create new commits for each logical step (test, fix, wiring, etc.).
+  - This preserves the development story and makes review/bisect easier.
+  - Squash only at the very end (if desired) via interactive rebase before merge.
+
 - **Required before PR is approved/landed**
   - Backend: `pytest` passes
   - Frontend: `vitest` passes AND `npm run build` passes
