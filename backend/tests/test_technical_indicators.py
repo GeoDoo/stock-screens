@@ -708,6 +708,21 @@ class TestMomentumBridge:
         
         assert trend == "flat"
     
+    def test_analyze_vwma_trend_insufficient_data_returns_flat(self):
+        """
+        analyze_vwma_trend with insufficient data returns 'flat'.
+        
+        Note: The caller (technical_service.py) should NOT call this
+        with insufficient data. If called anyway, returns 'flat' as
+        a safe default rather than crashing.
+        """
+        # Less than lookback (20) valid values
+        vwma_values = [None] * 195 + [100.0] * 5
+        
+        trend = TechnicalIndicators.analyze_vwma_trend(vwma_values, period=200)
+        
+        assert trend == "flat"
+    
     def test_momentum_bridge_signal_buy(self):
         """
         Cheap valuation + VWMA uptrend/flat = BUY signal.
