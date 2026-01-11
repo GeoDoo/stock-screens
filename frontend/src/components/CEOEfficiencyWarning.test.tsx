@@ -75,4 +75,28 @@ describe('CEOEfficiencyWarning', () => {
     expect(screen.getByText('8.5%')).toBeInTheDocument();
     expect(screen.getByText('+4.0%')).toBeInTheDocument();
   });
+  
+  it('shows distortion warning when Inc. ROIC exceeds 100%', () => {
+    render(
+      <CEOEfficiencyWarning
+        incrementalRoic={2.676}  // 267.6% (like Apple)
+        wacc={0.109}  // 10.9%
+      />
+    );
+    
+    expect(screen.getByText('267.6%')).toBeInTheDocument();
+    expect(screen.getByText(/Potentially misleading/)).toBeInTheDocument();
+    expect(screen.getByText(/buybacks/)).toBeInTheDocument();
+  });
+  
+  it('does not show distortion warning for normal values', () => {
+    render(
+      <CEOEfficiencyWarning
+        incrementalRoic={0.15}  // 15%
+        wacc={0.10}  // 10%
+      />
+    );
+    
+    expect(screen.queryByText(/Potentially misleading/)).not.toBeInTheDocument();
+  });
 });

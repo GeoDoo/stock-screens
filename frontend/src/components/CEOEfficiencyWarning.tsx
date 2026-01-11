@@ -54,6 +54,9 @@ export function CEOEfficiencyWarning({ incrementalRoic, wacc }: CEOEfficiencyWar
     description = 'New investments roughly break even vs cost of capital';
   }
   
+  // Flag extreme values that may be distorted
+  const isDistorted = Math.abs(incrementalRoic) > 1.0;  // > 100% or < -100%
+  
   return (
     <div className={`p-4 rounded-lg border ${borderColor} ${bgColor}`}>
       <div className="flex items-center justify-between mb-2">
@@ -90,6 +93,16 @@ export function CEOEfficiencyWarning({ incrementalRoic, wacc }: CEOEfficiencyWar
           </div>
         </div>
       </div>
+      
+      {/* Warning for distorted metrics */}
+      {isDistorted && (
+        <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+          <span className="font-semibold">⚠️ Potentially misleading:</span>{' '}
+          Incremental ROIC above 100% often occurs when a company returns massive capital via buybacks, 
+          causing invested capital to shrink while profits grow. This mathematically inflates the ratio 
+          but doesn't reflect true reinvestment efficiency. Consider alongside other metrics.
+        </div>
+      )}
     </div>
   );
 }
