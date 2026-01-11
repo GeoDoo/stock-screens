@@ -575,6 +575,7 @@ class ValuationService:
                 "implied_exit_multiple": None,
                 "terminal_value_pct": terminal_value_pct,
                 "gordon_growth_tv": terminal_value,
+                "implied_terminal_roic": None,  # P0 Fix: Always include this field
                 "warning": "Cannot calculate exit multiple - terminal EBITDA is zero or negative",
             }
         
