@@ -2186,6 +2186,21 @@ export default function App() {
                   )}
                 </div>
 
+                {/* P2 #8: Business-type valuation notes for financials/cyclicals */}
+                {comparableResult.valuation_notes && comparableResult.valuation_notes.length > 0 && (
+                  <div className="space-y-2">
+                    {comparableResult.valuation_notes.map((note, idx) => (
+                      <div 
+                        key={idx} 
+                        className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800"
+                      >
+                        <span className="font-semibold">⚠️ Valuation Note:</span>
+                        <span className="block mt-1">{note}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Implied Valuations */}
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Implied Value by Multiple</h3>
