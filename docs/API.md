@@ -273,6 +273,29 @@ GET /api/filings/{ticker}/info
 
 ---
 
+### Crawl Filings
+
+Trigger a deep crawl of a company's filing history.
+
+This fetches all historical archives (10+ years) and persists
+them to the local database for offline forensic analysis.
+
+Returns immediately and runs in the background.
+
+```
+POST /api/filings/{ticker}/crawl
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ticker` | string | Yes |  |
+
+
+
+---
+
 ### Download Filing Pdf
 
 Download SEC filing as PDF.

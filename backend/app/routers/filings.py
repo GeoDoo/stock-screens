@@ -5,7 +5,7 @@ Phase 1: Filings Viewer with PDF generation.
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi import APIRouter, HTTPException, Query, Body, BackgroundTasks
 from fastapi.responses import Response
 
 from app.services.sec_filings import sec_filings_service, SECFilingsError
@@ -75,6 +75,37 @@ async def get_company_info(ticker: str):
     try:
         info = await sec_filings_service.get_company_info(ticker)
         return info
+    except SECFilingsError as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{ticker}/crawl")
+async def crawl_filings(
+    ticker: str,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Trigger a deep crawl of a company's filing history.
+    
+    This fetches all historical archives (10+ years) and persists
+    them to the local database for offline forensic analysis.
+    
+    Returns immediately and runs in the background.
+    """
+    try:
+        # Verify ticker exists before starting background task
+        await sec_filings_service.get_company_info(ticker)
+        
+        # Start background crawl
+        background_tasks.add_task(sec_filings_service.crawl_ticker_history, ticker)
+        
+        return {
+            "ticker": ticker.upper(),
+            "status": "crawling_started",
+            "message": f"Filing history crawl for {ticker.upper()} started in background."
+        }
     except SECFilingsError as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail=str(e))

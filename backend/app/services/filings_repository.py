@@ -80,6 +80,28 @@ class FilingsRepository:
                     ON filing_pdfs(form_type);
                 CREATE INDEX IF NOT EXISTS idx_filing_pdfs_filing_date 
                     ON filing_pdfs(filing_date DESC);
+
+                CREATE TABLE IF NOT EXISTS sec_filings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ticker TEXT NOT NULL,
+                    cik TEXT NOT NULL,
+                    accession_number TEXT NOT NULL,
+                    form_type TEXT NOT NULL,
+                    filing_date TEXT NOT NULL,
+                    description TEXT,
+                    document_name TEXT,
+                    sentiment_score REAL,
+                    parsed_status TEXT DEFAULT 'pending',
+                    created_at TEXT NOT NULL,
+                    
+                    -- Unique constraint: one entry per accession number
+                    UNIQUE(accession_number)
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_sec_filings_ticker 
+                    ON sec_filings(ticker);
+                CREATE INDEX IF NOT EXISTS idx_sec_filings_date 
+                    ON sec_filings(filing_date DESC);
             """)
             
             # Migration: add original_size_kb if it doesn't exist
@@ -319,6 +341,66 @@ class FilingsRepository:
             
             logger.info("cache_cleared", count=deleted)
             return deleted
+
+    async def save_metadata(
+        self,
+        ticker: str,
+        cik: str,
+        accession_number: str,
+        form_type: str,
+        filing_date: date,
+        description: Optional[str] = None,
+        document_name: Optional[str] = None,
+    ):
+        """Save SEC filing metadata to the database (Async)."""
+        created_at = datetime.now(timezone.utc).isoformat()
+        
+        async with get_async_connection(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO sec_filings (
+                    ticker, cik, accession_number, form_type, 
+                    filing_date, description, document_name, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    ticker.upper(),
+                    cik,
+                    accession_number,
+                    form_type,
+                    filing_date.isoformat(),
+                    description,
+                    document_name,
+                    created_at
+                )
+            )
+            await db.commit()
+
+    async def list_metadata(
+        self,
+        ticker: Optional[str] = None,
+        form_type: Optional[str] = None,
+        limit: int = 100
+    ) -> list[dict]:
+        """List filing metadata from the database (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            query = "SELECT * FROM sec_filings WHERE 1=1"
+            params = []
+            
+            if ticker:
+                query += " AND ticker = ?"
+                params.append(ticker.upper())
+            
+            if form_type:
+                query += " AND form_type = ?"
+                params.append(form_type)
+                
+            query += " ORDER BY filing_date DESC LIMIT ?"
+            params.append(limit)
+            
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
 
 
 # Singleton instance
