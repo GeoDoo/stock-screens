@@ -898,3 +898,11 @@ export interface CompanyInfoResponse {
   sic?: string;
   sic_description?: string;
 }
+
+export interface FilingAnalysisResponse {
+  ticker: string;
+  query: string;
+  analysis: string;
+  timestamp: string;
+  model: string;
+}
