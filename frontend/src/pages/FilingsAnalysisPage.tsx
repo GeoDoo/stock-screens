@@ -75,7 +75,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === 'f' && activeTab === 'document' && !analyzing) {
+      if (e.key.toLowerCase() === 'f' && activeTab === 'document' && analyzing === 'none') {
         setIsFocusMode(prev => !prev);
       }
     };
@@ -511,7 +511,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                               <History className="w-4 h-4 text-indigo-600" />
                               Historical Consistency Timeline
                             </h3>
-                            <ForensicTimeline history={forensicHistory} ticker={symbol!} />
+                            <ForensicTimeline history={forensicHistory} />
                           </div>
                         )}
                       </div>

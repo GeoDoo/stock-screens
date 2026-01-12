@@ -3,7 +3,6 @@ import type { ForensicHistoryItem } from '../api';
 
 interface Props {
   history: ForensicHistoryItem[];
-  ticker: string;
 }
 
 export function ForensicTimeline({ history }: Props) {

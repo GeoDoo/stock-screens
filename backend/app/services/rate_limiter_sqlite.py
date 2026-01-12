@@ -213,7 +213,9 @@ class RateLimiterSQLite:
                         await db.commit()
                         return False
                 elif config.reset_schedule == ResetSchedule.PER_MINUTE:
-                    if (now - limited_at).total_seconds() >= 60:
+                    # REDUCED COOLDOWN: For per-minute limits, only block for 15s after a 429
+                    # to allow the rolling window to clear naturally.
+                    if (now - limited_at).total_seconds() >= 15:
                         await db.execute("DELETE FROM api_limited WHERE provider = ?", (provider,))
                         await db.commit()
                         return False

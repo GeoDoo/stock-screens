@@ -338,9 +338,13 @@ class SECFilingsService:
                 
             acc = entry["accession_number"]
             cik = entry["cik"]
-            doc_name = entry["document_name"]
+            doc_name = entry.get("document_name")
             
             # Reconstruction of document URL since it's not stored in metadata table
+            if not doc_name:
+                logger.warning("skipping_audit_missing_doc_name", ticker=ticker, accession=acc)
+                continue
+                
             doc_url = self._build_document_url(cik, acc, doc_name)
             
             try:
@@ -360,8 +364,8 @@ class SECFilingsService:
                 
                 logger.info("historical_audit_complete", ticker=ticker, accession=acc)
                 
-                # Small sleep to respect LLM rate limits
-                await asyncio.sleep(2.0)
+                # Small sleep to respect LLM rate limits (Increased to 5s for Free Tier safety)
+                await asyncio.sleep(5.0)
                 
             except Exception as e:
                 logger.error("historical_audit_failed", ticker=ticker, accession=acc, error=str(e))

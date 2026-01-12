@@ -8,14 +8,15 @@ async def test_forensic_report_schema_updates():
     """Verify that the ForensicReport schema handles the new EPS adjustment fields."""
     report_dict = {
         "accounting_consistency_score": 85,
-        "red_flags": {
-            "Revenue": {
+        "red_flags": [
+            {
+                "category": "Revenue",
                 "score": 2,
                 "severity": "Low",
                 "findings": ["Consistent policies"],
                 "evidence_quotes": ["Revenue is recognized upon delivery"]
             }
-        },
+        ],
         "summary": "Clean filing",
         "reported_eps": 5.50,
         "forensic_eps_adjustment": -0.25,
@@ -26,7 +27,7 @@ async def test_forensic_report_schema_updates():
                 "impact": "Reduces sustainable earnings"
             }
         ],
-        "model": "gemini-2.5-flash"
+        "model": "gemini-flash-latest"
     }
     
     report = ForensicReport(**report_dict)
@@ -47,5 +48,5 @@ async def test_analyze_forensic_prompt_includes_eps_instructions():
         
         # We don't actually call it because it's complex to mock the response.parsed
         # but we can verify the method exists and uses the right model.
-        assert analyzer.MODEL == "gemini-2.5-flash"
+        assert analyzer.MODEL == "gemini-flash-latest"
         assert hasattr(analyzer, "analyze_forensic")
