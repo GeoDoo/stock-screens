@@ -525,6 +525,14 @@ export interface FinancialRatiosPeriod {
     net_buyback_efficiency?: number | null;
     is_defensive_buyback?: boolean | null;
   };
+  // NOTES2.md III.1: Exit Liquidity for institutional position sizing
+  exit_liquidity?: {
+    average_daily_volume: number;  // 30-day ADV in shares
+    average_daily_dollar_volume: number;  // ADV × Price
+    days_to_liquidate_1m: number;  // Days to exit a $1M position at 10% participation
+    liquidity_tier: 'highly_liquid' | 'liquid' | 'moderate' | 'illiquid';
+    requires_liquidity_discount: boolean;  // True if > 5 days to exit
+  } | null;
 }
 
 // Financial Ratios Result (contains both annual and TTM)

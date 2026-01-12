@@ -596,6 +596,13 @@ export const glossaryTerms: GlossaryTerm[] = [
     definition: "Compares Incremental Return on Invested Capital to Weighted Average Cost of Capital. If Inc. ROIC > WACC, management creates value with new investments. If Inc. ROIC < WACC, growth destroys value — every dollar of new capital earns less than its cost. A negative spread means the CEO is actively burning shareholder capital by pursuing growth.",
     investopediaUrl: "https://www.investopedia.com/terms/r/returnoninvestmentcapital.asp",
   },
+  {
+    id: "exit-liquidity",
+    term: "Exit Liquidity",
+    fullName: "Position Exit Risk Assessment",
+    definition: "Measures how quickly an institutional investor can exit a position without moving the market. Uses the 10% participation rule: don't trade more than 10% of Average Daily Volume to avoid price impact. 'Days to Exit $1M' shows how long it takes to liquidate a standard position. Illiquid stocks (>5 days) may require a liquidity discount in your target price.",
+    investopediaUrl: "https://www.investopedia.com/terms/l/liquidity.asp",
+  },
 ];
 
 // Create a lookup map for quick access by ID
