@@ -41,6 +41,11 @@ def test_extract_ixbrl_facts_basic():
     html = """
     <html>
         <body>
+            <context id="c1">
+                <period>
+                    <instant>2023-12-31</instant>
+                </period>
+            </context>
             <ix:nonFraction name="us-gaap:NetIncomeLoss" scale="6" unitRef="usd" contextRef="c1">1,234.5</ix:nonFraction>
             <ix:nonFraction name="us-gaap:Revenues" scale="6" unitRef="usd" contextRef="c1">10,000</ix:nonFraction>
             <ix:nonFraction name="us-gaap:Assets" scale="6" unitRef="usd" contextRef="c1">50,000</ix:nonFraction>
@@ -49,7 +54,10 @@ def test_extract_ixbrl_facts_basic():
     </html>
     """
     parser = FilingParser()
-    facts = parser.extract_ixbrl_facts(html)
+    facts_by_date = parser.extract_ixbrl_facts(html)
+    
+    assert "2023-12-31" in facts_by_date
+    facts = facts_by_date["2023-12-31"]
     
     assert facts["net_income"] == 1234500000.0
     assert facts["revenue"] == 10000000000.0
@@ -61,10 +69,18 @@ def test_extract_ixbrl_facts_negative_and_sign():
     html = """
     <html>
         <body>
-            <ix:nonFraction name="us-gaap:NetIncomeLoss" scale="3" sign="-" unitRef="usd">(500)</ix:nonFraction>
+            <context id="c1">
+                <period>
+                    <instant>2023-12-31</instant>
+                </period>
+            </context>
+            <ix:nonFraction name="us-gaap:NetIncomeLoss" scale="3" sign="-" unitRef="usd" contextRef="c1">(500)</ix:nonFraction>
         </body>
     </html>
     """
     parser = FilingParser()
-    facts = parser.extract_ixbrl_facts(html)
+    facts_by_date = parser.extract_ixbrl_facts(html)
+    
+    assert "2023-12-31" in facts_by_date
+    facts = facts_by_date["2023-12-31"]
     assert facts["net_income"] == -500000.0
