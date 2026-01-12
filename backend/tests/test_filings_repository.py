@@ -7,11 +7,15 @@ from app.services.filings_repository import FilingsRepository
 def repo(tmp_path):
     # Use a temporary database file
     db_path = tmp_path / "test_filings.db"
-    return FilingsRepository(db_path=str(db_path))
+    repository = FilingsRepository(db_path=str(db_path))
+    # We'll initialize in the test since _init_db is now async
+    return repository
 
 @pytest.mark.asyncio
 async def test_save_pdf_with_compression(repo):
     """Test that PDFs are compressed and size metadata is correct (P0 Bug Fix)."""
+    await repo._init_db()
+    
     # Create large-ish dummy data that compresses well
     original_data = b"Some financial data " * 1000
     original_size_kb = len(original_data) // 1024
@@ -35,23 +39,31 @@ async def test_save_pdf_with_compression(repo):
     compressed_data = zlib.compress(original_data, level=9)
     expected_compressed_kb = len(compressed_data) // 1024
     
+    # Check the returned object consistency
+    assert filing.uncompressed_size_kb == original_size_kb
+    assert filing.compressed_size_kb == expected_compressed_kb
+    assert len(filing.pdf_data) // 1024 == filing.uncompressed_size_kb
+
     # Check the database record directly
-    from app.services.database import get_connection
-    with get_connection(repo.db_path) as conn:
-        row = conn.execute("SELECT pdf_size_kb FROM filing_pdfs LIMIT 1").fetchone()
-        assert row["pdf_size_kb"] == expected_compressed_kb
-        # Ensure it's smaller than original
-        assert row["pdf_size_kb"] < original_size_kb
+    from app.services.database import get_async_connection
+    async with get_async_connection(repo.db_path) as db:
+        async with db.execute("SELECT pdf_size_kb, original_size_kb FROM filing_pdfs LIMIT 1") as cursor:
+            row = await cursor.fetchone()
+            assert row["pdf_size_kb"] == expected_compressed_kb
+            assert row["original_size_kb"] == original_size_kb
+            # Ensure it's smaller than original
+            assert row["pdf_size_kb"] < row["original_size_kb"]
 
 @pytest.mark.asyncio
 async def test_get_pdf_legacy_fallback(repo):
     """Test that uncompressed legacy data is handled correctly."""
+    await repo._init_db()
     original_data = b"Legacy uncompressed data"
     
     # Insert uncompressed data manually into the DB
-    from app.services.database import get_connection
-    with get_connection(repo.db_path) as conn:
-        conn.execute(
+    from app.services.database import get_async_connection
+    async with get_async_connection(repo.db_path) as db:
+        await db.execute(
             """
             INSERT INTO filing_pdfs (
                 ticker, cik, accession_number, form_type, filing_date,
@@ -60,7 +72,7 @@ async def test_get_pdf_legacy_fallback(repo):
             """,
             ("TEST", "123", "ACC", "10-K", "2023-01-01", "doc.htm", original_data, len(original_data)//1024, "2023-01-01")
         )
-        conn.commit()
+        await db.commit()
     
     # Should fallback to original data if decompression fails
     retrieved = await repo.get_pdf("123", "ACC", "doc.htm")
