@@ -985,8 +985,20 @@ export default function App() {
                         <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(currentHints?.da_ratio)}</td>
                       </tr>
                       <tr className="border-b border-gray-100">
-                        <td className="py-3 text-sm text-gray-500">CapEx / Revenue<GlossaryRef id="capex" /></td>
-                        <td className="py-3 text-sm font-mono font-medium text-right">{formatPercent(currentHints?.capex_ratio)}</td>
+                        <td className="py-3 text-sm text-gray-500">
+                          CapEx / Revenue<GlossaryRef id="capex" />
+                          {currentHints?.capex_exceeds_maintenance && (
+                            <span className="ml-2 text-amber-500" title="Growth investment mode: CapEx significantly exceeds D&A (maintenance). Consider using a lower CapEx ratio for mature-state projections.">⚠️</span>
+                          )}
+                        </td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">
+                          {formatPercent(currentHints?.capex_ratio)}
+                          {currentHints?.capex_exceeds_maintenance && currentHints?.maintenance_capex_ratio != null && (
+                            <span className="ml-2 text-xs text-gray-400" title="Maintenance CapEx (≈ D&A ratio)">
+                              maint: {formatPercent(currentHints.maintenance_capex_ratio)}
+                            </span>
+                          )}
+                        </td>
                       </tr>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 text-sm text-gray-500">Working Capital / Revenue<GlossaryRef id="working-capital" /></td>

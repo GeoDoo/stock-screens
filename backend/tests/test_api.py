@@ -143,12 +143,67 @@ class TestStockEndpoint:
             assert "description" in tax_prov
             assert "confidence" in tax_prov
             assert tax_prov["confidence"] in ["high", "medium", "low"]
+            
+            # Check high capex warning fields (NOTES4.md enhancement)
+            # For AAPL mock data: D&A=11B, CapEx=10B, so CapEx < 1.5*D&A = false
+            assert "maintenance_capex_ratio" in result["hints_annual"]
+            assert "capex_exceeds_maintenance" in result["hints_annual"]
+            # AAPL mock has CapEx (10B) < D&A (11B) * 1.5 = 16.5B, so no warning
+            assert result["hints_annual"]["capex_exceeds_maintenance"] is False
 
     def test_get_stock_without_api_key(self):
         with patch("app.routers.stock.FMP_API_KEY", ""):
             response = client.get("/api/stock/AAPL?provider=fmp")
             assert response.status_code == 400
             assert "API key" in response.json()["detail"]
+
+    def test_get_stock_high_capex_warning(self):
+        """
+        High CapEx Warning (NOTES4.md): When CapEx >> D&A, flag growth investment mode.
+        
+        For companies like META spending 33% revenue on CapEx (vs 9% D&A),
+        using current CapEx ratio in projections produces negative valuations.
+        The warning helps users understand they should use a lower terminal CapEx.
+        """
+        # Create mock data with high CapEx vs low D&A across ALL historical years
+        mock_stock_data = create_mock_stock_data(
+            symbol="META",
+            name="Meta Platforms",
+            industry="Internet Content",
+            sector="Technology",
+            beta=1.3,
+            market_cap=1600000000000,
+        )
+        # Override ALL financials to have high CapEx pattern
+        # Ratios are calculated as averages across historical data
+        for fin in mock_stock_data.financials:
+            fin.capital_expenditure = -fin.revenue * 0.30  # 30% CapEx ratio
+            fin.depreciation_amortization = fin.revenue * 0.06  # 6% D&A ratio
+        
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            response = client.get("/api/stock/META?provider=fmp")
+            
+            assert response.status_code == 200
+            result = response.json()
+            
+            hints = result["hints_annual"]
+            
+            # CapEx ratio (30%) >> D&A ratio (6%)
+            # Should trigger warning: 30% > 6% * 1.5 = 9%
+            assert hints["capex_exceeds_maintenance"] is True, (
+                "High CapEx warning should trigger when CapEx/Rev >> D&A/Rev. "
+                "30% CapEx vs 6% D&A - that's growth investment mode!"
+            )
+            
+            # Maintenance CapEx should equal D&A ratio (~6%)
+            assert hints["maintenance_capex_ratio"] is not None
+            assert 0.04 < hints["maintenance_capex_ratio"] < 0.08, (
+                f"maintenance_capex_ratio should ≈ D&A ratio (~6%), got {hints['maintenance_capex_ratio']:.2%}"
+            )
 
     def test_get_stock_handles_missing_industry_sector(self):
         """Industry and sector should be None if not provided by provider."""

@@ -45,6 +45,40 @@ from app.services.sensitivity_calculator import SensitivityCalculator
 
 router = APIRouter(prefix="/api/stock", tags=["stock"])
 
+
+def _build_historical_hints(fcf_projector, extractor) -> HistoricalHints:
+    """
+    Build HistoricalHints with capex warning logic.
+    
+    High CapEx Warning (NOTES4.md): When CapEx >> D&A, the company is in 
+    growth investment mode. Using current CapEx ratio for DCF projections
+    can produce nonsensical (even negative) valuations.
+    
+    - maintenance_capex_ratio ≈ D&A ratio (steady-state replacement CapEx)
+    - capex_exceeds_maintenance = True when capex > 1.5 × D&A
+    """
+    da_ratio = fcf_projector.da_to_revenue_ratio() if extractor.da_history() else None
+    capex_ratio = fcf_projector.capex_to_revenue_ratio() if extractor.capex_history() else None
+    
+    # Maintenance CapEx ≈ Depreciation (steady-state replacement)
+    maintenance_capex_ratio = da_ratio
+    
+    # Flag if growth CapEx significantly exceeds maintenance
+    capex_exceeds_maintenance = False
+    if capex_ratio is not None and da_ratio is not None and da_ratio > 0:
+        capex_exceeds_maintenance = capex_ratio > da_ratio * 1.5
+    
+    return HistoricalHints(
+        revenue_growth=fcf_projector.revenue_cagr() if extractor.revenue_history() else None,
+        operating_margin=fcf_projector.operating_margin() if extractor.ebit_history() else None,
+        da_ratio=da_ratio,
+        capex_ratio=capex_ratio,
+        wc_ratio=fcf_projector.wc_to_revenue_ratio() if extractor.working_capital_history() else None,
+        maintenance_capex_ratio=maintenance_capex_ratio,
+        capex_exceeds_maintenance=capex_exceeds_maintenance,
+    )
+
+
 # Get API keys from environment
 FMP_API_KEY = os.getenv("FMP_API_KEY", "")
 MASSIVE_API_KEY = os.getenv("POLYGON_API_KEY", "")
@@ -333,13 +367,7 @@ async def get_stock(symbol: str, provider: str):
             working_capital=extractor.latest_working_capital(),
         ),
         # P0 Fix: Use hints_annual + hints_ttm for consistency with /analyze
-        hints_annual=HistoricalHints(
-            revenue_growth=fcf_projector.revenue_cagr() if extractor.revenue_history() else None,
-            operating_margin=fcf_projector.operating_margin() if extractor.ebit_history() else None,
-            da_ratio=fcf_projector.da_to_revenue_ratio() if extractor.da_history() else None,
-            capex_ratio=fcf_projector.capex_to_revenue_ratio() if extractor.capex_history() else None,
-            wc_ratio=fcf_projector.wc_to_revenue_ratio() if extractor.working_capital_history() else None,
-        ),
+        hints_annual=_build_historical_hints(fcf_projector, extractor),
         hints_ttm=None,  # TTM not fetched in this endpoint (use /analyze for TTM)
         validation=ValidationResponse(**validation_result.to_dict()),
         is_using_ltm=extractor.is_using_ltm(),
@@ -1256,13 +1284,28 @@ async def batch_analyze(symbol: str, provider: str):
                 if prior_year_revenue and prior_year_revenue > 0:
                     ttm_revenue_growth = (ttm_revenue / prior_year_revenue) - 1
             
+            # Calculate capex and da ratios for warning logic
+            ttm_da_ratio = (ttm_da / ttm_revenue) if ttm_revenue and ttm_da else None
+            ttm_capex_ratio = (abs(ttm_capex) / ttm_revenue) if ttm_revenue and ttm_capex else None
+            
+            # High CapEx Warning (NOTES4.md): When CapEx >> D&A, company is in growth investment mode
+            # maintenance_capex_ratio ≈ D&A ratio (steady-state replacement CapEx)
+            # capex_exceeds_maintenance = True when capex > 1.5 × D&A (significant growth investment)
+            maintenance_capex_ratio = ttm_da_ratio  # Maintenance CapEx ≈ Depreciation
+            capex_exceeds_maintenance = False
+            if ttm_capex_ratio is not None and ttm_da_ratio is not None:
+                capex_exceeds_maintenance = ttm_capex_ratio > ttm_da_ratio * 1.5
+            
             hints_ttm = {
                 "revenue_growth": ttm_revenue_growth,
                 "operating_margin": (ttm_operating_income / ttm_revenue) if ttm_revenue and ttm_operating_income else None,
-                "da_ratio": (ttm_da / ttm_revenue) if ttm_revenue and ttm_da else None,
-                "capex_ratio": (abs(ttm_capex) / ttm_revenue) if ttm_revenue and ttm_capex else None,
+                "da_ratio": ttm_da_ratio,
+                "capex_ratio": ttm_capex_ratio,
                 # Use `is not None` to handle WC=0 correctly (0 is valid, not falsy)
                 "wc_ratio": (ttm_wc / ttm_revenue) if ttm_revenue and ttm_wc is not None else None,
+                # High CapEx Warning fields
+                "maintenance_capex_ratio": maintenance_capex_ratio,
+                "capex_exceeds_maintenance": capex_exceeds_maintenance,
             }
     
     stock_response["hints_ttm"] = hints_ttm

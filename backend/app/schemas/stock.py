@@ -30,6 +30,10 @@ class HistoricalHints(BaseModel):
     da_ratio: Optional[float]
     capex_ratio: Optional[float]
     wc_ratio: Optional[float]
+    # High CapEx Warning (NOTES4.md): Flag when CapEx >> D&A (growth investment phase)
+    # maintenance_capex_ratio = D&A ratio (what steady-state CapEx would be)
+    maintenance_capex_ratio: Optional[float] = None
+    capex_exceeds_maintenance: bool = False  # True if capex_ratio > da_ratio * 1.5
 
 
 class ProvenanceItem(BaseModel):
