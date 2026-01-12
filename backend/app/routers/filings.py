@@ -197,6 +197,11 @@ async def run_forensic_audit(
                     sloan_ratio=quant_results.get("sloan_ratio"),
                     altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
                     beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
+                    liquidity_ratios=quant_results.get("liquidity_ratios", {}),
+                    solvency_ratios=quant_results.get("solvency_ratios", {}),
+                    efficiency_ratios=quant_results.get("efficiency_ratios", {}),
+                    profitability_ratios=quant_results.get("profitability_ratios", {}),
+                    accounting_corrections=quant_results.get("accounting_corrections", []),
                     findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
                 )
             else:
@@ -218,6 +223,11 @@ async def run_forensic_audit(
                         sloan_ratio=quant_results.get("sloan_ratio"),
                         altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
                         beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
+                        liquidity_ratios=quant_results.get("liquidity_ratios", {}),
+                        solvency_ratios=quant_results.get("solvency_ratios", {}),
+                        efficiency_ratios=quant_results.get("efficiency_ratios", {}),
+                        profitability_ratios=quant_results.get("profitability_ratios", {}),
+                        accounting_corrections=quant_results.get("accounting_corrections", []),
                         findings=[f"[API FALLBACK] {f}" for f in quant_results.get("quantitative_findings", [])]
                     )
 
@@ -550,6 +560,11 @@ async def analyze_filing(
                     sloan_ratio=quant_results.get("sloan_ratio"),
                     altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
                     beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
+                    liquidity_ratios=quant_results.get("liquidity_ratios", {}),
+                    solvency_ratios=quant_results.get("solvency_ratios", {}),
+                    efficiency_ratios=quant_results.get("efficiency_ratios", {}),
+                    profitability_ratios=quant_results.get("profitability_ratios", {}),
+                    accounting_corrections=quant_results.get("accounting_corrections", []),
                     findings=[f"[API FALLBACK] {f}" for f in quant_results.get("quantitative_findings", [])]
                 )
             except:
@@ -564,6 +579,11 @@ async def analyze_filing(
                 sloan_ratio=quant_results.get("sloan_ratio"),
                 altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
                 beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
+                liquidity_ratios=quant_results.get("liquidity_ratios", {}),
+                solvency_ratios=quant_results.get("solvency_ratios", {}),
+                efficiency_ratios=quant_results.get("efficiency_ratios", {}),
+                profitability_ratios=quant_results.get("profitability_ratios", {}),
+                accounting_corrections=quant_results.get("accounting_corrections", []),
                 findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
             )
     except Exception as e:

@@ -200,7 +200,27 @@ class DataExtractor:
     def total_assets(self) -> Optional[float]:
         """Total assets from balance sheet."""
         return self._get_latest(self.balance_sheet, "totalAssets")
+
+    def total_current_liabilities(self) -> Optional[float]:
+        """Total current liabilities from balance sheet."""
+        return self._get_latest(self.balance_sheet, "totalCurrentLiabilities")
     
+    def short_term_debt(self) -> Optional[float]:
+        """Short term debt from balance sheet."""
+        return self._get_latest(self.balance_sheet, "shortTermDebt")
+    
+    def long_term_debt(self) -> Optional[float]:
+        """Long term debt from balance sheet."""
+        return self._get_latest(self.balance_sheet, "longTermDebt")
+
+    def account_payables(self) -> Optional[float]:
+        """Account payables from balance sheet."""
+        return self._get_latest(self.balance_sheet, "accountPayables")
+
+    def deferred_revenue(self) -> Optional[float]:
+        """Deferred / Unearned revenue from balance sheet."""
+        return self._get_latest(self.balance_sheet, "deferredRevenue")
+
     def goodwill(self) -> Optional[float]:
         """Goodwill from balance sheet."""
         return self._get_latest(self.balance_sheet, "goodwill")
@@ -235,6 +255,18 @@ class DataExtractor:
         it gives the most current view of the company's revenue run-rate.
         """
         return self._get_ttm(self.income_statement, "revenue")
+    
+    def gross_profit(self) -> Optional[float]:
+        """Gross profit, preferring TTM."""
+        return self._get_ttm(self.income_statement, "grossProfit")
+    
+    def sga_expense(self) -> Optional[float]:
+        """Selling, General and Administrative expense, preferring TTM."""
+        return self._get_ttm(self.income_statement, "sellingGeneralAndAdministrative")
+    
+    def rd_expense(self) -> Optional[float]:
+        """Research and Development expense, preferring TTM."""
+        return self._get_ttm(self.income_statement, "researchAndDevelopment")
     
     def latest_operating_income(self) -> Optional[float]:
         """
