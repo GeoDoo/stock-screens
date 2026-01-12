@@ -17,9 +17,6 @@ parser = FilingParser()
 
 
 @router.get("/{ticker}")
-
-
-@router.get("/{ticker}")
 async def get_filings(
     ticker: str,
     form_types: Optional[List[str]] = Query(
@@ -236,7 +233,7 @@ async def get_filing_sections(
 
 @router.post("/analyze-section")
 async def analyze_filing_section(
-    ticker: str,
+    ticker: str = Query(..., description="Stock ticker symbol"),
     document_url: str = Query(..., description="SEC URL of the filing HTML"),
     section_name: str = Query(..., description="Name of the section to analyze (e.g., 'Item 7')"),
     query: Optional[str] = Query(None, description="Optional custom query for this section"),
@@ -278,7 +275,7 @@ async def analyze_filing_section(
 
 @router.post("/compare-sections")
 async def compare_filing_sections(
-    ticker: str,
+    ticker: str = Query(..., description="Stock ticker symbol"),
     current_url: str = Query(..., description="SEC URL of current filing"),
     previous_url: str = Query(..., description="SEC URL of previous filing"),
     section_name: str = Query(..., description="Name of section to compare"),

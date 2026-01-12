@@ -382,7 +382,7 @@ POST /api/filings/analyze-section
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `ticker` | string | Yes |  |
+| `ticker` | string | Yes | Stock ticker symbol |
 | `document_url` | string | Yes | SEC URL of the filing HTML |
 | `section_name` | string | Yes | Name of the section to analyze (e.g., 'Item 7') |
 | `query` | string | null | No | Optional custom query for this section |
@@ -403,7 +403,7 @@ POST /api/filings/compare-sections
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `ticker` | string | Yes |  |
+| `ticker` | string | Yes | Stock ticker symbol |
 | `current_url` | string | Yes | SEC URL of current filing |
 | `previous_url` | string | Yes | SEC URL of previous filing |
 | `section_name` | string | Yes | Name of section to compare |
