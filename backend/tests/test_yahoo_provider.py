@@ -258,6 +258,80 @@ class TestTTMFreshnessValidation:
             "cannot validate freshness, so fail safe"
         )
     
+    def test_ttm_prefers_broader_cash_definition(self, yahoo_provider):
+        """
+        TTM financials should prefer "Cash Cash Equivalents And Short Term Investments"
+        over "Cash And Cash Equivalents" for more accurate equity valuation.
+        
+        Bug: For META, narrow cash = $10.2B but broader = $44.4B.
+        Short-term investments (treasuries, money market) are liquid and available
+        for debt repayment, so we should use the broader definition.
+        """
+        from datetime import timedelta
+        
+        # Create fresh quarterly data
+        dates = pd.date_range(end=pd.Timestamp.now(), periods=4, freq='QE')[::-1]
+        
+        income_data = {
+            d: [100_000_000, 40_000_000, 60_000_000, 15_000_000, 10_000_000, 1_000_000, 3_000_000]
+            for d in dates
+        }
+        income_df = pd.DataFrame(
+            income_data,
+            index=["Total Revenue", "Cost Of Revenue", "Gross Profit", 
+                   "Operating Income", "Net Income", "Interest Expense", "Tax Provision"]
+        )
+        
+        # Balance sheet with BOTH cash fields - broader should be preferred
+        balance_data = {
+            dates[0]: [
+                500_000_000,   # Total Assets
+                200_000_000,   # Total Liabilities
+                300_000_000,   # Total Equity
+                100_000_000,   # Total Debt
+                10_000_000,    # Cash And Cash Equivalents (narrow)
+                44_000_000,    # Cash Cash Equivalents And Short Term Investments (broader)
+                150_000_000,   # Current Assets
+                80_000_000     # Current Liabilities
+            ]
+        }
+        balance_df = pd.DataFrame(
+            balance_data,
+            index=[
+                "Total Assets", "Total Liabilities Net Minority Interest", 
+                "Total Equity Gross Minority Interest", "Total Debt",
+                "Cash And Cash Equivalents",  # Narrow definition: $10M
+                "Cash Cash Equivalents And Short Term Investments",  # Broader: $44M
+                "Current Assets", "Current Liabilities"
+            ]
+        )
+        
+        cash_data = {
+            d: [20_000_000, -5_000_000, 15_000_000, 8_000_000, -2_000_000]
+            for d in dates
+        }
+        cash_df = pd.DataFrame(
+            cash_data,
+            index=["Operating Cash Flow", "Capital Expenditure", "Free Cash Flow",
+                   "Depreciation And Amortization", "Cash Dividends Paid"]
+        )
+        
+        mock_ticker = MagicMock()
+        mock_ticker.quarterly_financials = income_df
+        mock_ticker.quarterly_balance_sheet = balance_df
+        mock_ticker.quarterly_cashflow = cash_df
+        
+        result = yahoo_provider._get_ttm_financials(mock_ticker)
+        
+        assert result is not None
+        
+        # Should use broader definition ($44M), not narrow ($10M)
+        assert result.cash_and_equivalents == 44_000_000, (
+            f"Should prefer broader cash definition (44M) over narrow (10M). "
+            f"Got: {result.cash_and_equivalents/1e6:.0f}M. "
+            f"Short-term investments are liquid and should be included."
+        )
+    
     def test_ttm_extracts_stock_based_compensation(self, yahoo_provider):
         """
         P0 Fix: TTM financials must include stock_based_compensation

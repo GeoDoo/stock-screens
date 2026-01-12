@@ -130,7 +130,9 @@ class YahooProvider(StockDataProvider):
                     total_liabilities=get_val(balance_df, "Total Liabilities Net Minority Interest", "Total Liabilities"),
                     total_equity=get_val(balance_df, "Total Equity Gross Minority Interest", "Stockholders Equity"),
                     total_debt=get_val(balance_df, "Total Debt"),
-                    cash_and_equivalents=get_val(balance_df, "Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"),
+                    # Prefer broader definition: includes short-term investments (treasuries, money market)
+                    # These are liquid and available for debt repayment in equity valuation
+                    cash_and_equivalents=get_val(balance_df, "Cash Cash Equivalents And Short Term Investments", "Cash And Cash Equivalents"),
                     current_assets=get_val(balance_df, "Current Assets"),
                     current_liabilities=get_val(balance_df, "Current Liabilities"),
                     short_term_debt=get_val(balance_df, "Current Debt", "Short Long Term Debt", "Current Debt And Capital Lease Obligation"),
@@ -264,7 +266,9 @@ class YahooProvider(StockDataProvider):
                 total_liabilities=latest_quarter(q_balance, "Total Liabilities Net Minority Interest", "Total Liabilities"),
                 total_equity=latest_quarter(q_balance, "Total Equity Gross Minority Interest", "Stockholders Equity"),
                 total_debt=latest_quarter(q_balance, "Total Debt"),
-                cash_and_equivalents=latest_quarter(q_balance, "Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"),
+                # Prefer broader definition: includes short-term investments (treasuries, money market)
+                # These are liquid and available for debt repayment in equity valuation
+                cash_and_equivalents=latest_quarter(q_balance, "Cash Cash Equivalents And Short Term Investments", "Cash And Cash Equivalents"),
                 current_assets=latest_quarter(q_balance, "Current Assets"),
                 current_liabilities=latest_quarter(q_balance, "Current Liabilities"),
                 # Cash Flow (sum 4 quarters)
