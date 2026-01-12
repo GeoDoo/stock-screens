@@ -307,6 +307,28 @@ GET /api/filings/pdf/{ticker}/{cik}/{accession_number}/{form_type}/{filing_date}
 
 ---
 
+### Analyze Filing
+
+Run forensic analysis on a specific SEC filing.
+
+This uses the 'Institutional-Grade' prompt suite to detect shenanigans.
+
+```
+POST /api/filings/{ticker}/analyze
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ticker` | string | Yes |  |
+| `document_url` | string | Yes | SEC URL of the filing HTML |
+| `query` | string | null | No | Optional custom query for analysis |
+
+
+
+---
+
 ## memos
 
 ### Create Memo
