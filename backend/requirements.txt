@@ -6,3 +6,4 @@ pydantic>=2.2.0
 pytest==8.0.0
 pytest-asyncio==0.21.0
 yfinance>=1.0
+pandas>=2.0.0
