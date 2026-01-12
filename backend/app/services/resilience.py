@@ -25,7 +25,7 @@ def retry_on_api_error(
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> T:
             retryer = tenacity.AsyncRetrying(
-                stop=tenacity.stop_after_attempt(retries),
+                stop=tenacity.stop_after_attempt(retries + 1),
                 wait=tenacity.wait_exponential(multiplier=backoff_factor, min=1, max=10),
                 retry=tenacity.retry_if_exception_type(exceptions),
                 before_sleep=lambda retry_state: logger.warning(
