@@ -339,6 +339,63 @@ export function FinancialRatiosTable({ ratios }: Props) {
           )}
         </div>
       )}
+
+      {/* Exit Liquidity (NOTES2.md III.1) */}
+      {ratios.exit_liquidity && (
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">Exit Liquidity<GlossaryRef id="exit-liquidity" /></h3>
+          <table className="w-full">
+            <tbody>
+              <tr className="border-b border-gray-100">
+                <td className="py-2 text-sm text-gray-500">Avg Daily Volume</td>
+                <td className="py-2 text-sm font-mono font-medium text-right">
+                  {(ratios.exit_liquidity.average_daily_volume / 1_000_000).toFixed(2)}M shares
+                </td>
+              </tr>
+              <tr className="border-b border-gray-100">
+                <td className="py-2 text-sm text-gray-500">Daily $ Volume</td>
+                <td className="py-2 text-sm font-mono font-medium text-right">
+                  ${(ratios.exit_liquidity.average_daily_dollar_volume / 1_000_000).toFixed(1)}M
+                </td>
+              </tr>
+              <tr className="border-b border-gray-100">
+                <td className="py-2 text-sm text-gray-500">Days to Exit $1M</td>
+                <td className="py-2 text-sm font-mono font-medium text-right">
+                  <span className={
+                    ratios.exit_liquidity.days_to_liquidate_1m < 0.5 ? 'text-green-600' :
+                    ratios.exit_liquidity.days_to_liquidate_1m < 2 ? 'text-gray-700' :
+                    ratios.exit_liquidity.days_to_liquidate_1m <= 5 ? 'text-amber-600' :
+                    'text-red-600'
+                  }>
+                    {ratios.exit_liquidity.days_to_liquidate_1m < 1 
+                      ? `${(ratios.exit_liquidity.days_to_liquidate_1m * 24).toFixed(1)} hrs`
+                      : `${ratios.exit_liquidity.days_to_liquidate_1m.toFixed(1)} days`
+                    }
+                  </span>
+                </td>
+              </tr>
+              <tr className="border-b border-gray-100">
+                <td className="py-2 text-sm text-gray-500">Liquidity Tier</td>
+                <td className="py-2 text-sm font-medium text-right">
+                  <span className={
+                    ratios.exit_liquidity.liquidity_tier === 'highly_liquid' ? 'px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs' :
+                    ratios.exit_liquidity.liquidity_tier === 'liquid' ? 'px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs' :
+                    ratios.exit_liquidity.liquidity_tier === 'moderate' ? 'px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs' :
+                    'px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs'
+                  }>
+                    {ratios.exit_liquidity.liquidity_tier.replace('_', ' ')}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          {ratios.exit_liquidity.requires_liquidity_discount && (
+            <p className="mt-2 text-xs text-amber-600">
+              ⚠️ Illiquid — consider a liquidity discount in your target price.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

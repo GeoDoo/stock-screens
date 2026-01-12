@@ -102,6 +102,37 @@ class SBCMetrics:
 
 
 @dataclass
+class ExitLiquidity:
+    """
+    Exit Liquidity metrics for institutional position sizing (NOTES2.md III.1).
+    
+    Measures how quickly an investor can exit a position without moving the market.
+    Uses the 10% participation rule: don't trade more than 10% of ADV to avoid
+    market impact.
+    """
+    average_daily_volume: int  # 30-day ADV in shares
+    average_daily_dollar_volume: float  # ADV × Price
+    days_to_liquidate_1m: float  # Days to exit a $1M position at 10% participation
+    liquidity_tier: str  # "highly_liquid", "liquid", "moderate", "illiquid"
+    requires_liquidity_discount: bool  # True if > 5 days to exit
+    
+    def calculate_days_to_liquidate(self, position_size: float) -> float:
+        """
+        Calculate days to liquidate a custom position size.
+        
+        Args:
+            position_size: Position size in dollars
+            
+        Returns:
+            Days to fully exit at 10% ADV participation
+        """
+        safe_daily_volume = self.average_daily_dollar_volume * 0.10
+        if safe_daily_volume <= 0:
+            return float('inf')
+        return position_size / safe_daily_volume
+
+
+@dataclass
 class FinancialRatios:
     """Complete set of financial ratios."""
     valuation: ValuationRatios
@@ -111,6 +142,7 @@ class FinancialRatios:
     efficiency: EfficiencyRatios
     risk: RiskMetrics
     sbc: SBCMetrics
+    exit_liquidity: Optional[ExitLiquidity] = None  # Trading liquidity for position sizing
 
 
 class RatioCalculator:
@@ -235,6 +267,9 @@ class RatioCalculator:
                 base_excess_cash = max(0, base_cash - base_op_cash)
                 base_invested_capital = base_equity + base_debt - base_excess_cash
         
+        # Exit liquidity for institutional position sizing
+        average_daily_volume = profile.get("averageDailyVolume")
+        
         return FinancialRatios(
             valuation=self._calc_valuation(
                 price, market_cap, shares, net_income, revenue, equity, ev, ebitda
@@ -269,6 +304,7 @@ class RatioCalculator:
             sbc=self._calc_sbc(
                 stock_based_compensation, free_cash_flow, revenue, share_repurchases
             ),
+            exit_liquidity=self._calc_exit_liquidity(price, average_daily_volume),
         )
     
     def _calc_valuation(
@@ -861,5 +897,65 @@ class RatioCalculator:
                 metrics.fcf_margin_adjusted = (free_cash_flow - stock_based_compensation) / revenue
         
         return metrics
+
+    def _calc_exit_liquidity(
+        self,
+        price: Optional[float],
+        average_daily_volume: Optional[int],
+    ) -> Optional[ExitLiquidity]:
+        """
+        Calculate exit liquidity metrics for institutional position sizing.
+        
+        NOTES2.md Section III.1: Liquidity & ADV "Exit Risk"
+        
+        The tool calculates what a stock is worth, but not if you can EXIT the position.
+        For institutional users, this provides an "Exit Liquidity Check" comparing a
+        standard $1M position to the 30-day Average Daily Volume (ADV).
+        
+        Uses the 10% participation rule: to avoid moving the price, don't trade more
+        than 10% of ADV per day.
+        
+        Tiers:
+        - highly_liquid: < 0.5 days to exit $1M (mega caps, highly traded)
+        - liquid: 0.5 - 2 days (large caps, normal liquidity)
+        - moderate: 2 - 5 days (mid caps, acceptable for most)
+        - illiquid: > 5 days (requires liquidity discount in WACC)
+        """
+        if price is None or average_daily_volume is None or average_daily_volume <= 0:
+            return None
+        
+        if price <= 0:
+            return None
+        
+        # Calculate daily dollar volume
+        daily_dollar_volume = average_daily_volume * price
+        
+        # 10% participation rate to avoid market impact
+        safe_daily_volume = daily_dollar_volume * 0.10
+        
+        # Days to liquidate a $1M position
+        position_size = 1_000_000  # Standard institutional check
+        days_to_liquidate = position_size / safe_daily_volume if safe_daily_volume > 0 else float('inf')
+        
+        # Determine liquidity tier
+        if days_to_liquidate < 0.5:
+            tier = "highly_liquid"
+        elif days_to_liquidate < 2:
+            tier = "liquid"
+        elif days_to_liquidate <= 5:
+            tier = "moderate"
+        else:
+            tier = "illiquid"
+        
+        # Positions taking > 5 days to exit require a liquidity discount
+        requires_discount = days_to_liquidate > 5
+        
+        return ExitLiquidity(
+            average_daily_volume=average_daily_volume,
+            average_daily_dollar_volume=daily_dollar_volume,
+            days_to_liquidate_1m=round(days_to_liquidate, 2),
+            liquidity_tier=tier,
+            requires_liquidity_discount=requires_discount,
+        )
 
 
