@@ -28,6 +28,7 @@ def retry_on_api_error(
                 stop=tenacity.stop_after_attempt(retries + 1),
                 wait=tenacity.wait_exponential(multiplier=backoff_factor, min=1, max=10),
                 retry=tenacity.retry_if_exception_type(exceptions),
+                reraise=True,
                 before_sleep=lambda retry_state: logger.warning(
                     "api_retry_attempt",
                     func=func.__name__,
@@ -69,6 +70,7 @@ class CircuitBreaker:
                 if time.time() - self.last_failure_time > self.reset_timeout:
                     logger.info("circuit_breaker_half_open", name=self.name)
                     self.state = "HALF-OPEN"
+                    self.failures = 0
                 else:
                     logger.warning("circuit_breaker_open_blocked", name=self.name)
                     raise ProviderError(f"Circuit breaker {self.name} is OPEN")
