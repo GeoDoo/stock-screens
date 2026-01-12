@@ -7,6 +7,7 @@ import { GlossaryPage } from './components/GlossaryPage.tsx'
 import { MemosPage } from './components/MemosPage.tsx'
 import { MemoDetailPage } from './components/MemoDetailPage.tsx'
 import FilingsPage from './components/FilingsPage.tsx'
+import { FilingsAnalysisPage } from './pages/FilingsAnalysisPage.tsx'
 
 function Router() {
   const [path, setPath] = useState(window.location.pathname)
@@ -26,6 +27,12 @@ function Router() {
       }, 100)
     }
   }, [path])
+
+  // Forensic Analysis Route: /analysis/:symbol
+  const analysisMatch = path.match(/^\/analysis\/([a-zA-Z0-9.-]+)$/)
+  if (analysisMatch) {
+    return <FilingsAnalysisPage />
+  }
 
   if (path === '/glossary') {
     return <GlossaryPage />
