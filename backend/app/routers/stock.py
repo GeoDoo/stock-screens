@@ -1324,7 +1324,9 @@ async def batch_analyze(symbol: str, provider: str):
             # capex_exceeds_maintenance = True when capex > 1.5 × D&A (significant growth investment)
             maintenance_capex_ratio = ttm_da_ratio  # Maintenance CapEx ≈ Depreciation
             capex_exceeds_maintenance = False
-            if ttm_capex_ratio is not None and ttm_da_ratio is not None:
+            # Guard: da_ratio > 0 prevents false positive when D&A is zero
+            # (any positive capex would exceed 0 * 1.5 = 0)
+            if ttm_capex_ratio is not None and ttm_da_ratio is not None and ttm_da_ratio > 0:
                 capex_exceeds_maintenance = ttm_capex_ratio > ttm_da_ratio * 1.5
             
             hints_ttm = {
