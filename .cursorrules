@@ -94,6 +94,7 @@ All bugfixes must add a regression test for the exact failure mode:
 
 ## GitHub Flow (Rebase-Only Standard)
 - **Branch from `main`** for every change: `feat/...`, `fix/...`, `chore/...`, `refactor/...`.
+- **ONLY ONE PR AT A TIME**: Never open multiple PRs simultaneously. Wait for the current PR to be merged before starting the next one.
 - Keep branches **small and short-lived** (aim: merge within 1–2 days).
 - Open a PR early (draft is fine) and keep it focused (one behavior change per PR).
 
