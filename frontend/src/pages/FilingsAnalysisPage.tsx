@@ -73,6 +73,16 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
     }
   }, [selectedFiling]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'f' && activeTab === 'document' && !analyzing) {
+        setIsFocusMode(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, analyzing]);
+
   const loadData = async () => {
     setLoading(true);
     setError(null);
