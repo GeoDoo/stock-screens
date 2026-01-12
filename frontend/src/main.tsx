@@ -28,10 +28,10 @@ function Router() {
     }
   }, [path])
 
-  // Forensic Analysis Route: /analysis/:symbol
-  const analysisMatch = path.match(/^\/analysis\/([a-zA-Z0-9.-]+)$/)
-  if (analysisMatch) {
-    return <FilingsAnalysisPage symbol={analysisMatch[1]} />
+  // Forensic Analysis Route: /forensic/:symbol
+  const forensicMatch = path.match(/^\/forensic\/([a-zA-Z0-9.-]+)$/)
+  if (forensicMatch) {
+    return <FilingsAnalysisPage symbol={forensicMatch[1]} />
   }
 
   if (path === '/glossary') {

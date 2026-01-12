@@ -244,6 +244,15 @@ export default function FilingsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <a
+                        href={`/forensic/${ticker.toUpperCase()}`}
+                        className="px-3 py-1.5 text-sm font-bold text-white bg-indigo-600 rounded hover:bg-indigo-700 shadow-sm flex items-center gap-1 transition-all"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Forensic Scan
+                      </a>
+                      <a
                         href={filing.viewer_url}
                         target="_blank"
                         rel="noopener noreferrer"

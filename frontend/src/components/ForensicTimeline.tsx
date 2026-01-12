@@ -1,4 +1,3 @@
-import React from 'react';
 import { History, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import type { ForensicHistoryItem } from '../api';
 
@@ -7,7 +6,7 @@ interface Props {
   ticker: string;
 }
 
-export function ForensicTimeline({ history, ticker }: Props) {
+export function ForensicTimeline({ history }: Props) {
   if (history.length === 0) return null;
 
   // Sort history by date ascending for the timeline
@@ -50,7 +49,7 @@ export function ForensicTimeline({ history, ticker }: Props) {
           <div className="absolute top-1/2 left-0 w-full h-0.5 bg-gray-100 -translate-y-1/2" />
           
           <div className="flex justify-between items-center relative z-10">
-            {sortedHistory.map((item, idx) => (
+            {sortedHistory.map((item) => (
               <div key={item.accession_number} className="flex flex-col items-center gap-3">
                 <div className="text-[10px] font-mono text-gray-400 font-bold">
                   {new Date(item.filing_date).getFullYear()}

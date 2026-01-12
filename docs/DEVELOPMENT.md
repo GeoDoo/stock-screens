@@ -2,7 +2,7 @@
 
 > **Auto-generated** from package files.
 > 
-> Last updated: 2026-01-12 20:35
+> Last updated: 2026-01-12 21:36
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -58,7 +58,9 @@ npm run dev
 | `lucide-react` | ^0.562.0 |
 | `react` | ^19.2.0 |
 | `react-dom` | ^19.2.0 |
+| `react-markdown` | ^10.1.0 |
 | `react-router-dom` | ^7.12.0 |
+| `remark-gfm` | ^4.0.1 |
 
 ## Running Tests
 
