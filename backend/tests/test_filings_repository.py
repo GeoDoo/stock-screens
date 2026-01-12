@@ -7,11 +7,15 @@ from app.services.filings_repository import FilingsRepository
 def repo(tmp_path):
     # Use a temporary database file
     db_path = tmp_path / "test_filings.db"
-    return FilingsRepository(db_path=str(db_path))
+    repository = FilingsRepository(db_path=str(db_path))
+    # We'll initialize in the test since _init_db is now async
+    return repository
 
 @pytest.mark.asyncio
 async def test_save_pdf_with_compression(repo):
     """Test that PDFs are compressed and size metadata is correct (P0 Bug Fix)."""
+    await repo._init_db()
+    
     # Create large-ish dummy data that compresses well
     original_data = b"Some financial data " * 1000
     original_size_kb = len(original_data) // 1024
@@ -53,6 +57,7 @@ async def test_save_pdf_with_compression(repo):
 @pytest.mark.asyncio
 async def test_get_pdf_legacy_fallback(repo):
     """Test that uncompressed legacy data is handled correctly."""
+    await repo._init_db()
     original_data = b"Legacy uncompressed data"
     
     # Insert uncompressed data manually into the DB
