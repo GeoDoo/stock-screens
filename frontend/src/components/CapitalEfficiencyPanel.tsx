@@ -15,7 +15,7 @@ interface CapitalEfficiencyPanelProps {
 export function CapitalEfficiencyPanel({ data, wacc }: CapitalEfficiencyPanelProps) {
   if (data.data_issue) {
     return (
-      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+      <div>
         <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
           Capital Efficiency
         </div>
@@ -76,7 +76,7 @@ export function CapitalEfficiencyPanel({ data, wacc }: CapitalEfficiencyPanelPro
     : { text: 'Unknown', color: 'bg-gray-100 text-gray-500' };
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-lg p-4 border border-gray-200">
+    <div>
       <div className="flex justify-between items-center mb-4">
         <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">
           Capital Efficiency <GlossaryRef id="roic" />
@@ -116,7 +116,7 @@ export function CapitalEfficiencyPanel({ data, wacc }: CapitalEfficiencyPanelPro
 
       {/* Assessment */}
       {data.assessment && (
-        <div className="text-xs text-gray-600 bg-white/50 rounded p-2 mb-2">
+        <div className="text-xs text-gray-600 mb-2">
           {data.assessment}
         </div>
       )}
