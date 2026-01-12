@@ -14,12 +14,36 @@ import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from google import genai
 from google.genai import types
 
+from app.services.rate_limiter_sqlite import rate_limiter
+
 logger = logging.getLogger(__name__)
+
+
+# Institutional Forensic Prompt Suite
+FORENSIC_PROMPT_SUITE = {
+    "accounting_forensics": """
+    Analyze the financial statements for high-risk accrual accounting:
+    1. Sloan Ratio: Is Net Income significantly higher than Cash Flow from Operations? 
+    2. Capitalization Creep: Compare 'Other Assets' and 'Intangibles' growth. Is management hiding expenses in the balance sheet?
+    3. Revenue Recognition: Look for changes in wording (e.g., shifts to 'percentage of completion').
+    """,
+    "inventory_sales_divergence": """
+    Compare Inventory growth to Revenue growth.
+    - If Inventory > Revenue growth by >20%, explain the risk of obsolescence or 'channel stuffing'.
+    - If Inventory is falling while Revenue is growing, is it efficiency or a supply chain risk?
+    """,
+    "textual_alpha": """
+    Analyze the MD&A (Management Discussion & Analysis) for psychological red flags:
+    1. Tone Shifts: Compare to previous year if available. Is language becoming more legalistic/passive?
+    2. Risk Factor Changes: Identify new or significantly expanded risk disclosures.
+    3. Vague Language: Flag evasive answers regarding liquidity or competitive pressures.
+    """
+}
 
 
 class AnalyzerError(Exception):
@@ -75,22 +99,15 @@ class FilingAnalyzer:
             raise AnalyzerError("GEMINI_API_KEY not set in environment")
         
         self.client = genai.Client(api_key=self.api_key)
-        self._request_times: List[float] = []
-        self._max_rpm = 14  # Stay under 15 RPM limit
+        self._provider_name = "gemini"
     
     def _check_rate_limit(self):
-        """Ensure we don't exceed rate limits."""
-        import time
-        now = time.time()
-        
-        # Remove requests older than 1 minute
-        self._request_times = [t for t in self._request_times if now - t < 60]
-        
-        if len(self._request_times) >= self._max_rpm:
-            wait_time = 60 - (now - self._request_times[0])
+        """Ensure we don't exceed rate limits using central SQLite rate limiter."""
+        if rate_limiter.is_at_limit(self._provider_name):
+            wait_time = rate_limiter.get_time_until_reset(self._provider_name) or 60
             raise RateLimitError(retry_after=wait_time)
         
-        self._request_times.append(now)
+        rate_limiter.record_call(self._provider_name)
     
     def analyze(
         self,
@@ -199,23 +216,16 @@ Identify:
         )
     
     def extract_red_flags(self, filing_text: str) -> AnalysisResult:
-        """Quick scan for common accounting red flags."""
+        """Quick scan for common accounting red flags using FORENSIC_PROMPT_SUITE."""
+        combined_query = "\n".join([f"SECTION {k.upper()}:\n{v}" for k, v in FORENSIC_PROMPT_SUITE.items()])
+        
         return self.analyze(
             filing_text=filing_text,
-            query="""Scan this filing for red flags:
+            query=f"""Scan this filing for institutional-grade red flags:
 
-1. Revenue recognition changes or aggressive policies
-2. Related party transactions
-3. Off-balance sheet arrangements
-4. Unusual inventory or receivables growth
-5. Changes in auditor or audit opinions
-6. Going concern language
-7. Material weakness in internal controls
-8. Significant estimate changes
-9. Non-GAAP metrics that differ greatly from GAAP
-10. Vague or evasive language in MD&A
+{combined_query}
 
-For each red flag found, quote the relevant text and explain why it's concerning."""
+For each red flag found, quote the relevant text and explain the economic risk to a long-term investor."""
         )
 
 

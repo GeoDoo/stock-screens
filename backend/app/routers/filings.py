@@ -5,10 +5,11 @@ Phase 1: Filings Viewer with PDF generation.
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Body
 from fastapi.responses import Response
 
 from app.services.sec_filings import sec_filings_service, SECFilingsError
+from app.services.filing_analyzer import get_filing_analyzer, AnalyzerError
 
 router = APIRouter(prefix="/api/filings", tags=["filings"])
 
@@ -139,4 +140,39 @@ async def download_filing_pdf(
         )
         
     except SECFilingsError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{ticker}/analyze")
+async def analyze_filing(
+    ticker: str,
+    document_url: str = Query(..., description="SEC URL of the filing HTML"),
+    query: Optional[str] = Query(None, description="Optional custom query for analysis"),
+):
+    """
+    Run forensic analysis on a specific SEC filing.
+    
+    This uses the 'Institutional-Grade' prompt suite to detect shenanigans.
+    """
+    analyzer = get_filing_analyzer()
+    
+    try:
+        # 1. Fetch the HTML (cached by SECFilingsService logic if we use it)
+        html_content = await sec_filings_service.get_filing_html(document_url)
+        
+        # 2. Run Forensic Scan
+        if query:
+            result = analyzer.analyze(html_content, query)
+        else:
+            result = analyzer.extract_red_flags(html_content)
+            
+        return {
+            "ticker": ticker.upper(),
+            "query": result.query,
+            "analysis": result.response,
+            "timestamp": result.timestamp.isoformat(),
+            "model": result.model
+        }
+        
+    except (SECFilingsError, AnalyzerError) as e:
         raise HTTPException(status_code=500, detail=str(e))
