@@ -362,9 +362,9 @@ export function FinancialRatiosTable({ ratios }: Props) {
                 <td className="py-2 text-sm text-gray-500">Days to Exit $1M</td>
                 <td className="py-2 text-sm font-mono font-medium text-right">
                   <span className={
-                    ratios.exit_liquidity.days_to_liquidate_1m < 0.5 ? 'text-green-600' :
-                    ratios.exit_liquidity.days_to_liquidate_1m < 2 ? 'text-gray-700' :
-                    ratios.exit_liquidity.days_to_liquidate_1m <= 5 ? 'text-amber-600' :
+                    ratios.exit_liquidity.liquidity_tier === 'highly_liquid' ? 'text-green-600' :
+                    ratios.exit_liquidity.liquidity_tier === 'liquid' ? 'text-gray-700' :
+                    ratios.exit_liquidity.liquidity_tier === 'moderate' ? 'text-amber-600' :
                     'text-red-600'
                   }>
                     {ratios.exit_liquidity.days_to_liquidate_1m < 1 
