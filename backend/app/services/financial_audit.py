@@ -133,6 +133,11 @@ class FinancialAuditService:
         sloan = self.sloan_ratio()
         z_score = self.altman_z_score()
         m_score = self.beneish_m_score()
+        
+        # Source variables for multiple checks
+        net_income = self.extractor.net_income()
+        ocf = self.extractor.cash_flow_from_operations()
+        total_assets = self.extractor.total_assets()
 
         findings = []
         
@@ -158,8 +163,7 @@ class FinancialAuditService:
                 findings.append(f"Revenue Quality: Accounts Receivable grew {ar_growth:.1%} vs Revenue growth of {rev_growth:.1%}. Potential 'channel stuffing'.")
 
         # 5. Asset Bloat: Other Assets + Intangibles vs Revenue
-        intangibles = self.extractor.goodwill() or 0 + (self.extractor.intangible_assets() or 0)
-        total_assets = self.extractor.total_assets()
+        intangibles = (self.extractor.goodwill() or 0) + (self.extractor.intangible_assets() or 0)
         if total_assets and intangibles / total_assets > 0.40: # 40% of assets are 'soft'
             findings.append(f"Asset Bloat: Intangibles & Goodwill represent {intangibles/total_assets:.1%} of total assets. High impairment risk.")
 
@@ -185,7 +189,6 @@ class FinancialAuditService:
         # 9. Asset Quality Index (AQI)
         # AQI = 1 - (Current Assets + PPE) / Total Assets
         # High AQI means more 'soft' assets (deferred costs, etc.)
-        total_assets = self.extractor.total_assets()
         current_assets = self.extractor.current_assets()
         ppe = self.extractor.ppe()
         if total_assets and current_assets is not None and ppe is not None:

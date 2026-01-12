@@ -707,14 +707,3 @@ class DataExtractor:
         """
         statements = getattr(self, statement_key, [])
         return self._get_history(statements, metric_key)
-
-    def get_full_history(self, statement_key: str, metric_key: str) -> List[float]:
-        """
-        Get full historical values for a metric (oldest first).
-        
-        Args:
-            statement_key: 'income_statement', 'balance_sheet', or 'cash_flow'
-            metric_key: the field name in the statement
-        """
-        statements = getattr(self, statement_key, [])
-        return self._get_history(statements, metric_key)
