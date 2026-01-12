@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-12 21:43
+> Last updated: 2026-01-12 22:49
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -34,6 +34,7 @@ Stock Screens is a full-stack stock analysis application with:
 | `filing_analyzer.py` | Error during filing analysis. |
 | `filing_parser.py` | Parses SEC HTML filings to extract specific sections (Items) |
 | `filings_repository.py` | A cached SEC filing PDF. |
+| `financial_audit.py` | Performs quantitative forensic analysis on financial stateme |
 | `fmp_client.py` | Custom exception for FMP API errors. |
 | `fmp_provider.py` | Financial Modeling Prep data provider. |
 | `historical_valuation.py` | Valuation metrics for a single year. |
@@ -118,7 +119,9 @@ Weighted Average Cost of Capital calculator.
 | `CEOEfficiencyWarning.tsx` | CEOEfficiencyWarning |
 | `CapitalEfficiencyPanel.tsx` | CapitalEfficiencyPanel |
 | `DiscountRateModal.tsx` | DiscountRateModal |
+| `ExecutionRiskMatrix.tsx` | ExecutionRiskMatrix |
 | `FilingsPage.tsx` | FilingsPage |
+| `FinancialAuditGrid.tsx` | FinancialAuditGrid |
 | `FinancialRatiosTable.tsx` | FinancialRatiosTable |
 | `ForensicRedFlags.tsx` | ForensicRedFlags |
 | `ForensicTimeline.tsx` | ForensicTimeline |
@@ -184,7 +187,7 @@ The application uses a single SQLite database (`stock_screens.db`) with the foll
 
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
-| Backend | 47 test files | pytest |
+| Backend | 48 test files | pytest |
 | Frontend | 24 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)
