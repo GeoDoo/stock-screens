@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
-from typing import List, Optional, Dict
-from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field, ConfigDict
 
 class RedFlagCategory(BaseModel):
     """Score and evidence for a specific red flag category."""
@@ -16,8 +16,8 @@ class EPSAdjustment(BaseModel):
     amount: float = Field(..., description="Per-share adjustment amount (can be negative for reductions)")
     impact: str = Field(..., description="Description of the impact on economic reality")
 
-class ForensicReport(BaseModel):
-    """Structured forensic analysis report."""
+class ForensicAnalysisLLM(BaseModel):
+    """The subset of the forensic report that the LLM is responsible for generating."""
     accounting_consistency_score: int = Field(..., ge=1, le=100, description="Overall stability of accounting policies (100 = Perfect)")
     red_flags: List[RedFlagCategory] = Field(
         ..., 
@@ -27,8 +27,26 @@ class ForensicReport(BaseModel):
     reported_eps: Optional[float] = Field(None, description="The reported EPS from the filing")
     forensic_eps_adjustment: float = Field(0.0, description="Total estimated adjustment to EPS")
     adjustments: List[EPSAdjustment] = Field(default_factory=list, description="Breakdown of specific EPS adjustments")
+
+class QuantitativeAudit(BaseModel):
+    """Quantitative forensic metrics from financial statements."""
+    sloan_ratio: Optional[float] = Field(None, description="Accrual quality metric")
+    altman_z_score: Optional[float] = Field(None, description="Bankruptcy risk score")
+    beneish_m_score: Optional[float] = Field(None, description="Earnings manipulation risk")
+    margin_growth_sensitivity: Optional[Dict[str, Any]] = Field(None, description="Sensitivity matrix for execution risk")
+    findings: List[str] = Field(default_factory=list, description="Automated numerical findings")
+
+class ForensicReport(BaseModel):
+    """Structured forensic analysis report."""
+    accounting_consistency_score: int
+    red_flags: List[RedFlagCategory]
+    summary: str
+    reported_eps: Optional[float] = None
+    forensic_eps_adjustment: float = 0.0
+    adjustments: List[EPSAdjustment] = Field(default_factory=list)
+    quantitative_audit: Optional[QuantitativeAudit] = None
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    model: str = Field(..., description="LLM model used for analysis")
+    model: str = ""
 
 class FilingForensicResponse(BaseModel):
     """API response for forensic analysis."""

@@ -75,7 +75,7 @@ class MassiveProvider(StockDataProvider):
             raise ProviderError("Massive API access denied")
         elif response.status_code == 429:
             logger.warning("api_rate_limit_hit", provider="massive")
-            raise RateLimitError("Massive rate limit exceeded")
+            raise RateLimitError(f"Rate limit exceeded for {self.name}.")
         elif response.status_code >= 500:
             logger.error("api_server_error", provider="massive", status_code=response.status_code)
             raise TransientProviderError(f"Massive server error: {response.status_code}")

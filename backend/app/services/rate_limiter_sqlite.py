@@ -249,7 +249,8 @@ class RateLimiterSQLite:
                     tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
                     return int((tomorrow - now).total_seconds())
                 elif config.reset_schedule == ResetSchedule.PER_MINUTE:
-                    reset_time = limited_at + timedelta(seconds=60)
+                    # BLOCK DURATION: 15s (matches is_api_limited auto-clear logic)
+                    reset_time = limited_at + timedelta(seconds=15)
                     remaining = (reset_time - now).total_seconds()
                     return int(max(0, remaining))
                 elif config.reset_schedule == ResetSchedule.PER_SECOND:

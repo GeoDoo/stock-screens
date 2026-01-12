@@ -24,7 +24,7 @@ from app.services.rate_limiter_sqlite import rate_limiter
 from app.services.telemetry_repository import get_telemetry_repository
 from app.services.logging_config import logger # Use structlog logger
 from app.services.resilience import get_circuit_breaker
-from app.schemas.forensic import ForensicReport
+from app.schemas.forensic import ForensicReport, ForensicAnalysisLLM
 
 
 # Institutional Forensic Prompt Suite
@@ -226,6 +226,9 @@ Provide a detailed, specific analysis with evidence from the filing."""
             )
 
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                # Mark as limited in our central rate limiter so we don't keep hitting it
+                await rate_limiter.mark_api_limited(self._provider_name)
+                
                 # Extract retry time if available
                 match = re.search(r'retry in (\d+\.?\d*)s', error_str.lower())
                 retry_after = float(match.group(1)) if match else 60.0
@@ -327,7 +330,9 @@ Critical Tasks:
         trace_id = structlog.contextvars.get_contextvars().get("trace_id", "unknown")
 
         try:
-            # Use the new GenerateContentConfig with response_mime_type and response_schema
+            # Use the new GenerateContentConfig with response_mime_type
+            # We remove response_schema because it's causing 'additionalProperties' errors 
+            # in some Gemini API environments. We will parse the JSON manually.
             response = await self.client.aio.models.generate_content(
                 model=self.MODEL,
                 contents=[prompt],
@@ -335,7 +340,6 @@ Critical Tasks:
                     temperature=0.1,
                     max_output_tokens=8192,
                     response_mime_type="application/json",
-                    response_schema=ForensicReport,
                 ),
             )
             
@@ -347,24 +351,42 @@ Critical Tasks:
                 status="success"
             )
 
-            # The response.parsed should contain the model instance if response_schema was used
-            report = response.parsed
-            if not isinstance(report, ForensicReport):
-                # Fallback if parsing didn't return the model
-                report = ForensicReport.model_validate_json(response.text)
+            # Map the LLM output to the final ForensicReport model
+            llm_res = ForensicAnalysisLLM.model_validate_json(response.text)
             
-            report.model = self.MODEL
+            report = ForensicReport(
+                accounting_consistency_score=llm_res.accounting_consistency_score,
+                red_flags=llm_res.red_flags,
+                summary=llm_res.summary,
+                reported_eps=llm_res.reported_eps,
+                forensic_eps_adjustment=llm_res.forensic_eps_adjustment,
+                adjustments=llm_res.adjustments,
+                model=self.MODEL
+            )
+            
             return report
             
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
+            error_str = str(e)
+            
             await telemetry_repo.record_metric(
                 trace_id=trace_id,
                 operation="gemini_forensic_analysis",
                 duration_ms=duration_ms,
                 status="failed",
-                error_message=str(e)
+                error_message=error_str
             )
+            
+            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                # Mark as limited in our central rate limiter
+                await rate_limiter.mark_api_limited(self._provider_name)
+                
+                # Extract retry time if available
+                match = re.search(r'retry in (\d+\.?\d*)s', error_str.lower())
+                retry_after = float(match.group(1)) if match else 60.0
+                raise RateLimitError(retry_after=retry_after)
+                
             logger.error(f"Forensic analysis failed: {e}")
             raise AnalyzerError(f"Forensic analysis failed: {e}")
 
