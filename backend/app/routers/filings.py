@@ -2,6 +2,7 @@
 
 Phase 1: Filings Viewer with PDF generation.
 """
+import os
 from datetime import date
 from typing import List, Optional
 
@@ -12,10 +13,25 @@ from app.services.sec_filings import sec_filings_service, SECFilingsError
 from app.services.filing_analyzer import get_filing_analyzer, AnalyzerError, RateLimitError
 from app.services.filing_parser import FilingParser
 from app.services.filings_repository import get_filings_repository
-from app.schemas.forensic import FilingForensicResponse, ForensicReport
+from app.services.stock_data_client import StockDataClient
+from app.services.data_extractor import DataExtractor
+from app.services.financial_audit import FinancialAuditService
+from app.services.data_adapter import stock_data_to_legacy
+from app.schemas.forensic import FilingForensicResponse, ForensicReport, QuantitativeAudit
 
 router = APIRouter(prefix="/api/filings", tags=["filings"])
 parser = FilingParser()
+
+# Get API keys from environment
+FMP_API_KEY = os.getenv("FMP_API_KEY", "")
+
+def get_stock_client(provider: str = "fmp"):
+    """Get a StockDataClient for numerical analysis."""
+    if provider == "fmp" and FMP_API_KEY:
+        from app.services.fmp_provider import FMPProvider
+        return StockDataClient(providers=[FMPProvider(FMP_API_KEY)])
+    from app.services.yahoo_provider import YahooProvider
+    return StockDataClient(providers=[YahooProvider()])
 
 
 @router.get("/sections")
@@ -87,7 +103,7 @@ async def compare_filing_sections(
     ticker: str = Query(..., description="Stock ticker symbol"),
     current_url: str = Query(..., description="SEC URL of current filing"),
     previous_url: str = Query(..., description="SEC URL of previous filing"),
-    section_name: str = Query(..., description="Name of section to compare"),
+    section_name: Optional[str] = Query(None, description="Name of section to compare (omit for full filing)"),
 ):
     """
     Compare the same section across two filings (Year-over-Year).
@@ -98,17 +114,25 @@ async def compare_filing_sections(
         current_html = await sec_filings_service.get_filing_html(current_url)
         previous_html = await sec_filings_service.get_filing_html(previous_url)
         
-        current_text = parser.get_section(current_html, section_name)
-        previous_text = parser.get_section(previous_html, section_name)
-        
-        if not current_text or not previous_text:
-            raise HTTPException(status_code=404, detail=f"Section '{section_name}' not found in one or both filings")
+        # If section_name is provided and not empty, extract it. Otherwise use full text.
+        if section_name and section_name.strip():
+            current_text = parser.get_section(current_html, section_name)
+            previous_text = parser.get_section(previous_html, section_name)
             
-        result = await analyzer.compare_filings(current_text, previous_text, section_name)
+            if not current_text or not previous_text:
+                raise HTTPException(status_code=404, detail=f"Section '{section_name}' not found in one or both filings")
+            
+            compare_label = section_name
+        else:
+            current_text = parser.clean_html(current_html)
+            previous_text = parser.clean_html(previous_html)
+            compare_label = "entire filing"
+            
+        result = await analyzer.compare_filings(current_text, previous_text, compare_label)
         
         return {
             "ticker": ticker.upper(),
-            "section": section_name,
+            "section": compare_label,
             "query": result.query,
             "analysis": result.response,
             "timestamp": result.timestamp.isoformat(),
@@ -127,29 +151,138 @@ async def run_forensic_audit(
     ticker: str,
     document_url: str = Query(..., description="SEC URL of the filing HTML"),
     accession_number: Optional[str] = Query(None, description="SEC accession number for persistence"),
+    provider: str = Query("fmp", description="Provider for numerical analysis"),
 ):
     """
     Perform a complete institutional-grade forensic audit of a filing.
-    Returns a structured report with an Accounting Consistency Score and category red flags.
+    Returns a structured report with textual red flags and quantitative statement analysis.
     """
     analyzer = get_filing_analyzer()
+    from app.services.logging_config import logger
+    from app.services.rate_limiter_sqlite import rate_limiter
     
     try:
-        # Fetch full filing HTML
+        # 1. TEXTUAL AUDIT (LLM)
         html_content = await sec_filings_service.get_filing_html(document_url)
-        
-        # Clean HTML to text for LLM
         text_content = parser.clean_html(html_content)
-        
-        # Run structured forensic analysis
         report = await analyzer.analyze_forensic(text_content)
         
-        # PERSISTENCE: Save to DB if accession_number is provided
+        # 2. QUANTITATIVE AUDIT (NUMBERS FROM THE FILE)
+        report.quantitative_audit = QuantitativeAudit(sloan_ratio=None, altman_z_score=None, beneish_m_score=None, findings=[])
+        try:
+            # Extract numerical facts directly from the iXBRL in the HTML (Source of Truth)
+            from app.services.data_adapter import ixbrl_facts_to_legacy
+            ixbrl_facts_by_date = parser.extract_ixbrl_facts(html_content)
+            
+            # ... logic to fetch from API or file ...
+            if ixbrl_facts_by_date:
+                logger.info("file_sourced_quantitative_audit_started", ticker=ticker)
+                legacy_data = ixbrl_facts_to_legacy(ixbrl_facts_by_date)
+                
+                # Market Cap isn't in XBRL usually, try a quick API hit just for the denominator of Z-Score
+                try:
+                    client = get_stock_client(provider)
+                    if not await rate_limiter.is_api_limited(provider):
+                        stock_data = await client.get_stock_data(ticker)
+                        legacy_data["profile"]["marketCap"] = stock_data.profile.market_cap
+                        legacy_data["profile"]["symbol"] = ticker.upper()
+                except:
+                    pass
+                
+                extractor = DataExtractor(legacy_data)
+                auditor = FinancialAuditService(extractor)
+                quant_results = auditor.analyze_statements()
+                
+                report.quantitative_audit = QuantitativeAudit(
+                    sloan_ratio=quant_results.get("sloan_ratio"),
+                    altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
+                    beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
+                    findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
+                )
+            else:
+                # Fallback to API data if no iXBRL tags found (older filings)
+                logger.info("no_ixbrl_found_falling_back_to_api", ticker=ticker)
+                client = get_stock_client(provider)
+                if await rate_limiter.is_api_limited(provider):
+                    reset_in = await rate_limiter.get_time_until_reset(provider)
+                    wait_msg = f" after {reset_in}s" if reset_in else ""
+                    report.quantitative_audit.findings = [f"Numerical audit limited to text-scan due to API limits.{wait_msg}"]
+                else:
+                    api_data = await client.get_stock_data(ticker)
+                    legacy_data = stock_data_to_legacy(api_data)
+                    extractor = DataExtractor(legacy_data)
+                    auditor = FinancialAuditService(extractor)
+                    quant_results = auditor.analyze_statements()
+                    
+                    report.quantitative_audit = QuantitativeAudit(
+                        sloan_ratio=quant_results.get("sloan_ratio"),
+                        altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
+                        beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
+                        findings=[f"[API FALLBACK] {f}" for f in quant_results.get("quantitative_findings", [])]
+                    )
+
+            # Generate Execution Risk Matrix if enough data
+            try:
+                from app.services.valuation_service import ValuationService
+                valuation_service = ValuationService(client)
+                # We need a WACC for the matrix. Try to calculate or use fallback.
+                wacc = 0.10 # Default fallback
+                try:
+                    # Attempt a quick WACC calculation
+                    risk_free = await client.get_treasury_rate()
+                    beta = extractor.beta() or 1.0
+                    cost_of_debt = extractor.cost_of_debt(risk_free) or (risk_free + 0.02)
+                    from app.services.wacc_calculator import WACCCalculator
+                    wacc_calc = WACCCalculator(
+                        risk_free_rate=risk_free,
+                        beta=beta,
+                        market_risk_premium=extractor.market_risk_premium(),
+                        cost_of_debt=cost_of_debt,
+                        tax_rate=extractor.tax_rate() or 0.25,
+                        market_cap=extractor.market_cap() or 1e9,
+                        total_debt=extractor.total_debt() or 0
+                    )
+                    wacc = wacc_calc.calculate()
+                except:
+                    pass
+                
+                matrix = await valuation_service.calculate_sensitivity_from_extractor(extractor, wacc)
+                report.quantitative_audit.margin_growth_sensitivity = matrix
+            except Exception as e:
+                logger.warning("matrix_generation_failed", ticker=ticker, error=str(e))
+            
+        except RateLimitError as e:
+            logger.warning("quantitative_audit_rate_limited", ticker=ticker, provider=provider)
+            # Graceful degradation: include a finding that quantitative data was rate-limited
+            error_msg = str(e)
+            if "Retry after" in error_msg:
+                try:
+                    # Clean up the message if it has long floats
+                    parts = error_msg.split("after ")
+                    if len(parts) > 1:
+                        seconds = float(parts[1].split("s")[0])
+                        error_msg = f"Rate limit reached. Retry after {int(seconds)}s."
+                except:
+                    pass
+            
+            report.quantitative_audit = QuantitativeAudit(
+                sloan_ratio=None,
+                altman_z_score=None,
+                beneish_m_score=None,
+                findings=[f"Numerical audit unavailable: {error_msg}"]
+            )
+        except Exception as e:
+            logger.warning("quantitative_audit_failed", ticker=ticker, error=str(e))
+            # Don't fail the whole audit if numerical data is missing
+        
+        # 3. PERSISTENCE: Save to DB if accession_number is provided
         if accession_number:
             repo = get_filings_repository()
             await repo.update_forensic_report(
                 accession_number=accession_number,
                 consistency_score=report.accounting_consistency_score,
+                reported_eps=report.reported_eps,
+                forensic_eps_adjustment=report.forensic_eps_adjustment,
                 report_json=report.model_dump_json()
             )
         
@@ -379,19 +512,65 @@ async def analyze_filing(
     ticker: str,
     document_url: str = Query(..., description="SEC URL of the filing HTML"),
     query: Optional[str] = Query(None, description="Optional custom query for analysis"),
+    provider: str = Query("fmp", description="Provider for numerical analysis"),
 ):
     """
     Run forensic analysis on a specific SEC filing.
     
     This uses the 'Institutional-Grade' prompt suite to detect shenanigans.
+    Now includes a fast quantitative audit (iXBRL) even if LLM is limited.
     """
     analyzer = get_filing_analyzer()
+    from app.services.logging_config import logger
+    from app.services.rate_limiter_sqlite import rate_limiter
     
+    # 1. Fetch the HTML
     try:
-        # 1. Fetch the HTML (cached by SECFilingsService logic if we use it)
         html_content = await sec_filings_service.get_filing_html(document_url)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch filing: {str(e)}")
+
+    # 2. Fast Quantitative Audit (No LLM needed)
+    quant_audit = QuantitativeAudit(sloan_ratio=None, altman_z_score=None, beneish_m_score=None, findings=[])
+    try:
+        from app.services.data_adapter import ixbrl_facts_to_legacy
+        ixbrl_facts_by_date = parser.extract_ixbrl_facts(html_content)
         
-        # 2. Run Forensic Scan
+        # If file has no iXBRL or extraction failed, try a quick API hit
+        if not ixbrl_facts_by_date and not await rate_limiter.is_api_limited(provider):
+            try:
+                client = get_stock_client(provider)
+                api_data = await client.get_stock_data(ticker)
+                legacy_data = stock_data_to_legacy(api_data)
+                extractor = DataExtractor(legacy_data)
+                auditor = FinancialAuditService(extractor)
+                quant_results = auditor.analyze_statements()
+                
+                quant_audit = QuantitativeAudit(
+                    sloan_ratio=quant_results.get("sloan_ratio"),
+                    altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
+                    beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
+                    findings=[f"[API FALLBACK] {f}" for f in quant_results.get("quantitative_findings", [])]
+                )
+            except:
+                pass
+        elif ixbrl_facts_by_date:
+            legacy_data = ixbrl_facts_to_legacy(ixbrl_facts_by_date)
+            extractor = DataExtractor(legacy_data)
+            auditor = FinancialAuditService(extractor)
+            quant_results = auditor.analyze_statements()
+            
+            quant_audit = QuantitativeAudit(
+                sloan_ratio=quant_results.get("sloan_ratio"),
+                altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
+                beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
+                findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
+            )
+    except Exception as e:
+        logger.warning("scan_quantitative_audit_failed", ticker=ticker, error=str(e))
+
+        # 3. Textual Forensic Scan (LLM)
+    try:
         if query:
             result = await analyzer.analyze(html_content, query)
         else:
@@ -402,10 +581,33 @@ async def analyze_filing(
             "query": result.query,
             "analysis": result.response,
             "timestamp": result.timestamp.isoformat(),
-            "model": result.model
+            "model": result.model,
+            "quantitative_audit": quant_audit.model_dump() if quant_audit else None
         }
         
-    except (SECFilingsError, AnalyzerError) as e:
-        if isinstance(e, RateLimitError):
-            raise HTTPException(status_code=429, detail=str(e))
+    except RateLimitError as e:
+        # Graceful degradation
+        logger.warning("scan_textual_analysis_rate_limited", ticker=ticker)
+        
+        error_msg = str(e)
+        if "Retry after" in error_msg:
+            try:
+                parts = error_msg.split("after ")
+                if len(parts) > 1:
+                    seconds = float(parts[1].split("s")[0])
+                    error_msg = f"Forensic AI is currently at its free-tier limit. Retry in {int(seconds)}s."
+            except:
+                pass
+
+        return {
+            "ticker": ticker.upper(),
+            "query": query or "Forensic Red Flags",
+            "analysis": f"### ⚠️ AI RATE LIMIT REACHED\n\n{error_msg}\n\nNumerical statement analysis is still available below.",
+            "timestamp": date.today().isoformat(),
+            "model": "rate-limited",
+            "quantitative_audit": quant_audit.model_dump() if quant_audit else None
+        }
+    except AnalyzerError as e:
         raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")

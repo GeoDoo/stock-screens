@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 import time
 import structlog
 from datetime import datetime, timezone
@@ -47,6 +47,73 @@ class ValuationService:
             client: StockDataClient configured with the user's chosen provider
         """
         self.client = client
+
+    async def calculate_sensitivity_from_extractor(
+        self,
+        extractor: DataExtractor,
+        wacc: float,
+        terminal_growth_rate: float = 0.03,
+        projection_years: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        Calculate sensitivity matrices directly from an extractor.
+        Used for forensic audits where data might be file-sourced.
+        """
+        # 1. Project FCF
+        fcf_projector = FCFProjector(
+            historical_revenue=extractor.revenue_history(),
+            historical_ebit=extractor.ebit_history(),
+            historical_da=extractor.da_history(),
+            historical_capex=extractor.capex_history(),
+            historical_working_capital=extractor.working_capital_history(),
+            tax_rate=extractor.tax_rate() or 0.25,
+        )
+
+        effective_revenue_growth = fcf_projector.revenue_cagr()
+        effective_operating_margin = fcf_projector.operating_margin()
+        
+        projections = fcf_projector.project(
+            years=projection_years,
+            revenue_growth=effective_revenue_growth,
+            operating_margin=effective_operating_margin,
+        )
+
+        projected_fcf = [p["fcf"] for p in projections]
+        
+        # 2. Sensitivity Analysis
+        total_debt = extractor.total_debt() or 0
+        cash = extractor.cash() or 0
+        shares = extractor.shares_outstanding() or 1
+        
+        sensitivity_calc = SensitivityCalculator(
+            projected_fcfs=projected_fcf,
+            projection_years=projection_years,
+            shares_outstanding=shares,
+            total_debt=total_debt,
+            cash=cash,
+            minority_interest=extractor.minority_interest() or 0,
+            preferred_stock=extractor.preferred_stock() or 0,
+            deferred_tax_assets=extractor.deferred_tax_assets() or 0,
+            pension_deficit=extractor.pension_liability() or 0,
+            # Pass ratios for margin/growth matrix
+            da_ratio=fcf_projector.da_to_revenue_ratio(),
+            capex_ratio=fcf_projector.capex_to_revenue_ratio(),
+            wc_ratio=fcf_projector.wc_to_revenue_ratio(),
+            tax_rate=extractor.tax_rate() or 0.25,
+        )
+        
+        # Margin vs Growth matrix
+        margin_growth = sensitivity_calc.generate_margin_growth_matrix(
+            base_revenue=extractor.latest_revenue() or 0,
+            base_margin=effective_operating_margin,
+            base_growth=effective_revenue_growth,
+            discount_rate=wacc,
+            terminal_growth=terminal_growth_rate,
+            margin_steps=[-0.04, -0.02, 0, 0.02, 0.04],
+            growth_steps=[-0.04, -0.02, 0, 0.02, 0.04],
+        )
+        
+        return margin_growth
 
     async def value_stock(
         self,
@@ -257,13 +324,22 @@ class ValuationService:
             )
             
             # Generate matrix with discount rate vs terminal growth
-            # Discount rate: current ± 2% in 1% steps
-            # Terminal growth: 1.5% to 4.5% in 0.5% steps
             sensitivity = sensitivity_calc.generate_matrix(
                 base_discount_rate=discount_rate,
                 base_terminal_growth=terminal_growth_rate,
                 discount_rate_steps=[-0.02, -0.01, 0, 0.01, 0.02],
                 terminal_growth_steps=[-0.015, -0.01, -0.005, 0, 0.005, 0.01, 0.015],
+            )
+
+            # Generate margin vs growth matrix (execution risk)
+            margin_growth_sensitivity = sensitivity_calc.generate_margin_growth_matrix(
+                base_revenue=extractor.latest_revenue() or 0,
+                base_margin=effective_operating_margin,
+                base_growth=effective_revenue_growth,
+                discount_rate=discount_rate,
+                terminal_growth=terminal_growth_rate,
+                margin_steps=[-0.04, -0.02, 0, 0.02, 0.04],
+                growth_steps=[-0.04, -0.02, 0, 0.02, 0.04],
             )
 
             # 7. Calculate value drivers (what moves intrinsic value most)
@@ -362,6 +438,7 @@ class ValuationService:
                     "terminal_shares": terminal_shares,  # Shares at end of projection period
                 },
                 "sensitivity": sensitivity,
+                "margin_growth_sensitivity": margin_growth_sensitivity,
                 "value_drivers": value_drivers,
                 "terminal_value_check": terminal_value_check,
                 "business_type_warning": business_type_warning,

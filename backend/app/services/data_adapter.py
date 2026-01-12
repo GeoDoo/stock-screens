@@ -2,6 +2,7 @@
 Adapter to convert standardized StockData to the legacy dict format
 expected by DataExtractor and other services.
 """
+from typing import Dict, Any
 from app.services.base_provider import StockData
 
 
@@ -103,4 +104,58 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
         "cash_flow": cash_flows,
     }
 
+
+def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
+    """
+    Convert extracted multi-period iXBRL facts into the legacy dict format.
+    Sorted by date (latest first).
+    """
+    income_statements = []
+    balance_sheets = []
+    cash_flows = []
+    
+    # Sort dates latest first
+    sorted_dates = sorted(facts_by_date.keys(), reverse=True)
+    
+    for date_str in sorted_dates:
+        facts = facts_by_date[date_str]
+        
+        income_statements.append({
+            "date": date_str,
+            "period": "FY",
+            "revenue": facts.get("revenue"),
+            "netIncome": facts.get("net_income"),
+            "grossProfit": facts.get("gross_profit"),
+            "operatingIncome": facts.get("ebit") or facts.get("operating_income"),
+        })
+        
+        balance_sheets.append({
+            "date": date_str,
+            "period": "FY",
+            "totalAssets": facts.get("total_assets"),
+            "totalLiabilities": facts.get("total_liabilities"),
+            "totalCurrentAssets": facts.get("current_assets"),
+            "totalCurrentLiabilities": facts.get("current_liabilities"),
+            "inventory": facts.get("inventory"),
+            "netReceivables": facts.get("accounts_receivable"),
+            "retainedEarnings": facts.get("retained_earnings"),
+            "propertyPlantEquipmentNet": facts.get("ppe_net"),
+            "cashAndCashEquivalents": facts.get("cash"),
+            "goodwill": facts.get("goodwill"),
+            "intangibleAssets": facts.get("intangibles"),
+        })
+        
+        cash_flows.append({
+            "date": date_str,
+            "period": "FY",
+            "operatingCashFlow": facts.get("operating_cash_flow"),
+            "capitalExpenditure": facts.get("capex"),
+        })
+    
+    return {
+        "profile": {"marketCap": 0, "symbol": "Filing"},
+        "income_statement": income_statements,
+        "balance_sheet": balance_sheets,
+        "cash_flow": cash_flows,
+    }
 

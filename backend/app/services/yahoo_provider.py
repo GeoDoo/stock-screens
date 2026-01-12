@@ -49,6 +49,8 @@ class YahooProvider(StockDataProvider):
         try:
             info = ticker.info
         except Exception as e:
+            if "429" in str(e) or "limit" in str(e).lower():
+                raise RateLimitError(f"Rate limit exceeded for Yahoo.")
             logger.error("api_error", provider="yahoo", symbol=symbol, error=str(e))
             raise ProviderError(f"Yahoo Finance error: {str(e)}")
         

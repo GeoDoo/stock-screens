@@ -530,6 +530,44 @@ class DataExtractor:
         """
         return self._get_ttm(self.cash_flow, "freeCashFlow")
 
+    def cash_flow_from_operations(self) -> Optional[float]:
+        """
+        Cash flow from operations, preferring TTM over annual data.
+        """
+        return self._get_ttm(self.cash_flow, "operatingCashFlow")
+    
+    def net_income(self) -> Optional[float]:
+        """Net income, preferring TTM over annual data."""
+        return self._get_ttm(self.income_statement, "netIncome")
+
+    def accounts_receivable(self) -> Optional[float]:
+        """Accounts receivable from balance sheet."""
+        return self._get_latest(self.balance_sheet, "netReceivables")
+
+    def inventory(self) -> Optional[float]:
+        """Inventory from balance sheet."""
+        return self._get_latest(self.balance_sheet, "inventory")
+
+    def ppe(self) -> Optional[float]:
+        """Property, plant, and equipment (net) from balance sheet."""
+        return self._get_latest(self.balance_sheet, "propertyPlantEquipmentNet")
+
+    def current_assets(self) -> Optional[float]:
+        """Total current assets from balance sheet."""
+        return self._get_latest(self.balance_sheet, "totalCurrentAssets")
+
+    def current_liabilities(self) -> Optional[float]:
+        """Total current liabilities from balance sheet."""
+        return self._get_latest(self.balance_sheet, "totalCurrentLiabilities")
+
+    def total_liabilities(self) -> Optional[float]:
+        """Total liabilities from balance sheet."""
+        return self._get_latest(self.balance_sheet, "totalLiabilities")
+
+    def retained_earnings(self) -> Optional[float]:
+        """Retained earnings from balance sheet."""
+        return self._get_latest(self.balance_sheet, "retainedEarnings")
+
     def diluted_shares_outstanding(self) -> Optional[float]:
         """
         Fully Diluted Shares Outstanding (FDSO) from income statement.
@@ -659,35 +697,24 @@ class DataExtractor:
         values = self._get_history(self.cash_flow, "capitalExpenditure")
         return [abs(v) for v in values]
 
-    def working_capital_history(self) -> List[float]:
+    def get_full_history(self, statement_key: str, metric_key: str) -> List[float]:
         """
-        Historical Non-Cash Working Capital (oldest first).
+        Get full historical values for a metric (oldest first).
         
-        NCWC = (Current Assets - Cash) - (Current Liabilities - Short-term Debt)
-        
-        Uses same Non-Cash formula as latest_working_capital() for consistency.
-        
-        Note: Excludes TTM/LTM and quarterly data to ensure valid year-over-year
-        comparisons in FCF projections.
+        Args:
+            statement_key: 'income_statement', 'balance_sheet', or 'cash_flow'
+            metric_key: the field name in the statement
         """
-        if not self.balance_sheet:
-            return []
-        
-        # Filter to annual-only balance sheets
-        annual_sheets = [bs for bs in self.balance_sheet if self._is_annual_period(bs)]
-        
-        wc_values = []
-        for bs in reversed(annual_sheets):
-            current_assets = bs.get("totalCurrentAssets", 0) or 0
-            current_liabilities = bs.get("totalCurrentLiabilities", 0) or 0
-            cash = bs.get("cashAndCashEquivalents", 0) or 0
-            short_term_debt = bs.get("shortTermDebt", 0) or 0
-            
-            # Non-Cash Working Capital
-            non_cash_current_assets = current_assets - cash
-            operating_current_liabilities = current_liabilities - short_term_debt
-            ncwc = non_cash_current_assets - operating_current_liabilities
-            
-            wc_values.append(ncwc)
-        return wc_values
+        statements = getattr(self, statement_key, [])
+        return self._get_history(statements, metric_key)
 
+    def get_full_history(self, statement_key: str, metric_key: str) -> List[float]:
+        """
+        Get full historical values for a metric (oldest first).
+        
+        Args:
+            statement_key: 'income_statement', 'balance_sheet', or 'cash_flow'
+            metric_key: the field name in the statement
+        """
+        statements = getattr(self, statement_key, [])
+        return self._get_history(statements, metric_key)
