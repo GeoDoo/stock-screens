@@ -594,14 +594,18 @@ GET /api/stock/{symbol}
     "operating_margin": 0.0,
     "da_ratio": 0.0,
     "capex_ratio": 0.0,
-    "wc_ratio": 0.0
+    "wc_ratio": 0.0,
+    "maintenance_capex_ratio": 0.0,
+    "capex_exceeds_maintenance": true
   },
   "hints_ttm": {
     "revenue_growth": 0.0,
     "operating_margin": 0.0,
     "da_ratio": 0.0,
     "capex_ratio": 0.0,
-    "wc_ratio": 0.0
+    "wc_ratio": 0.0,
+    "maintenance_capex_ratio": 0.0,
+    "capex_exceeds_maintenance": true
   },
   "validation": {
     "has_errors": true,

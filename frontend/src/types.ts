@@ -45,6 +45,9 @@ export interface HistoricalHints {
   da_ratio: number | null;
   capex_ratio: number | null;
   wc_ratio: number | null;
+  // High CapEx Warning (NOTES4.md): Flag when company is in growth investment mode
+  maintenance_capex_ratio?: number | null;  // ≈ D&A ratio (steady-state CapEx)
+  capex_exceeds_maintenance?: boolean;  // True if capex_ratio > 1.5 × da_ratio
 }
 
 // Same structure for both annual and TTM hints
