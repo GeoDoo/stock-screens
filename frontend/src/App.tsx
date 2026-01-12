@@ -1539,11 +1539,11 @@ export default function App() {
 
             {/* Valuation Result */}
             {result && (
-              <section className="pt-8 border-t border-gray-100">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-8">Valuation Result</h2>
+              <section className="pt-8 border-t border-gray-100 space-y-8">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">Valuation Result</h2>
             
             {/* Main Result */}
-            <div className="mb-12">
+            <div>
               <div className="flex items-baseline gap-4 mb-3">
                 <span className="text-sm text-gray-500">Intrinsic Value<GlossaryRef id="intrinsic-value" /></span>
                 <span className="text-5xl font-bold font-mono tracking-tight">${result.intrinsic_value_per_share.toFixed(2)}</span>
