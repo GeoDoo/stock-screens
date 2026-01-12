@@ -191,6 +191,8 @@ class SECFilingsService:
         Fetches from both recent filings and historical filing archives
         to ensure complete coverage (e.g., all 10-Ks since IPO).
         
+        Persists metadata to the local database for offline access.
+        
         Args:
             ticker: Stock ticker symbol
             form_types: Filter by form types (e.g., ["10-K", "10-Q"])
@@ -201,6 +203,7 @@ class SECFilingsService:
         """
         cik = await self._get_cik(ticker)
         ticker = ticker.upper().strip()
+        repo = get_filings_repository()
         
         url = f"{self.BASE_URL}/submissions/CIK{cik}.json"
         response = await self._request(url)
@@ -230,10 +233,87 @@ class SECFilingsService:
                         older_data, cik, ticker, form_types, limit, filings
                     )
                 except Exception as e:
-                    logger.warning(f"Failed to fetch older filings from {file_name}: {e}")
+                    logger.warning("failed_to_fetch_older_filings", ticker=ticker, file=file_name, error=str(e))
+        
+        # PERSISTENCE: Save metadata to DB
+        # We save all fetched filings to the metadata store for future local queries
+        for f in filings:
+            await repo.save_metadata(
+                ticker=f.ticker,
+                cik=f.cik,
+                accession_number=f.accession_number,
+                form_type=f.form_type,
+                filing_date=f.filing_date,
+                description=f.description,
+                document_name=f.document_name
+            )
         
         return filings
     
+    async def crawl_ticker_history(self, ticker: str) -> Dict[str, Any]:
+        """
+        Deep crawl of a ticker's entire SEC filing history.
+        Fetches all historical archives and persists them to the local DB.
+        
+        Args:
+            ticker: Stock ticker symbol
+            
+        Returns:
+            Dictionary with crawl statistics
+        """
+        cik = await self._get_cik(ticker)
+        ticker = ticker.upper().strip()
+        repo = get_filings_repository()
+        
+        logger.info("crawl_start", ticker=ticker, cik=cik)
+        
+        url = f"{self.BASE_URL}/submissions/CIK{cik}.json"
+        response = await self._request(url)
+        data = response.json()
+        
+        # 1. Process recent filings
+        recent = data.get("filings", {}).get("recent", {})
+        filings = self._parse_filings_array(recent, cik, ticker, None, 10000, [])
+        
+        # 2. Process all historical archives
+        older_files = data.get("filings", {}).get("files", [])
+        for file_info in older_files:
+            file_name = file_info.get("name")
+            if not file_name:
+                continue
+            
+            try:
+                older_url = f"{self.BASE_URL}/submissions/{file_name}"
+                older_response = await self._request(older_url)
+                older_data = older_response.json()
+                filings = self._parse_filings_array(
+                    older_data, cik, ticker, None, 10000, filings
+                )
+            except Exception as e:
+                logger.warning("crawl_archive_failed", ticker=ticker, file=file_name, error=str(e))
+        
+        # 3. Persist everything
+        for f in filings:
+            await repo.save_metadata(
+                ticker=f.ticker,
+                cik=f.cik,
+                accession_number=f.accession_number,
+                form_type=f.form_type,
+                filing_date=f.filing_date,
+                description=f.description,
+                document_name=f.document_name
+            )
+            
+        logger.info("crawl_complete", ticker=ticker, total_found=len(filings))
+        
+        return {
+            "ticker": ticker,
+            "cik": cik,
+            "total_found": len(filings),
+            "status": "complete",
+            "timestamp": date.today().isoformat()
+        }
+
     async def get_company_info(self, ticker: str) -> Dict[str, Any]:
         """Get company information from SEC."""
         cik = await self._get_cik(ticker)
