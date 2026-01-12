@@ -536,6 +536,8 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
         pension_deficit=pension_deficit,
         # P1 Fix: Dilution support
         annual_dilution_rate=request.annual_dilution_rate,
+        # NOTES2.md III.3: Growth-Margin Correlation
+        growth_margin_correlation=request.growth_margin_correlation,
     )
     
     if request.scenarios:

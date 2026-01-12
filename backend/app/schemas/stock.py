@@ -221,6 +221,11 @@ class ScenarioRequest(BaseModel):
     # P1 Fix: Dilution support (consistency with main valuation)
     # Validated to -0.5 to 0.5 range (50% buyback to 50% dilution max)
     annual_dilution_rate: float = Field(default=0.0, ge=-0.5, le=0.5)
+    # NOTES2.md III.3: Growth-Margin Correlation
+    # When enabled, default scenarios auto-adjust margins based on growth
+    # -0.2 = high growth -> lower margin (competition effect)
+    # 0.0 = disabled (independent variables - legacy behavior)
+    growth_margin_correlation: float = Field(default=0.0, ge=-1.0, le=1.0)
 
 
 class MonteCarloRequest(BaseModel):
