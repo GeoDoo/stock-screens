@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-12 16:03
+> Last updated: 2026-01-12 16:25
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -31,6 +31,7 @@ Stock Screens is a full-stack stock analysis application with:
 | `dcf_calculator.py` | Discounted Cash Flow calculator with optional mid-year disco |
 | `dividend_analyzer.py` | A single dividend payment. |
 | `fcf_projector.py` | Projects Free Cash Flow from first principles. |
+| `filings_repository.py` | A cached SEC filing PDF. |
 | `fmp_client.py` | Custom exception for FMP API errors. |
 | `fmp_provider.py` | Financial Modeling Prep data provider. |
 | `historical_valuation.py` | Valuation metrics for a single year. |
@@ -158,7 +159,7 @@ Weighted Average Cost of Capital calculator.
 
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
-| Backend | 33 test files | pytest |
+| Backend | 34 test files | pytest |
 | Frontend | 23 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)

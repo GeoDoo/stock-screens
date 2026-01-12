@@ -1,6 +1,7 @@
 """SEC EDGAR filings service with PDF generation.
 
 Fetches SEC filings and converts HTML to PDF using headless Chrome (playwright).
+PDFs are cached in SQLite to avoid repeated expensive conversions.
 """
 import logging
 from dataclasses import dataclass
@@ -9,6 +10,8 @@ from typing import List, Optional, Dict, Any
 
 import httpx
 from playwright.async_api import async_playwright
+
+from app.services.filings_repository import get_filings_repository
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +29,7 @@ class Filing:
     filing_date: date
     description: str
     document_url: str
+    document_name: str  # e.g., "aapl-20230930.htm"
     cik: str
     ticker: str
 
@@ -140,7 +144,10 @@ class SECFilingsService:
         documents = recent.get("primaryDocument", [])
         descriptions = recent.get("primaryDocDescription", [])
         
-        for i in range(min(len(accessions), limit * 2)):  # Fetch extra to account for filtering
+        # When filtering, we need to scan through all available filings
+        # since filtered types (like 10-K) may be spread throughout history
+        scan_limit = len(accessions) if form_types else limit * 2
+        for i in range(scan_limit):
             if len(filings) >= limit:
                 break
             
@@ -165,6 +172,7 @@ class SECFilingsService:
                 filing_date=filing_date,
                 description=description or form_type,
                 document_url=self._build_document_url(cik, accession, document),
+                document_name=document,
                 cik=cik,
                 ticker=ticker,
             ))
@@ -206,19 +214,47 @@ class SECFilingsService:
         except Exception as e:
             raise SECFilingsError(f"Failed to fetch filing HTML: {e}")
     
-    async def get_filing_pdf(self, document_url: str) -> bytes:
+    async def get_filing_pdf(
+        self,
+        document_url: str,
+        *,
+        ticker: Optional[str] = None,
+        cik: Optional[str] = None,
+        accession_number: Optional[str] = None,
+        form_type: Optional[str] = None,
+        filing_date: Optional[date] = None,
+        document_name: Optional[str] = None,
+        use_cache: bool = True,
+    ) -> bytes:
         """
         Convert SEC filing HTML to PDF.
         
-        Fetches HTML via httpx (SEC allows with proper User-Agent),
-        then renders to PDF via headless Chromium.
+        Checks cache first if metadata is provided. Stores result in cache
+        for future requests.
         
         Args:
             document_url: URL to SEC filing HTML document
+            ticker: Stock ticker (for caching)
+            cik: Company CIK (for caching)
+            accession_number: Filing accession (for caching)
+            form_type: Form type (for caching)
+            filing_date: Filing date (for caching)
+            document_name: Document filename (for caching)
+            use_cache: Whether to use cache (default True)
             
         Returns:
             PDF bytes
         """
+        repo = get_filings_repository()
+        
+        # Check cache if we have the required identifiers
+        if use_cache and cik and accession_number and document_name:
+            cached = repo.get_pdf(cik, accession_number, document_name)
+            if cached:
+                logger.info(f"Returning cached PDF for {document_name}")
+                return cached
+        
+        # Generate PDF
         try:
             # Fetch HTML ourselves with SEC-compliant headers
             html_content = await self.get_filing_html(document_url)
@@ -263,7 +299,22 @@ class SECFilingsService:
                 )
                 
                 await browser.close()
-                return pdf_bytes
+            
+            # Cache the result if we have metadata
+            if (use_cache and ticker and cik and accession_number 
+                    and form_type and filing_date and document_name):
+                repo.save_pdf(
+                    ticker=ticker,
+                    cik=cik,
+                    accession_number=accession_number,
+                    form_type=form_type,
+                    filing_date=filing_date,
+                    document_name=document_name,
+                    pdf_data=pdf_bytes,
+                )
+                logger.info(f"Cached PDF for {ticker} {form_type} ({document_name})")
+            
+            return pdf_bytes
                 
         except SECFilingsError:
             raise

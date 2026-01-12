@@ -398,8 +398,15 @@ export async function fetchCompanyInfo(ticker: string): Promise<CompanyInfoRespo
 
 /**
  * Get the URL to download a filing as PDF.
- * The backend converts SEC HTML to PDF on-demand.
+ * The backend converts SEC HTML to PDF on-demand and caches the result.
  */
-export function getFilingPdfUrl(cik: string, accessionNumber: string, documentFilename: string): string {
-  return `${API_BASE}/api/filings/pdf/${cik}/${accessionNumber}/${documentFilename}`;
+export function getFilingPdfUrl(
+  ticker: string,
+  cik: string,
+  accessionNumber: string,
+  formType: string,
+  filingDate: string,
+  documentFilename: string
+): string {
+  return `${API_BASE}/api/filings/pdf/${ticker}/${cik}/${accessionNumber}/${encodeURIComponent(formType)}/${filingDate}/${documentFilename}`;
 }

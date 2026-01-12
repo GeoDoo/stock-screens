@@ -35,16 +35,6 @@ function getFormBadgeColor(formType: string): string {
   return 'bg-gray-100 text-gray-800';
 }
 
-function extractDocumentInfo(documentUrl: string): { cik: string; accession: string; filename: string } | null {
-  // URL format: https://www.sec.gov/Archives/edgar/data/{cik}/{accession_clean}/{filename}
-  const match = documentUrl.match(/\/edgar\/data\/(\d+)\/(\d+)\/(.+)$/);
-  if (!match) return null;
-  return {
-    cik: match[1],
-    accession: match[2].replace(/(\d{10})(\d{2})(\d+)/, '$1-$2-$3'), // Add dashes back
-    filename: match[3],
-  };
-}
 
 export default function FilingsPage() {
   const [ticker, setTicker] = useState('');
@@ -88,9 +78,8 @@ export default function FilingsPage() {
   }, [ticker, selectedTypes]);
 
   const handleDownloadPdf = useCallback(async (filing: SECFiling) => {
-    const docInfo = extractDocumentInfo(filing.document_url);
-    if (!docInfo) {
-      setError('Invalid filing URL');
+    if (!cik) {
+      setError('CIK not available');
       return;
     }
     
@@ -98,7 +87,14 @@ export default function FilingsPage() {
     setError(null);
     
     try {
-      const pdfUrl = getFilingPdfUrl(docInfo.cik, docInfo.accession, docInfo.filename);
+      const pdfUrl = getFilingPdfUrl(
+        ticker.toUpperCase(),
+        cik,
+        filing.accession_number,
+        filing.form_type,
+        filing.filing_date,
+        filing.document_name
+      );
       
       // Download the PDF
       const response = await fetch(pdfUrl);
@@ -122,7 +118,7 @@ export default function FilingsPage() {
     } finally {
       setDownloadingId(null);
     }
-  }, [ticker]);
+  }, [ticker, cik]);
 
   const toggleType = (type: string) => {
     setSelectedTypes((prev) =>
