@@ -33,6 +33,8 @@ import { ForensicRedFlags } from '../components/ForensicRedFlags';
 import { RedFlagHeatmap } from '../components/RedFlagHeatmap';
 import { TruthBridge } from '../components/TruthBridge';
 import { ForensicTimeline } from '../components/ForensicTimeline';
+import { FinancialAuditGrid } from '../components/FinancialAuditGrid';
+import { ExecutionRiskMatrix } from '../components/ExecutionRiskMatrix';
 import { Layout } from '../components/Layout';
 
 export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string }) {
@@ -43,7 +45,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
   const [selectedFiling, setSelectedFiling] = useState<SECFiling | null>(null);
   const [sections, setSections] = useState<string[]>([]);
   const [selectedSection, setSelectedSection] = useState<string>('');
-  const [compareWithPrevious] = useState(false);
+  const [compareWithPrevious, setCompareWithPrevious] = useState(false);
   const [analysis, setAnalysis] = useState<FilingAnalysisResponse | null>(null);
   const [forensicReport, setForensicReport] = useState<FilingForensicResponse | null>(null);
   const [forensicHistory, setForensicHistory] = useState<ForensicHistoryItem[]>([]);
@@ -129,7 +131,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
     setForensicReport(null); // Clear deep audit report
     try {
       let res;
-      if (compareWithPrevious && selectedSection) {
+      if (compareWithPrevious) {
         // Find previous filing of same type
         const previousFiling = filings.find(f => 
           f.form_type === selectedFiling.form_type && 
@@ -144,7 +146,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
           ticker: symbol,
           currentUrl: selectedFiling.document_url,
           previousUrl: previousFiling.document_url,
-          sectionName: selectedSection
+          sectionName: selectedSection // Can be empty string for full filing
         });
       } else if (selectedSection) {
         res = await analyzeFilingSection({
@@ -252,10 +254,10 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar: Filings List */}
           {!isFocusMode && (
-          <aside className="w-40 bg-white border-r border-gray-100 overflow-y-auto flex flex-col">
-            <div className="p-3 border-b border-gray-100 bg-gray-50/30">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">
+          <aside className="w-32 bg-white border-r border-gray-100 overflow-y-auto flex flex-col shrink-0">
+            <div className="p-2 border-b border-gray-100 bg-gray-50/30">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-[9px] font-black text-gray-400 uppercase tracking-[0.25em]">
                   Archives
                 </h2>
               </div>
@@ -264,7 +266,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                   <button
                     key={type}
                     onClick={() => setFormFilter(type)}
-                    className={`flex-1 py-1 text-[8px] font-black rounded-md transition-all ${
+                    className={`flex-1 py-1 text-[7px] font-black rounded-md transition-all ${
                       formFilter === type 
                         ? 'bg-white text-indigo-600 shadow-sm' 
                         : 'text-gray-400 hover:text-gray-600'
@@ -283,24 +285,24 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                       setSelectedFiling(filing);
                       setAnalysis(null);
                     }}
-                    className={`w-full text-left px-3 py-3 border-b border-gray-50 transition-all ${
+                    className={`w-full text-left px-2.5 py-2.5 border-b border-gray-50 transition-all ${
                       selectedFiling?.accession_number === filing.accession_number
-                        ? 'bg-indigo-50/50 border-r-4 border-r-indigo-600'
+                        ? 'bg-indigo-50/50 border-r-2 border-r-indigo-600'
                         : 'hover:bg-gray-50'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={`px-1 py-0.5 rounded-[3px] text-[8px] font-black uppercase tracking-wider ${
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className={`px-1 py-0.5 rounded-[2px] text-[7px] font-black uppercase tracking-wider ${
                         filing.form_type === '10-K' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700'
                       }`}>
                         {filing.form_type}
                       </span>
-                      <span className="text-[8px] font-black text-gray-400">
+                      <span className="text-[7px] font-black text-gray-400">
                         {new Date(filing.filing_date).getFullYear()}
                       </span>
                     </div>
-                    <p className={`text-[9px] leading-tight line-clamp-1 ${
-                      selectedFiling?.accession_number === filing.accession_number ? 'font-bold text-gray-900' : 'font-medium text-gray-400'
+                    <p className={`text-[8px] leading-tight line-clamp-1 ${
+                      selectedFiling?.accession_number === filing.accession_number ? 'font-black text-gray-900' : 'font-bold text-gray-400'
                     }`}>
                       {new Date(filing.filing_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                     </p>
@@ -370,6 +372,26 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
 
                       <div className="h-4 w-[1px] bg-gray-200" />
 
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                          <div className="relative">
+                            <input
+                              type="checkbox"
+                              checked={compareWithPrevious}
+                              onChange={(e) => setCompareWithPrevious(e.target.checked)}
+                              disabled={analyzing !== 'none'}
+                              className="sr-only peer"
+                            />
+                            <div className="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-indigo-600 transition-colors"></div>
+                          </div>
+                          <span className={`text-[9px] font-black uppercase tracking-widest transition-colors ${compareWithPrevious ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                            YoY Compare
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className="h-4 w-[1px] bg-gray-200" />
+
                       <div className="flex items-center gap-3">
                         <button
                           onClick={runAnalysis}
@@ -406,6 +428,11 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                         <div className="flex items-center gap-3">
                           <FileText className="w-5 h-5 text-gray-400" />
                           <span className="text-sm font-bold text-gray-900">{selectedFiling.document_name}</span>
+                          {!isFocusMode && (
+                            <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest ml-4 border border-gray-100 px-1.5 py-0.5 rounded">
+                              Press 'F' for Focus Mode
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <button
@@ -499,6 +526,29 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                           adjustments={forensicReport.report.adjustments}
                           totalAdjustment={forensicReport.report.forensic_eps_adjustment}
                         />
+
+                        {forensicReport.report.quantitative_audit && (
+                          <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+                              <Brain className="w-4 h-4 text-indigo-600" />
+                              Financial Statement Audit
+                            </h3>
+                            <FinancialAuditGrid audit={forensicReport.report.quantitative_audit} />
+                          </div>
+                        )}
+
+                        {forensicReport.report.quantitative_audit?.margin_growth_sensitivity && (
+                          <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                            <ExecutionRiskMatrix 
+                              margins={forensicReport.report.quantitative_audit.margin_growth_sensitivity.margins}
+                              growthRates={forensicReport.report.quantitative_audit.margin_growth_sensitivity.growth_rates}
+                              matrix={forensicReport.report.quantitative_audit.margin_growth_sensitivity.matrix}
+                              roicFlags={forensicReport.report.quantitative_audit.margin_growth_sensitivity.roic_flags}
+                              baseMargin={forensicReport.report.quantitative_audit.margin_growth_sensitivity.base_margin}
+                              baseGrowth={forensicReport.report.quantitative_audit.margin_growth_sensitivity.base_growth}
+                            />
+                          </div>
+                        )}
                         
                         <RedFlagHeatmap 
                           redFlags={forensicReport.report.red_flags} 
@@ -517,8 +567,19 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                       </div>
                     </div>
                   ) : analysis ? (
-                    <div className="bg-white p-10 rounded-2xl border border-gray-200 shadow-sm">
-                       <ForensicRedFlags analysis={analysis.analysis} />
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                      {analysis.quantitative_audit && (
+                        <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+                            <Brain className="w-4 h-4 text-indigo-600" />
+                            Financial Statement Audit
+                          </h3>
+                          <FinancialAuditGrid audit={analysis.quantitative_audit} />
+                        </div>
+                      )}
+                      <div className="bg-white p-10 rounded-2xl border border-gray-200 shadow-sm">
+                        <ForensicRedFlags analysis={analysis.analysis} />
+                      </div>
                     </div>
                   ) : (
                     <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-sm">

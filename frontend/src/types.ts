@@ -905,6 +905,7 @@ export interface FilingAnalysisResponse {
   analysis: string;
   timestamp: string;
   model: string;
+  quantitative_audit?: QuantitativeAudit | null;
 }
 
 export interface RedFlagCategory {
@@ -921,6 +922,21 @@ export interface EPSAdjustment {
   impact: string;
 }
 
+export interface QuantitativeAudit {
+  sloan_ratio: number | null;
+  altman_z_score: number | null;
+  beneish_m_score: number | null;
+  margin_growth_sensitivity?: {
+    margins: number[];
+    growth_rates: number[];
+    matrix: (number | null)[][];
+    roic_flags: boolean[][];
+    base_margin: number;
+    base_growth: number;
+  } | null;
+  findings: string[];
+}
+
 export interface ForensicReport {
   accounting_consistency_score: number;
   red_flags: RedFlagCategory[];
@@ -928,6 +944,7 @@ export interface ForensicReport {
   reported_eps?: number | null;
   forensic_eps_adjustment: number;
   adjustments: EPSAdjustment[];
+  quantitative_audit?: QuantitativeAudit | null;
   timestamp: string;
   model: string;
 }

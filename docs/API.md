@@ -286,7 +286,7 @@ POST /api/filings/compare-sections
 | `ticker` | string | Yes | Stock ticker symbol |
 | `current_url` | string | Yes | SEC URL of current filing |
 | `previous_url` | string | Yes | SEC URL of previous filing |
-| `section_name` | string | Yes | Name of section to compare |
+| `section_name` | string | null | No | Name of section to compare (omit for full filing) |
 
 
 
@@ -295,7 +295,7 @@ POST /api/filings/compare-sections
 ### Run Forensic Audit
 
 Perform a complete institutional-grade forensic audit of a filing.
-Returns a structured report with an Accounting Consistency Score and category red flags.
+Returns a structured report with textual red flags and quantitative statement analysis.
 
 ```
 POST /api/filings/{ticker}/forensic-audit
@@ -308,6 +308,7 @@ POST /api/filings/{ticker}/forensic-audit
 | `ticker` | string | Yes |  |
 | `document_url` | string | Yes | SEC URL of the filing HTML |
 | `accession_number` | string | null | No | SEC accession number for persistence |
+| `provider` | string | No | Provider for numerical analysis (default: `fmp`) |
 
 
 **Response**
@@ -340,6 +341,15 @@ POST /api/filings/{ticker}/forensic-audit
         "impact": "string"
       }
     ],
+    "quantitative_audit": {
+      "sloan_ratio": 0.0,
+      "altman_z_score": 0.0,
+      "beneish_m_score": 0.0,
+      "margin_growth_sensitivity": {},
+      "findings": [
+        "string"
+      ]
+    },
     "timestamp": "2024-01-15T10:30:00Z",
     "model": "string"
   }
@@ -470,6 +480,7 @@ GET /api/filings/pdf/{ticker}/{cik}/{accession_number}/{form_type}/{filing_date}
 Run forensic analysis on a specific SEC filing.
 
 This uses the 'Institutional-Grade' prompt suite to detect shenanigans.
+Now includes a fast quantitative audit (iXBRL) even if LLM is limited.
 
 ```
 POST /api/filings/{ticker}/analyze
@@ -482,6 +493,7 @@ POST /api/filings/{ticker}/analyze
 | `ticker` | string | Yes |  |
 | `document_url` | string | Yes | SEC URL of the filing HTML |
 | `query` | string | null | No | Optional custom query for analysis |
+| `provider` | string | No | Provider for numerical analysis (default: `fmp`) |
 
 
 
