@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-12 18:03
+> Last updated: 2026-01-12 18:04
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -156,6 +156,22 @@ Weighted Average Cost of Capital calculator.
               │   DB    │  │  & Models   │
               └─────────┘  └─────────────┘
 ```
+
+## Database Schema
+
+The application uses a single SQLite database (`stock_screens.db`) with the following tables:
+
+| Table | Purpose |
+|-------|---------|
+| `api_calls` | Rate limiting call records |
+| `api_limited` | Rate limiting status flags |
+| `audit_entries` | Assumption audit trail entries |
+| `audit_changes` | Individual field changes per audit entry |
+| `memos` | Investment memos with thesis and assumptions |
+| `memo_scenarios` | Scenarios at memo creation time |
+| `memo_market_snapshots` | Periodic market tracking |
+| `memo_post_mortems` | Post-mortem reviews |
+| `filing_pdfs` | Cached SEC filing PDFs |
 
 ## Test Coverage
 

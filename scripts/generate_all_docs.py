@@ -183,6 +183,22 @@ Stock Screens is a full-stack stock analysis application with:
               └─────────┘  └─────────────┘
 ```
 
+## Database Schema
+
+The application uses a single SQLite database (`stock_screens.db`) with the following tables:
+
+| Table | Purpose |
+|-------|---------|
+| `api_calls` | Rate limiting call records |
+| `api_limited` | Rate limiting status flags |
+| `audit_entries` | Assumption audit trail entries |
+| `audit_changes` | Individual field changes per audit entry |
+| `memos` | Investment memos with thesis and assumptions |
+| `memo_scenarios` | Scenarios at memo creation time |
+| `memo_market_snapshots` | Periodic market tracking |
+| `memo_post_mortems` | Post-mortem reviews |
+| `filing_pdfs` | Cached SEC filing PDFs |
+
 ## Test Coverage
 
 | Layer | Test Files | Framework |
