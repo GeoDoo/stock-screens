@@ -4,6 +4,7 @@ Filings Repository - SQLite persistence for SEC filing PDFs.
 Caches generated PDFs to avoid repeated expensive HTML-to-PDF conversions.
 """
 import logging
+import zlib
 from dataclasses import dataclass
 from datetime import datetime, timezone, date
 from typing import Optional
@@ -110,7 +111,12 @@ class FilingsRepository:
                     f"Cache hit for {document_name} (CIK: {cik}, "
                     f"Accession: {accession_number})"
                 )
-                return row["pdf_data"]
+                try:
+                    # Decompress data on retrieval
+                    return zlib.decompress(row["pdf_data"])
+                except zlib.error:
+                    # Fallback for uncompressed legacy data
+                    return row["pdf_data"]
             
             return None
     
@@ -125,11 +131,15 @@ class FilingsRepository:
         pdf_data: bytes,
     ) -> CachedFiling:
         """
-        Save a PDF to the cache.
+        Save a PDF to the cache with Zlib compression.
         
         If the PDF already exists, it will be replaced.
         """
+        # Compress data before saving
+        compressed_data = zlib.compress(pdf_data, level=9)
         pdf_size_kb = len(pdf_data) // 1024
+        compressed_size_kb = len(compressed_data) // 1024
+        
         created_at = datetime.now(timezone.utc)
         
         with get_connection(self.db_path) as conn:
@@ -150,8 +160,8 @@ class FilingsRepository:
                     form_type,
                     filing_date.isoformat(),
                     document_name,
-                    pdf_data,
-                    pdf_size_kb,
+                    compressed_data,
+                    pdf_size_kb, # Store original size for metadata
                     created_at.isoformat(),
                 ),
             )
@@ -162,7 +172,8 @@ class FilingsRepository:
             
             logger.info(
                 f"Cached PDF for {ticker} {form_type} ({document_name}): "
-                f"{pdf_size_kb} KB"
+                f"{pdf_size_kb} KB -> {compressed_size_kb} KB "
+                f"({round((1 - compressed_size_kb/pdf_size_kb)*100, 1) if pdf_size_kb > 0 else 0}% saving)"
             )
             
             return CachedFiling(

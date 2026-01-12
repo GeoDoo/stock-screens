@@ -23,6 +23,7 @@ class ResetSchedule(Enum):
     """When the rate limit resets."""
     DAILY = "daily"        # Resets at midnight UTC
     PER_MINUTE = "minute"  # Rolling 1-minute window
+    PER_SECOND = "second"  # Rolling 1-second window
 
 
 class ProviderConfig:
@@ -37,6 +38,8 @@ PROVIDER_CONFIGS: Dict[str, ProviderConfig] = {
     "fmp": ProviderConfig(limit=250, reset_schedule=ResetSchedule.DAILY),
     "yahoo": ProviderConfig(limit=2000, reset_schedule=ResetSchedule.DAILY),
     "massive": ProviderConfig(limit=5, reset_schedule=ResetSchedule.PER_MINUTE),
+    "sec": ProviderConfig(limit=10, reset_schedule=ResetSchedule.PER_SECOND),
+    "gemini": ProviderConfig(limit=15, reset_schedule=ResetSchedule.PER_MINUTE),
 }
 
 
@@ -96,6 +99,9 @@ class RateLimiterSQLite:
         elif config.reset_schedule == ResetSchedule.PER_MINUTE:
             # 1 minute ago (rolling window)
             return now - timedelta(minutes=1)
+        elif config.reset_schedule == ResetSchedule.PER_SECOND:
+            # 1 second ago (rolling window)
+            return now - timedelta(seconds=1)
         else:
             return now.replace(hour=0, minute=0, second=0, microsecond=0)
     
@@ -207,6 +213,11 @@ class RateLimiterSQLite:
                     conn.execute("DELETE FROM api_limited WHERE provider = ?", (provider,))
                     conn.commit()
                     return False
+            elif config.reset_schedule == ResetSchedule.PER_SECOND:
+                if (now - limited_at).total_seconds() >= 1:
+                    conn.execute("DELETE FROM api_limited WHERE provider = ?", (provider,))
+                    conn.commit()
+                    return False
             
             return True
     
@@ -233,6 +244,10 @@ class RateLimiterSQLite:
                 return int((tomorrow - now).total_seconds())
             elif config.reset_schedule == ResetSchedule.PER_MINUTE:
                 reset_time = limited_at + timedelta(seconds=60)
+                remaining = (reset_time - now).total_seconds()
+                return int(max(0, remaining))
+            elif config.reset_schedule == ResetSchedule.PER_SECOND:
+                reset_time = limited_at + timedelta(seconds=1)
                 remaining = (reset_time - now).total_seconds()
                 return int(max(0, remaining))
             

@@ -2,7 +2,7 @@
 
 > **Auto-generated** from package files.
 > 
-> Last updated: 2026-01-12 16:58
+> Last updated: 2026-01-12 17:12
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -52,13 +52,14 @@ npm run dev
 
 | Package | Version |
 |---------|---------|
+| `lucide-react` | ^0.562.0 |
 | `react` | ^19.2.0 |
 | `react-dom` | ^19.2.0 |
 | `react-router-dom` | ^7.12.0 |
 
 ## Running Tests
 
-### Backend Tests (34 test files)
+### Backend Tests (35 test files)
 
 ```bash
 cd backend
@@ -69,7 +70,7 @@ pytest --tb=short -q      # Quick summary
 pytest tests/test_api.py  # Specific file
 ```
 
-### Frontend Tests (23 test files)
+### Frontend Tests (24 test files)
 
 ```bash
 cd frontend
