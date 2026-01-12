@@ -110,7 +110,7 @@ def check_required_sections():
         "README.md": ["Quick Start", "Features", "Architecture"],
         "API.md": [],  # Auto-generated, just check it exists and has content
         "ARCHITECTURE.md": ["Overview", "Data Flow", "Database Schema"],
-        "DEVELOPMENT.md": ["Prerequisites", "Testing", "Code Style"],
+        "DEVELOPMENT.md": ["Prerequisites", "Running Tests", "Code Style"],
         "DCF_MODEL.md": ["Free Cash Flow", "WACC", "Terminal Value"],
     }
     
