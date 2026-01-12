@@ -367,7 +367,7 @@ export async function closeMemo(params: CloseMemoParams): Promise<void> {
 // SEC Filings endpoints (Phase 1: Forensic Intelligence Roadmap)
 // ============================================================================
 
-import type { FilingsListResponse, CompanyInfoResponse } from '../types';
+import type { FilingsListResponse, CompanyInfoResponse, FilingAnalysisResponse } from '../types';
 
 export interface FetchFilingsParams {
   ticker: string;
@@ -409,4 +409,26 @@ export function getFilingPdfUrl(
   documentFilename: string
 ): string {
   return `${API_BASE}/api/filings/pdf/${ticker}/${cik}/${accessionNumber}/${encodeURIComponent(formType)}/${filingDate}/${documentFilename}`;
+}
+
+export interface AnalyzeFilingParams {
+  ticker: string;
+  documentUrl: string;
+  query?: string;
+}
+
+export async function analyzeFiling(
+  params: AnalyzeFilingParams
+): Promise<FilingAnalysisResponse> {
+  const query = new URLSearchParams();
+  query.set('document_url', params.documentUrl);
+  if (params.query) {
+    query.set('query', params.query);
+  }
+  
+  const res = await fetch(
+    `${API_BASE}/api/filings/${params.ticker}/analyze?${query.toString()}`,
+    { method: 'POST' }
+  );
+  return handleResponse<FilingAnalysisResponse>(res);
 }
