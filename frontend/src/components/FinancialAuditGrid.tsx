@@ -187,7 +187,7 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
             ))}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
