@@ -926,6 +926,21 @@ export interface QuantitativeAudit {
   sloan_ratio: number | null;
   altman_z_score: number | null;
   beneish_m_score: number | null;
+  
+  // Detailed Ratios
+  liquidity_ratios: Record<string, number | null>;
+  solvency_ratios: Record<string, number | null>;
+  efficiency_ratios: Record<string, number | null>;
+  profitability_ratios: Record<string, number | null>;
+  
+  // Corrections
+  accounting_corrections: {
+    name: string;
+    impact_on_ebit: number;
+    impact_on_assets: number;
+    description: string;
+  }[];
+
   margin_growth_sensitivity?: {
     margins: number[];
     growth_rates: number[];

@@ -345,6 +345,13 @@ POST /api/filings/{ticker}/forensic-audit
       "sloan_ratio": 0.0,
       "altman_z_score": 0.0,
       "beneish_m_score": 0.0,
+      "liquidity_ratios": {},
+      "solvency_ratios": {},
+      "efficiency_ratios": {},
+      "profitability_ratios": {},
+      "accounting_corrections": [
+        {}
+      ],
       "margin_growth_sensitivity": {},
       "findings": [
         "string"

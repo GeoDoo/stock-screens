@@ -33,6 +33,16 @@ class QuantitativeAudit(BaseModel):
     sloan_ratio: Optional[float] = Field(None, description="Accrual quality metric")
     altman_z_score: Optional[float] = Field(None, description="Bankruptcy risk score")
     beneish_m_score: Optional[float] = Field(None, description="Earnings manipulation risk")
+    
+    # Detailed Ratios
+    liquidity_ratios: Dict[str, Optional[float]] = Field(default_factory=dict)
+    solvency_ratios: Dict[str, Optional[float]] = Field(default_factory=dict)
+    efficiency_ratios: Dict[str, Optional[float]] = Field(default_factory=dict)
+    profitability_ratios: Dict[str, Optional[float]] = Field(default_factory=dict)
+    
+    # Corrections / Adjustments
+    accounting_corrections: List[Dict[str, Any]] = Field(default_factory=list)
+    
     margin_growth_sensitivity: Optional[Dict[str, Any]] = Field(None, description="Sensitivity matrix for execution risk")
     findings: List[str] = Field(default_factory=list, description="Automated numerical findings")
 
