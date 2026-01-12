@@ -729,6 +729,30 @@ class DataExtractor:
         values = self._get_history(self.cash_flow, "capitalExpenditure")
         return [abs(v) for v in values]
 
+    def working_capital_history(self) -> List[float]:
+        """
+        Historical Non-Cash Working Capital (oldest first).
+        
+        Formula: (Current Assets - Cash) - (Current Liabilities - Short-term Debt)
+        """
+        if not self.balance_sheet:
+            return []
+            
+        # Filter to annual-only
+        annual_bs = [s for s in self.balance_sheet if self._is_annual_period(s)]
+        
+        results = []
+        for stmt in reversed(annual_bs):
+            assets = stmt.get("totalCurrentAssets")
+            liabilities = stmt.get("totalCurrentLiabilities")
+            
+            if assets is not None and liabilities is not None:
+                cash = stmt.get("cashAndCashEquivalents") or 0
+                st_debt = stmt.get("shortTermDebt") or 0
+                results.append((assets - cash) - (liabilities - st_debt))
+                
+        return results
+
     def get_full_history(self, statement_key: str, metric_key: str) -> List[float]:
         """
         Get full historical values for a metric (oldest first).

@@ -127,6 +127,12 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
             "netIncome": facts.get("net_income"),
             "grossProfit": facts.get("gross_profit"),
             "operatingIncome": facts.get("ebit") or facts.get("operating_income"),
+            "costOfRevenue": facts.get("cost_of_revenue"),
+            "interestExpense": facts.get("interest_expense"),
+            "incomeTaxExpense": facts.get("tax_expense"),
+            "incomeBeforeTax": facts.get("ebt"),
+            "weightedAverageShsOut": facts.get("shares"),
+            "weightedAverageShsOutDil": facts.get("shares_diluted"),
         })
         
         balance_sheets.append({
@@ -134,8 +140,12 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
             "period": "FY",
             "totalAssets": facts.get("total_assets"),
             "totalLiabilities": facts.get("total_liabilities"),
+            "totalStockholdersEquity": facts.get("equity"),
+            "totalDebt": facts.get("total_debt") or ((facts.get("short_term_debt") or 0) + (facts.get("long_term_debt") or 0)),
             "totalCurrentAssets": facts.get("current_assets"),
             "totalCurrentLiabilities": facts.get("current_liabilities"),
+            "shortTermDebt": facts.get("short_term_debt"),
+            "longTermDebt": facts.get("long_term_debt"),
             "inventory": facts.get("inventory"),
             "netReceivables": facts.get("accounts_receivable"),
             "retainedEarnings": facts.get("retained_earnings"),
@@ -143,6 +153,7 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
             "cashAndCashEquivalents": facts.get("cash"),
             "goodwill": facts.get("goodwill"),
             "intangibleAssets": facts.get("intangibles"),
+            "accountPayables": facts.get("accounts_payable"),
         })
         
         cash_flows.append({
@@ -150,6 +161,9 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
             "period": "FY",
             "operatingCashFlow": facts.get("operating_cash_flow"),
             "capitalExpenditure": facts.get("capex"),
+            "depreciationAndAmortization": facts.get("da"),
+            "stockBasedCompensation": facts.get("sbc"),
+            "dividendsPaid": facts.get("dividends"),
         })
     
     return {

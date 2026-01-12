@@ -24,23 +24,43 @@ class FilingParser:
 
     # Common US-GAAP taxonomy tags for core financial metrics
     XBRL_MAPPINGS = {
-        "net_income": ["us-gaap:NetIncomeLoss", "us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic"],
-        "revenue": ["us-gaap:Revenues", "us-gaap:SalesRevenueNet", "us-gaap:TotalRevenuesAndOtherIncome"],
+        "net_income": ["us-gaap:NetIncomeLoss", "us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic", "us-gaap:ProfitLoss"],
+        "revenue": [
+            "us-gaap:Revenues", 
+            "us-gaap:SalesRevenueNet", 
+            "us-gaap:TotalRevenuesAndOtherIncome",
+            "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+            "us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax"
+        ],
         "operating_cash_flow": ["us-gaap:NetCashProvidedByUsedInOperatingActivities"],
-        "capex": ["us-gaap:PaymentsToAcquirePropertyPlantAndEquipment", "us-gaap:CapitalExpenditures"],
+        "capex": ["us-gaap:PaymentsToAcquirePropertyPlantAndEquipment", "us-gaap:CapitalExpenditures", "us-gaap:PaymentsToAcquireProductiveAssets"],
         "total_assets": ["us-gaap:Assets"],
-        "total_liabilities": ["us-gaap:Liabilities"],
+        "total_liabilities": ["us-gaap:Liabilities", "us-gaap:LiabilitiesAndStockholdersEquity"],
         "current_assets": ["us-gaap:AssetsCurrent"],
         "current_liabilities": ["us-gaap:LiabilitiesCurrent"],
-        "inventory": ["us-gaap:InventoryNet"],
-        "accounts_receivable": ["us-gaap:AccountsReceivableNetCurrent"],
+        "inventory": ["us-gaap:InventoryNet", "us-gaap:InventoryNetCurrent"],
+        "accounts_receivable": ["us-gaap:AccountsReceivableNetCurrent", "us-gaap:ReceivablesNetCurrent"],
         "retained_earnings": ["us-gaap:RetainedEarningsAccumulatedDeficit"],
         "ppe_net": ["us-gaap:PropertyPlantAndEquipmentNet"],
         "goodwill": ["us-gaap:Goodwill"],
         "intangibles": ["us-gaap:IntangibleAssetsNetExcludingGoodwill"],
         "gross_profit": ["us-gaap:GrossProfit"],
         "operating_income": ["us-gaap:OperatingIncomeLoss"],
-        "ebit": ["us-gaap:OperatingIncomeLoss"], # Often same as operating income
+        "ebit": ["us-gaap:OperatingIncomeLoss"],
+        "interest_expense": ["us-gaap:InterestExpense", "us-gaap:InterestExpenseDebt"],
+        "tax_expense": ["us-gaap:IncomeTaxExpenseBenefit"],
+        "ebt": ["us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest"],
+        "cost_of_revenue": ["us-gaap:CostOfRevenue", "us-gaap:CostOfGoodsAndServicesSold"],
+        "da": ["us-gaap:DepreciationDepletionAndAmortization", "us-gaap:DepreciationAndAmortization"],
+        "sbc": ["us-gaap:ShareBasedCompensation", "us-gaap:AllocatedShareBasedCompensationExpense"],
+        "dividends": ["us-gaap:PaymentsOfDividends", "us-gaap:PaymentsOfDividendsCommonStock"],
+        "short_term_debt": ["us-gaap:DebtCurrent", "us-gaap:ShortTermBorrowings", "us-gaap:LongTermDebtCurrent"],
+        "long_term_debt": ["us-gaap:LongTermDebtNoncurrent", "us-gaap:LongTermDebt"],
+        "total_debt": ["us-gaap:DebtAndCapitalLeaseObligations", "us-gaap:DebtInstrumentCarryingAmount"],
+        "equity": ["us-gaap:StockholdersEquity"],
+        "shares": ["us-gaap:WeightedAverageNumberOfSharesOutstandingBasic", "us-gaap:CommonStockSharesOutstanding"],
+        "shares_diluted": ["us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding", "us-gaap:WeightedAverageNumberOfSharesOutstandingDiluted"],
+        "accounts_payable": ["us-gaap:AccountsPayableCurrent", "us-gaap:AccountsPayableNetCurrent"],
     }
 
     def clean_html(self, html: str) -> str:
