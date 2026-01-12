@@ -162,9 +162,9 @@ async def analyze_filing(
         
         # 2. Run Forensic Scan
         if query:
-            result = analyzer.analyze(html_content, query)
+            result = await analyzer.analyze(html_content, query)
         else:
-            result = analyzer.extract_red_flags(html_content)
+            result = await analyzer.extract_red_flags(html_content)
             
         return {
             "ticker": ticker.upper(),

@@ -137,7 +137,7 @@ class FilingsRepository:
         """
         # Compress data before saving
         compressed_data = zlib.compress(pdf_data, level=9)
-        pdf_size_kb = len(pdf_data) // 1024
+        original_size_kb = len(pdf_data) // 1024
         compressed_size_kb = len(compressed_data) // 1024
         
         created_at = datetime.now(timezone.utc)
@@ -146,6 +146,7 @@ class FilingsRepository:
             cursor = conn.cursor()
             
             # Use INSERT OR REPLACE to handle duplicates
+            # Store compressed_size_kb to accurately reflect database footprint (P0 Fix)
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO filing_pdfs (
@@ -161,7 +162,7 @@ class FilingsRepository:
                     filing_date.isoformat(),
                     document_name,
                     compressed_data,
-                    pdf_size_kb, # Store original size for metadata
+                    compressed_size_kb,
                     created_at.isoformat(),
                 ),
             )
@@ -172,8 +173,8 @@ class FilingsRepository:
             
             logger.info(
                 f"Cached PDF for {ticker} {form_type} ({document_name}): "
-                f"{pdf_size_kb} KB -> {compressed_size_kb} KB "
-                f"({round((1 - compressed_size_kb/pdf_size_kb)*100, 1) if pdf_size_kb > 0 else 0}% saving)"
+                f"{original_size_kb} KB -> {compressed_size_kb} KB "
+                f"({round((1 - compressed_size_kb/original_size_kb)*100, 1) if original_size_kb > 0 else 0}% saving)"
             )
             
             return CachedFiling(
@@ -185,7 +186,7 @@ class FilingsRepository:
                 filing_date=filing_date,
                 document_name=document_name,
                 pdf_data=pdf_data,
-                pdf_size_kb=pdf_size_kb,
+                pdf_size_kb=compressed_size_kb,
                 created_at=created_at,
             )
     

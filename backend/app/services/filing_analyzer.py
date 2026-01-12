@@ -109,14 +109,14 @@ class FilingAnalyzer:
         
         rate_limiter.record_call(self._provider_name)
     
-    def analyze(
+    async def analyze(
         self,
         filing_text: str,
         query: str,
         system_prompt: Optional[str] = None,
     ) -> AnalysisResult:
         """
-        Analyze a filing section with a specific query.
+        Analyze a filing section with a specific query (Async).
         
         Args:
             filing_text: The SEC filing text (can be very long - 1M context)
@@ -153,7 +153,8 @@ ANALYSIS REQUEST: {query}
 Provide a detailed, specific analysis with evidence from the filing."""
 
         try:
-            response = self.client.models.generate_content(
+            # P0 Bug Fix: Use asynchronous client to avoid blocking the event loop
+            response = await self.client.aio.models.generate_content(
                 model=self.MODEL,
                 contents=prompt,
                 config=types.GenerateContentConfig(
@@ -166,7 +167,7 @@ Provide a detailed, specific analysis with evidence from the filing."""
                 query=query,
                 response=response.text,
                 model=self.MODEL,
-                tokens_used=None,  # Token counting requires additional API call
+                tokens_used=None,
             )
             
         except Exception as e:
@@ -180,14 +181,14 @@ Provide a detailed, specific analysis with evidence from the filing."""
             logger.error(f"Analysis failed: {e}")
             raise AnalyzerError(f"Analysis failed: {e}")
     
-    def compare_filings(
+    async def compare_filings(
         self,
         current_filing: str,
         previous_filing: str,
         section: str = "entire filing",
     ) -> AnalysisResult:
         """
-        Compare two filings to identify changes.
+        Compare two filings to identify changes (Async).
         
         Args:
             current_filing: This year's filing text
@@ -209,17 +210,17 @@ Identify:
 4. Removed or added language
 5. Any red flags"""
 
-        return self.analyze(
+        return await self.analyze(
             filing_text="",  # Text is in query
             query=query,
             system_prompt="You are comparing two SEC filings year-over-year. Focus on material changes.",
         )
     
-    def extract_red_flags(self, filing_text: str) -> AnalysisResult:
-        """Quick scan for common accounting red flags using FORENSIC_PROMPT_SUITE."""
+    async def extract_red_flags(self, filing_text: str) -> AnalysisResult:
+        """Quick scan for common accounting red flags using FORENSIC_PROMPT_SUITE (Async)."""
         combined_query = "\n".join([f"SECTION {k.upper()}:\n{v}" for k, v in FORENSIC_PROMPT_SUITE.items()])
         
-        return self.analyze(
+        return await self.analyze(
             filing_text=filing_text,
             query=f"""Scan this filing for institutional-grade red flags:
 
