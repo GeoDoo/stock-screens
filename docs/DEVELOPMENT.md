@@ -2,7 +2,7 @@
 
 > **Auto-generated** from package files.
 > 
-> Last updated: 2026-01-12 10:07
+> Last updated: 2026-01-12 10:16
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -44,6 +44,7 @@ npm run dev
 | `pytest` | 8.0.0 |
 | `pytest-asyncio` | 0.21.0 |
 | `yfinance` | latest |
+| `pandas` | latest |
 
 ## Frontend Dependencies
 
