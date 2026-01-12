@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import date
 from app.services.sec_filings import SECFilingsService, Filing, SECFilingsError
 from app.services.filing_analyzer import FilingAnalyzer, AnalyzerError, RateLimitError
@@ -46,27 +46,30 @@ class TestFilingAnalyzer:
         assert "accounting_forensics" in FORENSIC_PROMPT_SUITE
         assert "Sloan Ratio" in FORENSIC_PROMPT_SUITE["accounting_forensics"]
 
+    @pytest.mark.asyncio
     @patch("app.services.rate_limiter_sqlite.rate_limiter.is_at_limit")
-    def test_rate_limit_handling(self, mock_limit, analyzer):
+    async def test_rate_limit_handling(self, mock_limit, analyzer):
         """Test that the analyzer respects the central SQLite rate limiter."""
         mock_limit.return_value = True
         
         with pytest.raises(RateLimitError) as exc:
-            analyzer.extract_red_flags("test text")
+            await analyzer.extract_red_flags("test text")
         
         assert "Rate limit exceeded" in str(exc.value)
 
+    @pytest.mark.asyncio
     @patch("app.services.rate_limiter_sqlite.rate_limiter.is_at_limit", return_value=False)
     @patch("app.services.rate_limiter_sqlite.rate_limiter.record_call")
-    def test_analysis_flow(self, mock_record, mock_limit, analyzer):
+    async def test_analysis_flow(self, mock_record, mock_limit, analyzer):
         """Test the analysis flow calls the Gemini client and records usage."""
         # Mock the Gemini client response
         mock_response = MagicMock()
         mock_response.text = "Identified potential revenue recognition shift in Note 3."
         
-        analyzer.client.models.generate_content = MagicMock(return_value=mock_response)
+        # Mock the ASYNC client call using AsyncMock
+        analyzer.client.aio.models.generate_content = AsyncMock(return_value=mock_response)
         
-        result = analyzer.extract_red_flags("fake filing text")
+        result = await analyzer.extract_red_flags("fake filing text")
         
         assert "revenue recognition" in result.response.lower()
         assert mock_record.called
