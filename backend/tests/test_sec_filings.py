@@ -21,11 +21,13 @@ class TestFilingDataclass:
             filing_date=date(2025, 10, 31),
             description="Annual Report",
             document_url="https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm",
+            document_name="aapl-20250927.htm",
             cik="0000320193",
             ticker="AAPL",
         )
         assert filing.form_type == "10-K"
         assert filing.ticker == "AAPL"
+        assert filing.document_name == "aapl-20250927.htm"
     
     def test_viewer_url(self):
         filing = Filing(
@@ -34,6 +36,7 @@ class TestFilingDataclass:
             filing_date=date(2025, 10, 31),
             description="Annual Report",
             document_url="https://example.com",
+            document_name="aapl-20250927.htm",
             cik="0000320193",
             ticker="AAPL",
         )
@@ -172,6 +175,7 @@ class TestFilingsRouter:
                 filing_date=date(2025, 10, 31),
                 description="10-K",
                 document_url="https://example.com/doc.htm",
+                document_name="doc.htm",
                 cik="0000320193",
                 ticker="AAPL",
             )

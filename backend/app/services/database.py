@@ -7,6 +7,11 @@ Tables:
 - api_limited: Rate limiting status flags
 - audit_entries: Assumption audit trail entries
 - audit_changes: Individual field changes per audit entry
+- memos: Investment memos with thesis and assumptions
+- memo_scenarios: Scenarios at memo creation time
+- memo_market_snapshots: Periodic market tracking
+- memo_post_mortems: Post-mortem reviews
+- filing_pdfs: Cached SEC filing PDFs (HTML-to-PDF conversions)
 
 Usage:
     from app.services.database import get_connection, DEFAULT_DB_PATH

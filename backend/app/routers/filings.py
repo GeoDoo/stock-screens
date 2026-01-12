@@ -54,6 +54,7 @@ async def get_filings(
                     "filing_date": f.filing_date.isoformat(),
                     "description": f.description,
                     "document_url": f.document_url,
+                    "document_name": f.document_name,
                     "viewer_url": f.viewer_url,
                 }
                 for f in filings
@@ -79,29 +80,52 @@ async def get_company_info(ticker: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/pdf/{cik}/{accession_number}/{document}")
+@router.get("/pdf/{ticker}/{cik}/{accession_number}/{form_type}/{filing_date}/{document}")
 async def download_filing_pdf(
+    ticker: str,
     cik: str,
     accession_number: str,
+    form_type: str,
+    filing_date: str,
     document: str,
 ):
     """
     Download SEC filing as PDF.
     
-    Converts the SEC HTML filing to PDF on-demand.
+    Converts the SEC HTML filing to PDF on-demand. PDFs are cached
+    in the database to avoid repeated conversions.
     
     Args:
+        ticker: Stock ticker symbol
         cik: Company CIK number
         accession_number: Filing accession number
+        form_type: SEC form type (e.g., "10-K")
+        filing_date: Filing date (YYYY-MM-DD)
         document: Document filename (e.g., "aapl-20230930.htm")
     """
+    from datetime import date as date_type
+    
     # Build the SEC document URL
     cik_num = cik.lstrip("0")
     accession_clean = accession_number.replace("-", "")
     document_url = f"https://www.sec.gov/Archives/edgar/data/{cik_num}/{accession_clean}/{document}"
     
+    # Parse filing date
     try:
-        pdf_bytes = await sec_filings_service.get_filing_pdf(document_url)
+        parsed_date = date_type.fromisoformat(filing_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {filing_date}")
+    
+    try:
+        pdf_bytes = await sec_filings_service.get_filing_pdf(
+            document_url,
+            ticker=ticker.upper(),
+            cik=cik,
+            accession_number=accession_number,
+            form_type=form_type,
+            filing_date=parsed_date,
+            document_name=document,
+        )
         
         # Generate filename
         pdf_filename = document.rsplit(".", 1)[0] + ".pdf"

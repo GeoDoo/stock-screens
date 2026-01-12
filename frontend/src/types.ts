@@ -879,6 +879,7 @@ export interface SECFiling {
   filing_date: string;
   description: string;
   document_url: string;
+  document_name: string;
   viewer_url: string;
 }
 

@@ -277,23 +277,30 @@ GET /api/filings/{ticker}/info
 
 Download SEC filing as PDF.
 
-Converts the SEC HTML filing to PDF on-demand.
+Converts the SEC HTML filing to PDF on-demand. PDFs are cached
+in the database to avoid repeated conversions.
 
 Args:
+    ticker: Stock ticker symbol
     cik: Company CIK number
     accession_number: Filing accession number
+    form_type: SEC form type (e.g., "10-K")
+    filing_date: Filing date (YYYY-MM-DD)
     document: Document filename (e.g., "aapl-20230930.htm")
 
 ```
-GET /api/filings/pdf/{cik}/{accession_number}/{document}
+GET /api/filings/pdf/{ticker}/{cik}/{accession_number}/{form_type}/{filing_date}/{document}
 ```
 
 **Parameters**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
+| `ticker` | string | Yes |  |
 | `cik` | string | Yes |  |
 | `accession_number` | string | Yes |  |
+| `form_type` | string | Yes |  |
+| `filing_date` | string | Yes |  |
 | `document` | string | Yes |  |
 
 
