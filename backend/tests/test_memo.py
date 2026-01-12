@@ -208,61 +208,66 @@ class TestMemoRepository:
             what_would_change_mind="Services growth stalls below 10%",
         )
     
-    def test_save_and_retrieve_memo(self, repo, sample_memo):
+    @pytest.mark.asyncio
+    async def test_save_and_retrieve_memo(self, repo, sample_memo):
         """Should save memo and retrieve it with ID."""
-        saved = repo.save_memo(sample_memo)
+        saved = await repo.save_memo(sample_memo)
         
         assert saved.id is not None
         assert saved.symbol == "AAPL"
         assert saved.title == "AI iPhone Cycle"
         
         # Retrieve it
-        retrieved = repo.get_memo(saved.id)
+        retrieved = await repo.get_memo(saved.id)
         assert retrieved is not None
         assert retrieved.symbol == "AAPL"
         assert retrieved.conviction == Conviction.HIGH
         assert len(retrieved.scenarios) == 3
     
-    def test_list_memos_for_symbol(self, repo, sample_memo):
+    @pytest.mark.asyncio
+    async def test_list_memos_for_symbol(self, repo, sample_memo):
         """Should list all memos for a symbol."""
         # Save two memos for AAPL
-        repo.save_memo(sample_memo)
+        await repo.save_memo(sample_memo)
         
         sample_memo.title = "Services Growth Story"
         sample_memo.id = None
-        repo.save_memo(sample_memo)
+        await repo.save_memo(sample_memo)
         
-        memos = repo.list_memos(symbol="AAPL")
+        memos = await repo.list_memos(symbol="AAPL")
         assert len(memos) == 2
     
-    def test_list_all_memos(self, repo, sample_memo):
+    @pytest.mark.asyncio
+    async def test_list_all_memos(self, repo, sample_memo):
         """Should list all memos across symbols."""
-        repo.save_memo(sample_memo)
+        await repo.save_memo(sample_memo)
         
         sample_memo.symbol = "MSFT"
         sample_memo.title = "Cloud Growth"
         sample_memo.id = None
-        repo.save_memo(sample_memo)
+        await repo.save_memo(sample_memo)
         
-        all_memos = repo.list_memos()
+        all_memos = await repo.list_memos()
         assert len(all_memos) == 2
     
-    def test_list_active_memos_only(self, repo, sample_memo):
+    @pytest.mark.asyncio
+    async def test_list_active_memos_only(self, repo, sample_memo):
         """Should filter by status."""
-        saved = repo.save_memo(sample_memo)
+        saved = await repo.save_memo(sample_memo)
         
         # Close the memo
-        repo.close_memo(saved.id, MemoStatus.CLOSED_WIN, "Thesis played out")
+        await repo.close_memo(saved.id, MemoStatus.CLOSED_WIN, "Thesis played out")
         
-        active = repo.list_memos(status=MemoStatus.ACTIVE)
+        active = await repo.list_memos(status=MemoStatus.ACTIVE)
         assert len(active) == 0
         
-        closed = repo.list_memos(status=MemoStatus.CLOSED_WIN)
+        closed = await repo.list_memos(status=MemoStatus.CLOSED_WIN)
         assert len(closed) == 1
     
-    def test_add_post_mortem(self, repo, sample_memo):
+    @pytest.mark.asyncio
+    async def test_add_post_mortem(self, repo, sample_memo):
         """Should add post-mortem to memo."""
-        saved = repo.save_memo(sample_memo)
+        saved = await repo.save_memo(sample_memo)
         
         post_mortem = PostMortem(
             id=None,
@@ -274,68 +279,72 @@ class TestMemoRepository:
             iv_at_time=225.0,
         )
         
-        saved_pm = repo.add_post_mortem(post_mortem)
+        saved_pm = await repo.add_post_mortem(post_mortem)
         assert saved_pm.id is not None
         
         # Retrieve memo with post-mortems
-        memo = repo.get_memo(saved.id)
+        memo = await repo.get_memo(saved.id)
         assert len(memo.post_mortems) == 1
         assert memo.post_mortems[0].action == PostMortemAction.HOLD
     
-    def test_add_market_snapshot(self, repo, sample_memo):
+    @pytest.mark.asyncio
+    async def test_add_market_snapshot(self, repo, sample_memo):
         """Should track market snapshots over time."""
-        saved = repo.save_memo(sample_memo)
+        saved = await repo.save_memo(sample_memo)
         
         # Add weekly snapshots
-        repo.add_market_snapshot(saved.id, MarketSnapshot(
+        await repo.add_market_snapshot(saved.id, MarketSnapshot(
             price=190.0,
             intrinsic_value=222.0,
             pe_ratio=29.0,
         ))
-        repo.add_market_snapshot(saved.id, MarketSnapshot(
+        await repo.add_market_snapshot(saved.id, MarketSnapshot(
             price=195.0,
             intrinsic_value=225.0,
             pe_ratio=29.5,
         ))
         
-        memo = repo.get_memo(saved.id)
+        memo = await repo.get_memo(saved.id)
         assert len(memo.market_snapshots) == 2
         assert memo.market_snapshots[-1].price == 195.0
     
-    def test_close_memo(self, repo, sample_memo):
+    @pytest.mark.asyncio
+    async def test_close_memo(self, repo, sample_memo):
         """Should close memo with reason."""
-        saved = repo.save_memo(sample_memo)
+        saved = await repo.save_memo(sample_memo)
         
-        repo.close_memo(
+        await repo.close_memo(
             saved.id, 
             MemoStatus.CLOSED_WIN, 
             "Target reached, thesis fully realized"
         )
         
-        memo = repo.get_memo(saved.id)
+        memo = await repo.get_memo(saved.id)
         assert memo.status == MemoStatus.CLOSED_WIN
         assert memo.closed_at is not None
         assert "fully realized" in memo.closed_reason
     
-    def test_update_memo(self, repo, sample_memo):
+    @pytest.mark.asyncio
+    async def test_update_memo(self, repo, sample_memo):
         """Should update memo fields."""
-        saved = repo.save_memo(sample_memo)
+        saved = await repo.save_memo(sample_memo)
         
         saved.target_price = 240.0
         saved.risks = "Updated risk assessment"
         
-        updated = repo.update_memo(saved)
+        updated = await repo.update_memo(saved)
         
-        retrieved = repo.get_memo(saved.id)
+        retrieved = await repo.get_memo(saved.id)
         assert retrieved.target_price == 240.0
         assert "Updated" in retrieved.risks
     
-    def test_delete_memo(self, repo, sample_memo):
+    @pytest.mark.asyncio
+    async def test_delete_memo(self, repo, sample_memo):
         """Should delete memo and all related data."""
-        saved = repo.save_memo(sample_memo)
+        saved = await repo.save_memo(sample_memo)
         
         # Add some related data
-        repo.add_post_mortem(PostMortem(
+        await repo.add_post_mortem(PostMortem(
             id=None,
             memo_id=saved.id,
             created_at=datetime.now(timezone.utc),
@@ -345,23 +354,24 @@ class TestMemoRepository:
             iv_at_time=220.0,
         ))
         
-        repo.delete_memo(saved.id)
+        await repo.delete_memo(saved.id)
         
-        assert repo.get_memo(saved.id) is None
+        assert await repo.get_memo(saved.id) is None
     
-    def test_memos_ordered_by_created_at(self, repo, sample_memo):
+    @pytest.mark.asyncio
+    async def test_memos_ordered_by_created_at(self, repo, sample_memo):
         """Memos should be returned newest first."""
         # Save first memo
         sample_memo.created_at = datetime.now(timezone.utc) - timedelta(days=30)
-        repo.save_memo(sample_memo)
+        await repo.save_memo(sample_memo)
         
         # Save second memo (newer)
         sample_memo.id = None
         sample_memo.title = "Newer Memo"
         sample_memo.created_at = datetime.now(timezone.utc)
-        repo.save_memo(sample_memo)
+        await repo.save_memo(sample_memo)
         
-        memos = repo.list_memos()
+        memos = await repo.list_memos()
         assert memos[0].title == "Newer Memo"
 
 
@@ -387,8 +397,10 @@ class TestMemoAPI:
         # Cleanup
         app.dependency_overrides.clear()
     
-    def test_create_memo(self, client):
+    @pytest.mark.asyncio
+    async def test_create_memo(self, client):
         """POST /api/memos should create memo."""
+        # Note: client is TestClient, which is sync but handles async endpoints
         response = client.post("/api/memos", json={
             "symbol": "NVDA",
             "title": "AI Chip Dominance",
@@ -401,6 +413,9 @@ class TestMemoAPI:
                 "terminal_growth_rate": 0.04,
                 "discount_rate": 0.10,
                 "projection_years": 10,
+                "da_ratio": 0.03,
+                "capex_ratio": 0.04,
+                "wc_ratio": 0.05,
             },
             "scenarios": [
                 {
@@ -426,7 +441,8 @@ class TestMemoAPI:
         assert data["id"] is not None
         assert data["symbol"] == "NVDA"
     
-    def test_get_memo(self, client):
+    @pytest.mark.asyncio
+    async def test_get_memo(self, client):
         """GET /api/memos/{id} should return memo."""
         # First create one
         create_resp = client.post("/api/memos", json={
@@ -441,6 +457,9 @@ class TestMemoAPI:
                 "terminal_growth_rate": 0.03,
                 "discount_rate": 0.09,
                 "projection_years": 10,
+                "da_ratio": 0.03,
+                "capex_ratio": 0.04,
+                "wc_ratio": 0.05,
             },
             "scenarios": [],
             "initial_market": {
@@ -455,13 +474,15 @@ class TestMemoAPI:
         assert response.status_code == 200
         assert response.json()["symbol"] == "GOOG"
     
-    def test_list_memos(self, client):
+    @pytest.mark.asyncio
+    async def test_list_memos(self, client):
         """GET /api/memos should list memos."""
         response = client.get("/api/memos")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
     
-    def test_add_post_mortem(self, client):
+    @pytest.mark.asyncio
+    async def test_add_post_mortem(self, client):
         """POST /api/memos/{id}/post-mortems should add post-mortem."""
         # Create memo first
         create_resp = client.post("/api/memos", json={
@@ -476,6 +497,9 @@ class TestMemoAPI:
                 "terminal_growth_rate": 0.03,
                 "discount_rate": 0.095,
                 "projection_years": 10,
+                "da_ratio": 0.03,
+                "capex_ratio": 0.04,
+                "wc_ratio": 0.05,
             },
             "scenarios": [],
             "initial_market": {
@@ -496,7 +520,8 @@ class TestMemoAPI:
         assert response.status_code == 201
         assert response.json()["action"] == "hold"
     
-    def test_close_memo(self, client):
+    @pytest.mark.asyncio
+    async def test_close_memo(self, client):
         """POST /api/memos/{id}/close should close memo."""
         # Create memo first
         create_resp = client.post("/api/memos", json={
@@ -511,6 +536,9 @@ class TestMemoAPI:
                 "terminal_growth_rate": 0.03,
                 "discount_rate": 0.09,
                 "projection_years": 10,
+                "da_ratio": 0.03,
+                "capex_ratio": 0.04,
+                "wc_ratio": 0.05,
             },
             "scenarios": [],
             "initial_market": {

@@ -7,7 +7,7 @@ import json
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from app.services.database import get_connection, DEFAULT_DB_PATH
+from app.services.database import get_async_connection, get_connection, DEFAULT_DB_PATH
 from app.models.memo import (
     InvestmentMemo,
     AssumptionsSnapshot,
@@ -22,7 +22,7 @@ from app.models.memo import (
 
 class MemoRepository:
     """
-    SQLite-based repository for investment memos.
+    Asynchronous SQLite-based repository for investment memos.
     
     Tables:
     - memos: Core memo data
@@ -37,7 +37,7 @@ class MemoRepository:
         self._init_db()
     
     def _init_db(self):
-        """Initialize database schema."""
+        """Initialize database schema (Synchronous for startup)."""
         with get_connection(self.db_path) as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS memos (
@@ -111,13 +111,10 @@ class MemoRepository:
             """)
             conn.commit()
     
-    def save_memo(self, memo: InvestmentMemo) -> InvestmentMemo:
-        """Save a new investment memo."""
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            # Insert main memo
-            cursor.execute("""
+    async def save_memo(self, memo: InvestmentMemo) -> InvestmentMemo:
+        """Save a new investment memo (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            async with db.execute("""
                 INSERT INTO memos (
                     symbol, title, thesis, conviction, time_horizon_months, created_at,
                     assumptions_json, initial_price, initial_iv, initial_pe, initial_captured_at,
@@ -140,13 +137,12 @@ class MemoRepository:
                 memo.catalysts,
                 memo.what_would_change_mind,
                 memo.status.value,
-            ))
-            
-            memo_id = cursor.lastrowid
+            )) as cursor:
+                memo_id = cursor.lastrowid
             
             # Insert scenarios
             for scenario in memo.scenarios:
-                cursor.execute("""
+                await db.execute("""
                     INSERT INTO memo_scenarios (
                         memo_id, name, revenue_growth, operating_margin, 
                         intrinsic_value, upside_percent
@@ -160,71 +156,69 @@ class MemoRepository:
                     scenario.upside_percent,
                 ))
             
-            conn.commit()
+            await db.commit()
             
             memo.id = memo_id
             return memo
     
-    def get_memo(self, memo_id: int) -> Optional[InvestmentMemo]:
-        """Get a memo by ID with all related data."""
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
+    async def get_memo(self, memo_id: int) -> Optional[InvestmentMemo]:
+        """Get a memo by ID with all related data (Async)."""
+        async with get_async_connection(self.db_path) as db:
             # Get main memo
-            cursor.execute("SELECT * FROM memos WHERE id = ?", (memo_id,))
-            row = cursor.fetchone()
+            async with db.execute("SELECT * FROM memos WHERE id = ?", (memo_id,)) as cursor:
+                row = await cursor.fetchone()
             
             if row is None:
                 return None
             
             # Get scenarios
-            cursor.execute(
+            async with db.execute(
                 "SELECT * FROM memo_scenarios WHERE memo_id = ? ORDER BY id",
                 (memo_id,)
-            )
-            scenarios = [
-                ScenarioSnapshot(
-                    name=s["name"],
-                    revenue_growth=s["revenue_growth"],
-                    operating_margin=s["operating_margin"],
-                    intrinsic_value=s["intrinsic_value"],
-                    upside_percent=s["upside_percent"],
-                )
-                for s in cursor.fetchall()
-            ]
+            ) as cursor:
+                scenarios = [
+                    ScenarioSnapshot(
+                        name=s["name"],
+                        revenue_growth=s["revenue_growth"],
+                        operating_margin=s["operating_margin"],
+                        intrinsic_value=s["intrinsic_value"],
+                        upside_percent=s["upside_percent"],
+                    )
+                    for s in await cursor.fetchall()
+                ]
             
             # Get market snapshots
-            cursor.execute(
+            async with db.execute(
                 "SELECT * FROM memo_market_snapshots WHERE memo_id = ? ORDER BY captured_at",
                 (memo_id,)
-            )
-            snapshots = [
-                MarketSnapshot(
-                    price=s["price"],
-                    intrinsic_value=s["intrinsic_value"],
-                    pe_ratio=s["pe_ratio"],
-                    captured_at=datetime.fromisoformat(s["captured_at"]),
-                )
-                for s in cursor.fetchall()
-            ]
+            ) as cursor:
+                snapshots = [
+                    MarketSnapshot(
+                        price=s["price"],
+                        intrinsic_value=s["intrinsic_value"],
+                        pe_ratio=s["pe_ratio"],
+                        captured_at=datetime.fromisoformat(s["captured_at"]),
+                    )
+                    for s in await cursor.fetchall()
+                ]
             
             # Get post-mortems
-            cursor.execute(
+            async with db.execute(
                 "SELECT * FROM memo_post_mortems WHERE memo_id = ? ORDER BY created_at",
                 (memo_id,)
-            )
-            post_mortems = [
-                PostMortem(
-                    id=p["id"],
-                    memo_id=p["memo_id"],
-                    created_at=datetime.fromisoformat(p["created_at"]),
-                    note=p["note"],
-                    action=PostMortemAction(p["action"]),
-                    price_at_time=p["price_at_time"],
-                    iv_at_time=p["iv_at_time"],
-                )
-                for p in cursor.fetchall()
-            ]
+            ) as cursor:
+                post_mortems = [
+                    PostMortem(
+                        id=p["id"],
+                        memo_id=p["memo_id"],
+                        created_at=datetime.fromisoformat(p["created_at"]),
+                        note=p["note"],
+                        action=PostMortemAction(p["action"]),
+                        price_at_time=p["price_at_time"],
+                        iv_at_time=p["iv_at_time"],
+                    )
+                    for p in await cursor.fetchall()
+                ]
             
             return self._row_to_memo(row, scenarios, snapshots, post_mortems)
     
@@ -265,17 +259,15 @@ class MemoRepository:
             post_mortems=post_mortems,
         )
     
-    def list_memos(
+    async def list_memos(
         self,
         symbol: Optional[str] = None,
         status: Optional[MemoStatus] = None,
         limit: int = 50,
     ) -> List[InvestmentMemo]:
-        """List memos with optional filtering."""
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            query = "SELECT * FROM memos WHERE 1=1"
+        """List memos with optional filtering (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            query = "SELECT id FROM memos WHERE 1=1"
             params = []
             
             if symbol:
@@ -289,23 +281,21 @@ class MemoRepository:
             query += " ORDER BY created_at DESC LIMIT ?"
             params.append(limit)
             
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
             
             memos = []
             for row in rows:
-                memo = self.get_memo(row["id"])
+                memo = await self.get_memo(row["id"])
                 if memo:
                     memos.append(memo)
             
             return memos
     
-    def update_memo(self, memo: InvestmentMemo) -> InvestmentMemo:
-        """Update an existing memo."""
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            cursor.execute("""
+    async def update_memo(self, memo: InvestmentMemo) -> InvestmentMemo:
+        """Update an existing memo (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            await db.execute("""
                 UPDATE memos SET
                     title = ?,
                     thesis = ?,
@@ -327,22 +317,18 @@ class MemoRepository:
                 memo.what_would_change_mind,
                 memo.id,
             ))
-            
-            conn.commit()
-            
-            return self.get_memo(memo.id)
+            await db.commit()
+            return await self.get_memo(memo.id)
     
-    def close_memo(
+    async def close_memo(
         self, 
         memo_id: int, 
         status: MemoStatus, 
         reason: str,
     ) -> InvestmentMemo:
-        """Close a memo with final status and reason."""
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            cursor.execute("""
+        """Close a memo with final status and reason (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            await db.execute("""
                 UPDATE memos SET
                     status = ?,
                     closed_at = ?,
@@ -354,31 +340,23 @@ class MemoRepository:
                 reason,
                 memo_id,
             ))
-            
-            conn.commit()
-            
-            return self.get_memo(memo_id)
+            await db.commit()
+            return await self.get_memo(memo_id)
     
-    def delete_memo(self, memo_id: int) -> None:
-        """Delete a memo and all related data."""
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            # Delete related data first (foreign key cascade should handle this,
-            # but being explicit for SQLite compatibility)
-            cursor.execute("DELETE FROM memo_post_mortems WHERE memo_id = ?", (memo_id,))
-            cursor.execute("DELETE FROM memo_market_snapshots WHERE memo_id = ?", (memo_id,))
-            cursor.execute("DELETE FROM memo_scenarios WHERE memo_id = ?", (memo_id,))
-            cursor.execute("DELETE FROM memos WHERE id = ?", (memo_id,))
-            
-            conn.commit()
+    async def delete_memo(self, memo_id: int) -> None:
+        """Delete a memo and all related data (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            # Delete related data first
+            await db.execute("DELETE FROM memo_post_mortems WHERE memo_id = ?", (memo_id,))
+            await db.execute("DELETE FROM memo_market_snapshots WHERE memo_id = ?", (memo_id,))
+            await db.execute("DELETE FROM memo_scenarios WHERE memo_id = ?", (memo_id,))
+            await db.execute("DELETE FROM memos WHERE id = ?", (memo_id,))
+            await db.commit()
     
-    def add_post_mortem(self, post_mortem: PostMortem) -> PostMortem:
-        """Add a post-mortem review to a memo."""
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            cursor.execute("""
+    async def add_post_mortem(self, post_mortem: PostMortem) -> PostMortem:
+        """Add a post-mortem review to a memo (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            async with db.execute("""
                 INSERT INTO memo_post_mortems (
                     memo_id, created_at, note, action, price_at_time, iv_at_time
                 ) VALUES (?, ?, ?, ?, ?, ?)
@@ -389,19 +367,15 @@ class MemoRepository:
                 post_mortem.action.value,
                 post_mortem.price_at_time,
                 post_mortem.iv_at_time,
-            ))
-            
-            conn.commit()
-            
-            post_mortem.id = cursor.lastrowid
+            )) as cursor:
+                await db.commit()
+                post_mortem.id = cursor.lastrowid
             return post_mortem
     
-    def add_market_snapshot(self, memo_id: int, snapshot: MarketSnapshot) -> MarketSnapshot:
-        """Add a market snapshot for tracking."""
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            cursor.execute("""
+    async def add_market_snapshot(self, memo_id: int, snapshot: MarketSnapshot) -> MarketSnapshot:
+        """Add a market snapshot for tracking (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            await db.execute("""
                 INSERT INTO memo_market_snapshots (
                     memo_id, price, intrinsic_value, pe_ratio, captured_at
                 ) VALUES (?, ?, ?, ?, ?)
@@ -412,9 +386,7 @@ class MemoRepository:
                 snapshot.pe_ratio,
                 snapshot.captured_at.isoformat(),
             ))
-            
-            conn.commit()
-            
+            await db.commit()
             return snapshot
 
 

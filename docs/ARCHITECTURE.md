@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-12 17:16
+> Last updated: 2026-01-12 17:41
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -19,7 +19,7 @@ Stock Screens is a full-stack stock analysis application with:
 
 | Service | Purpose |
 |---------|---------|
-| `audit_repository.py` | SQLite-based repository for assumption audit entries. |
+| `audit_repository.py` | Asynchronous SQLite-based repository for assumption audit en |
 | `base_provider.py` | Standardized company profile data. |
 | `cache.py` | Simple in-memory cache with TTL and size limits. |
 | `capital_efficiency.py` | Calculator for capital efficiency metrics. |
@@ -37,7 +37,7 @@ Stock Screens is a full-stack stock analysis application with:
 | `fmp_provider.py` | Financial Modeling Prep data provider. |
 | `historical_valuation.py` | Valuation metrics for a single year. |
 | `massive_provider.py` | Massive (Polygon.io) data provider. |
-| `memo_repository.py` | SQLite-based repository for investment memos. |
+| `memo_repository.py` | Asynchronous SQLite-based repository for investment memos. |
 | `monte_carlo.py` | Configuration for a single Monte Carlo input variable. |
 | `monte_carlo_full.py` | Input parameter with bounded distribution. |
 | `multi_stage_growth.py` | How values transition from start to end over a growth stage. |

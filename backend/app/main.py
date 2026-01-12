@@ -178,13 +178,13 @@ def get_providers():
 @app.get("/api/rate-limits")
 async def get_rate_limits():
     """Get current rate limit statistics for all providers."""
-    return rate_limiter.get_all_stats()
+    return await rate_limiter.get_all_stats()
 
 
 @app.post("/api/rate-limits/reset")
 async def reset_rate_limits():
     """Reset all rate limit counters (e.g., for a new day)."""
-    rate_limiter.reset_all()
+    await rate_limiter.reset_all()
     return {"status": "ok", "message": "All rate limits reset"}
 
 

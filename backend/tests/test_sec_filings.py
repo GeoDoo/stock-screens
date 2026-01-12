@@ -166,7 +166,8 @@ class TestFilingsRouter:
         from app.main import app
         return TestClient(app)
     
-    def test_get_filings_endpoint(self, client):
+    @pytest.mark.asyncio
+    async def test_get_filings_endpoint(self, client):
         """Test /api/filings/{ticker} endpoint."""
         mock_filings = [
             Filing(
@@ -200,7 +201,8 @@ class TestFilingsRouter:
                 assert len(data["filings"]) == 1
                 assert data["filings"][0]["form_type"] == "10-K"
     
-    def test_get_filings_not_found(self, client):
+    @pytest.mark.asyncio
+    async def test_get_filings_not_found(self, client):
         """Test 404 for invalid ticker."""
         with patch("app.routers.filings.sec_filings_service.get_filings", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = SECFilingsError("Ticker 'INVALID' not found")
@@ -209,7 +211,8 @@ class TestFilingsRouter:
             
             assert response.status_code == 404
     
-    def test_get_company_info_endpoint(self, client):
+    @pytest.mark.asyncio
+    async def test_get_company_info_endpoint(self, client):
         """Test /api/filings/{ticker}/info endpoint."""
         mock_info = {
             "cik": "0000320193",

@@ -20,7 +20,8 @@ Usage:
         conn.execute("SELECT * FROM api_calls")
 """
 import sqlite3
-from contextlib import contextmanager
+import aiosqlite
+from contextlib import contextmanager, asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -34,16 +35,29 @@ def get_db_path() -> str:
     return str(DEFAULT_DB_PATH)
 
 
-@contextmanager
-def get_connection(db_path: Optional[str] = None):
+@asynccontextmanager
+async def get_async_connection(db_path: Optional[str] = None):
     """
-    Get a database connection with proper cleanup.
+    Get an asynchronous database connection with proper cleanup.
     
     Args:
         db_path: Optional path override. Defaults to stock_screens.db
         
     Yields:
-        sqlite3.Connection with Row factory enabled
+        aiosqlite.Connection with Row factory enabled
+    """
+    path = db_path or str(DEFAULT_DB_PATH)
+    async with aiosqlite.connect(path) as db:
+        db.row_factory = aiosqlite.Row
+        yield db
+
+
+@contextmanager
+def get_connection(db_path: Optional[str] = None):
+    """
+    Get a synchronous database connection with proper cleanup.
+    
+    DEPRECATED: Use get_async_connection() instead to avoid blocking the event loop.
     """
     path = db_path or str(DEFAULT_DB_PATH)
     conn = sqlite3.connect(path)

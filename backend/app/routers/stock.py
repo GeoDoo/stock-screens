@@ -255,7 +255,7 @@ async def get_stock(symbol: str, provider: str):
     client = get_client_for_provider(provider)
     
     # Record API call for rate limiting
-    rate_limiter.record_call(provider)
+    await rate_limiter.record_call(provider)
     
     try:
         stock_data = await client.get_stock_data(symbol.upper())
@@ -263,7 +263,7 @@ async def get_stock(symbol: str, provider: str):
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RateLimitError as e:
-        rate_limiter.mark_api_limited(provider)
+        await rate_limiter.mark_api_limited(provider)
         raise HTTPException(status_code=429, detail=str(e))
     except DataNotAvailableError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -490,7 +490,7 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
     """
     client = get_client_for_provider(provider)
     
-    rate_limiter.record_call(provider)
+    await rate_limiter.record_call(provider)
     
     try:
         stock_data = await client.get_stock_data(symbol.upper())
@@ -498,7 +498,7 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RateLimitError as e:
-        rate_limiter.mark_api_limited(provider)
+        await rate_limiter.mark_api_limited(provider)
         raise HTTPException(status_code=429, detail=str(e))
     except DataNotAvailableError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -657,12 +657,12 @@ async def get_comparables(symbol: str, provider: str, max_peers: int = 5):
     client = get_client_for_provider(provider)
     analyzer = ComparableAnalyzer(client, provider)
     
-    rate_limiter.record_call(provider)
+    await rate_limiter.record_call(provider)
     
     try:
         result = await analyzer.analyze(symbol.upper(), max_peers=max_peers)
     except RateLimitError as e:
-        rate_limiter.mark_api_limited(provider)
+        await rate_limiter.mark_api_limited(provider)
         raise HTTPException(status_code=429, detail=str(e))
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -972,14 +972,14 @@ async def get_technical_analysis(symbol: str, provider: str = "massive", days: i
     tech_provider = get_technical_provider(provider)
     service = TechnicalService(tech_provider)
     
-    rate_limiter.record_call(provider)
+    await rate_limiter.record_call(provider)
     
     try:
         result = await service.analyze(symbol.upper(), days=days)
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RateLimitError as e:
-        rate_limiter.mark_api_limited(provider)
+        await rate_limiter.mark_api_limited(provider)
         raise HTTPException(status_code=429, detail=str(e))
     except DataNotAvailableError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1033,7 +1033,7 @@ async def batch_analyze(symbol: str, provider: str):
     """
     client = get_client_for_provider(provider)
     
-    rate_limiter.record_call(provider)
+    await rate_limiter.record_call(provider)
     
     try:
         stock_data = await client.get_stock_data(symbol.upper())
@@ -1041,7 +1041,7 @@ async def batch_analyze(symbol: str, provider: str):
     except TickerNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RateLimitError as e:
-        rate_limiter.mark_api_limited(provider)
+        await rate_limiter.mark_api_limited(provider)
         raise HTTPException(status_code=429, detail=str(e))
     except DataNotAvailableError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1434,7 +1434,7 @@ async def batch_analyze(symbol: str, provider: str):
         "ratios": ratios_response,
         "dividends": dividends_response,
         "historical_valuation": historical_response,
-        "rate_limit": rate_limiter.get_usage_stats(provider),
+        "rate_limit": await rate_limiter.get_usage_stats(provider),
     }
 
 
@@ -1451,18 +1451,18 @@ async def run_monte_carlo(
     distribution of intrinsic values.
     """
     actual_provider = provider
-    if rate_limiter.is_api_limited(provider):
+    if await rate_limiter.is_api_limited(provider):
         actual_provider = "yahoo"
     
     client = get_client_for_provider(actual_provider)
-    rate_limiter.record_call(actual_provider)
+    await rate_limiter.record_call(actual_provider)
     
     try:
         stock_data = await client.get_stock_data(symbol.upper())
     except (RateLimitError, DataNotAvailableError) as e:
         if actual_provider != "yahoo":
             client = get_client_for_provider("yahoo")
-            rate_limiter.record_call("yahoo")
+            await rate_limiter.record_call("yahoo")
             try:
                 stock_data = await client.get_stock_data(symbol.upper())
                 actual_provider = "yahoo"
@@ -1581,18 +1581,18 @@ async def run_full_monte_carlo_endpoint(
     Use /monte-carlo (simplified) for quick intuition only.
     """
     actual_provider = provider
-    if rate_limiter.is_api_limited(provider):
+    if await rate_limiter.is_api_limited(provider):
         actual_provider = "yahoo"
     
     client = get_client_for_provider(actual_provider)
-    rate_limiter.record_call(actual_provider)
+    await rate_limiter.record_call(actual_provider)
     
     try:
         stock_data = await client.get_stock_data(symbol.upper())
     except (RateLimitError, DataNotAvailableError) as e:
         if actual_provider != "yahoo":
             client = get_client_for_provider("yahoo")
-            rate_limiter.record_call("yahoo")
+            await rate_limiter.record_call("yahoo")
             try:
                 stock_data = await client.get_stock_data(symbol.upper())
                 actual_provider = "yahoo"

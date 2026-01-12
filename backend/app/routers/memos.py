@@ -81,7 +81,7 @@ async def create_memo(
         what_would_change_mind=request.what_would_change_mind,
     )
     
-    saved = repo.save_memo(memo)
+    saved = await repo.save_memo(memo)
     return saved.to_dict()
 
 
@@ -108,7 +108,7 @@ async def list_memos(
                 detail=f"Invalid status. Valid: {[s.value for s in MemoStatus]}"
             )
     
-    memos = repo.list_memos(symbol=symbol, status=status_filter)
+    memos = await repo.list_memos(symbol=symbol, status=status_filter)
     return [m.to_dict() for m in memos]
 
 
@@ -118,7 +118,7 @@ async def get_memo(
     repo: MemoRepository = Depends(get_memo_repository),
 ):
     """Get a single investment memo by ID."""
-    memo = repo.get_memo(memo_id)
+    memo = await repo.get_memo(memo_id)
     if memo is None:
         raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
     return memo.to_dict()
@@ -131,7 +131,7 @@ async def update_memo(
     repo: MemoRepository = Depends(get_memo_repository),
 ):
     """Update an existing memo."""
-    existing = repo.get_memo(memo_id)
+    existing = await repo.get_memo(memo_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
     
@@ -152,7 +152,7 @@ async def update_memo(
     existing.catalysts = request.catalysts
     existing.what_would_change_mind = request.what_would_change_mind
     
-    updated = repo.update_memo(existing)
+    updated = await repo.update_memo(existing)
     return updated.to_dict()
 
 
@@ -162,11 +162,11 @@ async def delete_memo(
     repo: MemoRepository = Depends(get_memo_repository),
 ):
     """Delete an investment memo."""
-    existing = repo.get_memo(memo_id)
+    existing = await repo.get_memo(memo_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
     
-    repo.delete_memo(memo_id)
+    await repo.delete_memo(memo_id)
     return {"deleted": True, "id": memo_id}
 
 
@@ -181,7 +181,7 @@ async def add_post_mortem(
     
     Post-mortems track how reality is unfolding vs the original thesis.
     """
-    existing = repo.get_memo(memo_id)
+    existing = await repo.get_memo(memo_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
     
@@ -203,7 +203,7 @@ async def add_post_mortem(
         iv_at_time=request.iv_at_time,
     )
     
-    saved = repo.add_post_mortem(post_mortem)
+    saved = await repo.add_post_mortem(post_mortem)
     return saved.to_dict()
 
 
@@ -221,7 +221,7 @@ async def close_memo(
     - closed_loss: Thesis was wrong
     - closed_neutral: Closed for other reasons
     """
-    existing = repo.get_memo(memo_id)
+    existing = await repo.get_memo(memo_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
     
@@ -236,7 +236,7 @@ async def close_memo(
     if status == MemoStatus.ACTIVE:
         raise HTTPException(status_code=400, detail="Cannot close memo with 'active' status")
     
-    closed = repo.close_memo(memo_id, status, request.reason)
+    closed = await repo.close_memo(memo_id, status, request.reason)
     return closed.to_dict()
 
 
@@ -251,7 +251,7 @@ async def add_market_snapshot(
     
     Call this periodically to track how price and intrinsic value evolve.
     """
-    existing = repo.get_memo(memo_id)
+    existing = await repo.get_memo(memo_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"Memo {memo_id} not found")
     
@@ -261,5 +261,5 @@ async def add_market_snapshot(
         pe_ratio=request.pe_ratio,
     )
     
-    saved = repo.add_market_snapshot(memo_id, snapshot)
+    saved = await repo.add_market_snapshot(memo_id, snapshot)
     return saved.to_dict()

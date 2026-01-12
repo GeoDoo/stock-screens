@@ -176,7 +176,8 @@ class TestAuditRepository:
         # Cleanup
         os.unlink(path)
     
-    def test_save_initial_entry(self, repo):
+    @pytest.mark.asyncio
+    async def test_save_initial_entry(self, repo):
         """Should save initial analysis entry."""
         entry = AuditEntry(
             id=None,
@@ -198,12 +199,13 @@ class TestAuditRepository:
             is_initial=True,
         )
         
-        saved = repo.save_entry(entry)
+        saved = await repo.save_entry(entry)
         
         assert saved.id is not None
         assert saved.id > 0
     
-    def test_get_history_for_symbol(self, repo):
+    @pytest.mark.asyncio
+    async def test_get_history_for_symbol(self, repo):
         """Should retrieve all entries for a symbol in reverse chronological order."""
         # Save two entries
         entry1 = AuditEntry(
@@ -227,39 +229,41 @@ class TestAuditRepository:
             is_initial=False,
         )
         
-        repo.save_entry(entry1)
-        repo.save_entry(entry2)
+        await repo.save_entry(entry1)
+        await repo.save_entry(entry2)
         
-        history = repo.get_history("AAPL")
+        history = await repo.get_history("AAPL")
         
         assert len(history) == 2
         assert history[0].note == "Second"  # Most recent first
         assert history[1].note == "First"
     
-    def test_get_history_filters_by_symbol(self, repo):
+    @pytest.mark.asyncio
+    async def test_get_history_filters_by_symbol(self, repo):
         """Should only return entries for the requested symbol."""
-        repo.save_entry(AuditEntry(
+        await repo.save_entry(AuditEntry(
             id=None, symbol="AAPL", timestamp=datetime.now(),
             changes=[AssumptionChange(AssumptionField.REVENUE_GROWTH, None, 0.05)],
             note=None, is_initial=True,
         ))
-        repo.save_entry(AuditEntry(
+        await repo.save_entry(AuditEntry(
             id=None, symbol="MSFT", timestamp=datetime.now(),
             changes=[AssumptionChange(AssumptionField.REVENUE_GROWTH, None, 0.10)],
             note=None, is_initial=True,
         ))
         
-        aapl_history = repo.get_history("AAPL")
-        msft_history = repo.get_history("MSFT")
+        aapl_history = await repo.get_history("AAPL")
+        msft_history = await repo.get_history("MSFT")
         
         assert len(aapl_history) == 1
         assert len(msft_history) == 1
         assert aapl_history[0].symbol == "AAPL"
     
-    def test_get_latest_snapshot(self, repo):
+    @pytest.mark.asyncio
+    async def test_get_latest_snapshot(self, repo):
         """Should reconstruct current state from history."""
         # Initial
-        repo.save_entry(AuditEntry(
+        await repo.save_entry(AuditEntry(
             id=None, symbol="AAPL", timestamp=datetime.now() - timedelta(hours=2),
             changes=[
                 AssumptionChange(AssumptionField.REVENUE_GROWTH, None, 0.05),
@@ -268,7 +272,7 @@ class TestAuditRepository:
             note="Initial", is_initial=True,
         ))
         # Update
-        repo.save_entry(AuditEntry(
+        await repo.save_entry(AuditEntry(
             id=None, symbol="AAPL", timestamp=datetime.now(),
             changes=[
                 AssumptionChange(AssumptionField.REVENUE_GROWTH, 0.05, 0.08),
@@ -276,21 +280,23 @@ class TestAuditRepository:
             note="Updated growth", is_initial=False,
         ))
         
-        snapshot = repo.get_latest_snapshot("AAPL")
+        snapshot = await repo.get_latest_snapshot("AAPL")
         
         assert snapshot is not None
         assert snapshot.revenue_growth == 0.08  # Updated
         assert snapshot.operating_margin == 0.20  # From initial
     
-    def test_get_latest_snapshot_returns_none_for_unknown_symbol(self, repo):
+    @pytest.mark.asyncio
+    async def test_get_latest_snapshot_returns_none_for_unknown_symbol(self, repo):
         """Should return None if no history exists."""
-        snapshot = repo.get_latest_snapshot("UNKNOWN")
+        snapshot = await repo.get_latest_snapshot("UNKNOWN")
         
         assert snapshot is None
     
-    def test_get_field_history(self, repo):
+    @pytest.mark.asyncio
+    async def test_get_field_history(self, repo):
         """Should get history for a specific field across all entries."""
-        repo.save_entry(AuditEntry(
+        await repo.save_entry(AuditEntry(
             id=None, symbol="AAPL", timestamp=datetime.now() - timedelta(hours=2),
             changes=[
                 AssumptionChange(AssumptionField.REVENUE_GROWTH, None, 0.05),
@@ -298,7 +304,7 @@ class TestAuditRepository:
             ],
             note="Initial", is_initial=True,
         ))
-        repo.save_entry(AuditEntry(
+        await repo.save_entry(AuditEntry(
             id=None, symbol="AAPL", timestamp=datetime.now(),
             changes=[
                 AssumptionChange(AssumptionField.REVENUE_GROWTH, 0.05, 0.08),
@@ -306,25 +312,26 @@ class TestAuditRepository:
             note="Updated", is_initial=False,
         ))
         
-        field_history = repo.get_field_history("AAPL", AssumptionField.REVENUE_GROWTH)
+        field_history = await repo.get_field_history("AAPL", AssumptionField.REVENUE_GROWTH)
         
         assert len(field_history) == 2
         # Most recent first
         assert field_history[0].new_value == 0.08
         assert field_history[1].new_value == 0.05
     
-    def test_has_history(self, repo):
+    @pytest.mark.asyncio
+    async def test_has_history(self, repo):
         """Should check if symbol has any audit history."""
-        assert repo.has_history("AAPL") is False
+        assert await repo.has_history("AAPL") is False
         
-        repo.save_entry(AuditEntry(
+        await repo.save_entry(AuditEntry(
             id=None, symbol="AAPL", timestamp=datetime.now(),
             changes=[AssumptionChange(AssumptionField.REVENUE_GROWTH, None, 0.05)],
             note=None, is_initial=True,
         ))
         
-        assert repo.has_history("AAPL") is True
-        assert repo.has_history("MSFT") is False
+        assert await repo.has_history("AAPL") is True
+        assert await repo.has_history("MSFT") is False
 
 
 
@@ -400,7 +407,8 @@ class TestNullNewValue:
         assert new_snapshot.discount_rate is None
         assert new_snapshot.projection_years is None
     
-    def test_repo_saves_none_new_value(self, repo):
+    @pytest.mark.asyncio
+    async def test_repo_saves_none_new_value(self, repo):
         """
         Repository should be able to save entries where new_value is None.
         """
@@ -420,12 +428,12 @@ class TestNullNewValue:
         )
         
         # Should not raise
-        saved = repo.save_entry(entry)
+        saved = await repo.save_entry(entry)
         
         assert saved.id is not None
         
         # Verify retrieval
-        history = repo.get_history("AAPL")
+        history = await repo.get_history("AAPL")
         assert len(history) == 1
         assert history[0].changes[0].new_value is None
     
@@ -462,7 +470,8 @@ class TestSchemaMigration:
     retain the old constraint and fail on NULL inserts.
     """
     
-    def test_migration_allows_null_new_value_on_old_schema(self):
+    @pytest.mark.asyncio
+    async def test_migration_allows_null_new_value_on_old_schema(self):
         """
         Databases created with old schema should be migrated to allow NULL.
         
@@ -517,11 +526,11 @@ class TestSchemaMigration:
             )
             
             # Should NOT raise IntegrityError
-            saved = repo.save_entry(entry)
+            saved = await repo.save_entry(entry)
             assert saved.id is not None
             
             # Verify it was saved correctly
-            history = repo.get_history("AAPL")
+            history = await repo.get_history("AAPL")
             assert len(history) == 1
             assert history[0].changes[0].new_value is None
             
