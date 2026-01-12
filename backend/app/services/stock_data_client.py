@@ -1,5 +1,4 @@
 from typing import List, Optional
-import logging
 
 from app.services.base_provider import (
     StockDataProvider,
@@ -13,8 +12,8 @@ from app.services.fmp_provider import FMPProvider
 from app.services.yahoo_provider import YahooProvider
 
 from app.constants import DEFAULT_TREASURY_RATE
-
-logger = logging.getLogger(__name__)
+from app.services.logging_config import logger # Use structlog logger
+from app.services.resilience import get_circuit_breaker
 
 
 class StockDataClient:
@@ -67,34 +66,35 @@ class StockDataClient:
         errors = []
         
         for provider in self.providers:
+            breaker = get_circuit_breaker(provider.name)
             try:
-                logger.info(f"Trying {provider.name} for {symbol}")
-                data = await provider.get_stock_data(symbol)
-                logger.info(f"Success: {symbol} from {provider.name}")
+                logger.debug("provider_attempt_start", provider=provider.name, symbol=symbol)
+                data = await breaker.call(provider.get_stock_data, symbol)
+                logger.info("provider_attempt_success", provider=provider.name, symbol=symbol)
                 return data
             
             except TickerNotFoundError as e:
-                logger.debug(f"{provider.name}: {symbol} not found, trying next")
+                logger.debug("provider_attempt_failed", provider=provider.name, symbol=symbol, reason="not_found")
                 errors.append((provider.name, e))
                 continue
                 
             except DataNotAvailableError as e:
-                logger.debug(f"{provider.name}: {symbol} data not available, trying next")
+                logger.debug("provider_attempt_failed", provider=provider.name, symbol=symbol, reason="data_not_available")
                 errors.append((provider.name, e))
                 continue
                 
             except RateLimitError as e:
-                logger.warning(f"{provider.name}: rate limited, trying next")
+                logger.warning("provider_attempt_failed", provider=provider.name, symbol=symbol, reason="rate_limited")
                 errors.append((provider.name, e))
                 continue
                 
             except ProviderError as e:
-                logger.warning(f"{provider.name}: error for {symbol}: {e}")
+                logger.warning("provider_attempt_failed", provider=provider.name, symbol=symbol, reason="provider_error", error=str(e))
                 errors.append((provider.name, e))
                 continue
                 
             except Exception as e:
-                logger.error(f"{provider.name}: unexpected error for {symbol}: {e}")
+                logger.error("provider_attempt_failed", provider=provider.name, symbol=symbol, reason="unexpected_error", error=str(e))
                 errors.append((provider.name, ProviderError(str(e))))
                 continue
         

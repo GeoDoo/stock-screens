@@ -5,6 +5,7 @@ Does NOT support fundamental analysis.
 """
 import httpx
 from datetime import datetime, timedelta
+from typing import Optional, Any
 
 from app.constants import DEFAULT_TREASURY_RATE
 from app.services.base_provider import (
@@ -18,7 +19,10 @@ from app.services.base_provider import (
     RateLimitError,
     HistoricalPrices,
     PriceBar,
+    TransientProviderError,
 )
+from app.services.logging_config import logger # Use structlog logger
+from app.services.resilience import retry_on_api_error
 
 
 class MassiveProvider(StockDataProvider):
@@ -31,8 +35,9 @@ class MassiveProvider(StockDataProvider):
     name = "massive"
     BASE_URL = "https://api.polygon.io"
     
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, client: Optional[httpx.AsyncClient] = None):
         self.api_key = api_key
+        self._client = client
     
     @property
     def supports_fundamentals(self) -> bool:
@@ -42,26 +47,43 @@ class MassiveProvider(StockDataProvider):
     def supports_technical(self) -> bool:
         return True
     
-    async def _request(self, endpoint: str, **params) -> dict:
+    @retry_on_api_error(retries=3, exceptions=(httpx.HTTPError, TransientProviderError))
+    async def _request(self, endpoint: str, **params) -> Any:
         """Make authenticated request to Massive/Polygon API."""
-        async with httpx.AsyncClient() as client:
-            params["apiKey"] = self.api_key
-            response = await client.get(
-                f"{self.BASE_URL}{endpoint}",
-                params=params,
-                timeout=30.0,
-            )
-            
-            if response.status_code == 401:
-                raise ProviderError("Invalid Massive API key")
-            elif response.status_code == 403:
-                raise ProviderError("Massive API access denied")
-            elif response.status_code == 429:
-                raise RateLimitError("Massive rate limit exceeded")
-            elif response.status_code >= 400:
-                raise ProviderError(f"Massive API error: {response.status_code}")
-            
-            return response.json()
+        params["apiKey"] = self.api_key
+        url = f"{self.BASE_URL}{endpoint}"
+        
+        logger.debug("api_request_start", provider="massive", endpoint=endpoint)
+        
+        if self._client is not None:
+            response = await self._client.get(url, params=params, timeout=30.0)
+            return self._process_response(response, endpoint)
+        else:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params=params, timeout=30.0)
+                return self._process_response(response, endpoint)
+
+    def _process_response(self, response: httpx.Response, endpoint: str) -> Any:
+        """Process HTTP response."""
+        logger.debug("api_response_received", provider="massive", endpoint=endpoint, status_code=response.status_code)
+        
+        if response.status_code == 401:
+            logger.error("api_auth_error", provider="massive")
+            raise ProviderError("Invalid Massive API key")
+        elif response.status_code == 403:
+            logger.error("api_access_denied", provider="massive")
+            raise ProviderError("Massive API access denied")
+        elif response.status_code == 429:
+            logger.warning("api_rate_limit_hit", provider="massive")
+            raise RateLimitError("Massive rate limit exceeded")
+        elif response.status_code >= 500:
+            logger.error("api_server_error", provider="massive", status_code=response.status_code)
+            raise TransientProviderError(f"Massive server error: {response.status_code}")
+        elif response.status_code >= 400:
+            logger.error("api_error", provider="massive", status_code=response.status_code)
+            raise ProviderError(f"Massive API error: {response.status_code}")
+        
+        return response.json()
     
     async def get_stock_data(self, symbol: str) -> StockData:
         """

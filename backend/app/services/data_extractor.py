@@ -197,6 +197,14 @@ class DataExtractor:
         """Cash and equivalents from balance sheet."""
         return self._get_latest(self.balance_sheet, "cashAndCashEquivalents")
     
+    def goodwill(self) -> Optional[float]:
+        """Goodwill from balance sheet."""
+        return self._get_latest(self.balance_sheet, "goodwill")
+    
+    def intangible_assets(self) -> Optional[float]:
+        """Intangible assets from balance sheet."""
+        return self._get_latest(self.balance_sheet, "intangibleAssets")
+    
     # Equity Bridge components (institutional-grade)
     def minority_interest(self) -> Optional[float]:
         """Non-controlling interest - subtract from equity value."""

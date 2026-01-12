@@ -124,6 +124,20 @@ class TestCapitalEfficiencyCalculator:
         assert abs(roic - 2.50) < 0.001  # 250%
         assert abs(rr - 0.10) < 0.001  # Only needs to reinvest 10% of earnings
 
+    def test_rotic_calculation(self):
+        """ROTIC = NOPAT / (Invested Capital - Goodwill - Intangibles)."""
+        calculator = CapitalEfficiencyCalculator(
+            nopat=100,
+            invested_capital=500,
+            revenue_growth=0.10,
+            goodwill=100,
+            intangibles=50,
+        )
+        # Tangible IC = 500 - 100 - 50 = 350
+        # ROTIC = 100 / 350 = 0.2857...
+        rotic = calculator.rotic()
+        assert abs(rotic - 0.2857) < 0.001
+
 
 class TestAnalyzeValueCreation:
     """Tests for the high-level value creation analysis function."""
@@ -155,6 +169,22 @@ class TestAnalyzeValueCreation:
         
         assert result["is_value_creating"] is True
         assert "creates" in result["assessment"].lower() or "strong" in result["assessment"].lower()
+
+    def test_analyze_value_creation_includes_rotic(self):
+        """analyze_value_creation should include ROTIC when goodwill/intangibles available."""
+        result = analyze_value_creation(
+            nopat=100,
+            invested_capital=500,
+            revenue_growth=0.10,
+            wacc=0.08,
+            goodwill=100,
+            intangibles=50,
+        )
+        
+        assert "rotic" in result
+        assert result["rotic"] is not None
+        # ROTIC (28.6%) should be higher than ROIC (20%)
+        assert result["rotic"] > result["roic"]
     
     def test_value_destroyer_assessment(self):
         """Value destroyer gets negative assessment."""

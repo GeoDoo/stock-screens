@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 import pandas as pd
@@ -18,8 +17,7 @@ from app.services.base_provider import (
 )
 
 from app.constants import DEFAULT_TREASURY_RATE
-
-logger = logging.getLogger(__name__)
+from app.services.logging_config import logger # Use structlog logger
 
 # Maximum age for TTM data before it's considered stale (in days)
 # 6 months = ~180 days - if 2+ quarters are missed, data is unreliable
@@ -44,21 +42,26 @@ class YahooProvider(StockDataProvider):
     
     def _fetch_sync(self, symbol: str) -> StockData:
         """Synchronous fetch implementation."""
+        logger.debug("api_request_start", provider="yahoo", symbol=symbol)
         ticker = yf.Ticker(symbol)
         
         # Get basic info
         try:
             info = ticker.info
         except Exception as e:
+            logger.error("api_error", provider="yahoo", symbol=symbol, error=str(e))
             raise ProviderError(f"Yahoo Finance error: {str(e)}")
         
         # Check if ticker is valid
         if not info or info.get("regularMarketPrice") is None:
             # Try to check if it's a delisted or invalid symbol
             if info.get("symbol") is None:
+                logger.warning("api_ticker_not_found", provider="yahoo", symbol=symbol)
                 raise TickerNotFoundError(f"Ticker '{symbol}' not found")
+            logger.warning("api_data_unavailable", provider="yahoo", symbol=symbol)
             raise DataNotAvailableError(f"No price data available for '{symbol}'")
         
+        logger.info("api_response_success", provider="yahoo", symbol=symbol)
         # Build profile
         profile = CompanyProfile(
             symbol=symbol,

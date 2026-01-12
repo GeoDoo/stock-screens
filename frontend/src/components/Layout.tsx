@@ -1,14 +1,15 @@
 interface LayoutProps {
   children: React.ReactNode;
+  fullWidth?: boolean;
 }
 
-export function Layout({ children }: LayoutProps) {
+export function Layout({ children, fullWidth = false }: LayoutProps) {
   const path = window.location.pathname;
   
   return (
     <div className="min-h-screen bg-white flex">
       {/* Sidebar */}
-      <nav className="w-52 border-r border-gray-100 p-6 flex-shrink-0">
+      <nav className="w-52 border-r border-gray-100 p-6 flex-shrink-0 sticky top-0 h-screen overflow-y-auto">
         <a href="/" className="flex items-center gap-2 mb-8">
           {/* Logo icon - rising bars */}
           <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
@@ -76,8 +77,8 @@ export function Layout({ children }: LayoutProps) {
       </nav>
       
       {/* Content */}
-      <main className="flex-1 p-8 overflow-auto">
-        <div className="max-w-5xl">
+      <main className={`flex-1 overflow-auto ${fullWidth ? '' : 'p-8'}`}>
+        <div className={fullWidth ? 'h-full' : 'max-w-5xl'}>
           {children}
         </div>
       </main>

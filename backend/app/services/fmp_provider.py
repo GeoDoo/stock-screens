@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import httpx
 from typing import Any, List, Optional
 
@@ -16,11 +15,12 @@ from app.services.base_provider import (
     RateLimitError,
     HistoricalPrices,
     PriceBar,
+    TransientProviderError,
 )
 
 from app.constants import DEFAULT_TREASURY_RATE
-
-logger = logging.getLogger(__name__)
+from app.services.logging_config import logger # Use structlog logger
+from app.services.resilience import retry_on_api_error
 
 
 class FMPProvider(StockDataProvider):
@@ -42,34 +42,41 @@ class FMPProvider(StockDataProvider):
         self.api_key = api_key
         self._client = client  # NOTES2.md IV.1: Connection pooling
     
+    @retry_on_api_error(retries=3, exceptions=(httpx.HTTPError, TransientProviderError))
     async def _request(self, endpoint: str, **params) -> Any:
         params["apikey"] = self.api_key
         url = f"{self.BASE_URL}{endpoint}"
         
+        logger.debug("api_request_start", provider="fmp", endpoint=endpoint)
+        
         # NOTES2.md IV.1: Use shared client if available, else create per-request
         if self._client is not None:
             response = await self._client.get(url, params=params)
-            return self._process_response(response)
+            return self._process_response(response, endpoint)
         else:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, params=params)
                 # Process response INSIDE context to avoid accessing closed connection
-                return self._process_response(response)
+                return self._process_response(response, endpoint)
     
-    def _process_response(self, response: httpx.Response) -> Any:
+    def _process_response(self, response: httpx.Response, endpoint: str) -> Any:
         """
         Process HTTP response: check for errors and parse JSON.
         
         Must be called while the client connection is still open
         (inside async with block for per-request clients).
         """
+        logger.debug("api_response_received", provider="fmp", endpoint=endpoint, status_code=response.status_code)
+        
         # Check for subscription/premium-only responses (FMP returns 200 with text)
         content_type = response.headers.get("content-type", "")
         if response.status_code == 200 and "application/json" not in content_type:
             text = response.text
             if "subscription" in text.lower() or "premium" in text.lower():
+                logger.error("api_premium_required", provider="fmp", endpoint=endpoint)
                 raise DataNotAvailableError("Data requires premium FMP subscription")
             if "not found" in text.lower():
+                logger.warning("api_ticker_not_found", provider="fmp", endpoint=endpoint)
                 raise TickerNotFoundError("Ticker not found")
         
         # Handle HTTP errors
@@ -81,6 +88,8 @@ class FMPProvider(StockDataProvider):
                     error_detail = body.get("error") or body.get("message")
             except Exception:
                 error_detail = response.text[:200] if response.text else None
+            
+            logger.error("api_error", provider="fmp", endpoint=endpoint, status_code=response.status_code, error=error_detail)
             
             if response.status_code == 401:
                 raise ProviderError("Invalid FMP API key")
@@ -94,6 +103,8 @@ class FMPProvider(StockDataProvider):
                 raise TickerNotFoundError("Ticker not found")
             elif response.status_code == 429:
                 raise RateLimitError("FMP rate limit exceeded")
+            elif response.status_code >= 500:
+                raise TransientProviderError(error_detail or f"FMP server error ({response.status_code})")
             else:
                 raise ProviderError(error_detail or f"FMP API error ({response.status_code})")
         

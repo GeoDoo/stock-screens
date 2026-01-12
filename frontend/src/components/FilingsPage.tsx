@@ -6,6 +6,7 @@
 import { useState, useCallback } from 'react';
 import { fetchFilings, getFilingPdfUrl, type ApiError } from '../api';
 import type { SECFiling, FilingsListResponse } from '../types';
+import { Layout } from './Layout';
 
 const FORM_TYPES = [
   { value: '10-K', label: '10-K (Annual Report)' },
@@ -129,20 +130,18 @@ export default function FilingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Layout>
       {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <h1 className="text-2xl font-bold text-gray-900">SEC Filings Viewer</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Browse and download SEC filings as PDF
-          </p>
-        </div>
-      </header>
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-gray-900">SEC Filings Viewer</h1>
+        <p className="text-sm text-gray-400 mt-1">
+          Browse and download SEC filings as PDF
+        </p>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto">
         {/* Search Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-8">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <label htmlFor="ticker" className="block text-sm font-medium text-gray-700 mb-1">
@@ -295,7 +294,7 @@ export default function FilingsPage() {
             Enter a ticker symbol to search for SEC filings.
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </Layout>
   );
 }

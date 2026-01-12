@@ -31,7 +31,7 @@ function Router() {
   // Forensic Analysis Route: /analysis/:symbol
   const analysisMatch = path.match(/^\/analysis\/([a-zA-Z0-9.-]+)$/)
   if (analysisMatch) {
-    return <FilingsAnalysisPage />
+    return <FilingsAnalysisPage symbol={analysisMatch[1]} />
   }
 
   if (path === '/glossary') {

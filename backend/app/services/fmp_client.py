@@ -1,10 +1,8 @@
-import logging
 import httpx
 from typing import Any
 
 from app.constants import DEFAULT_TREASURY_RATE
-
-logger = logging.getLogger(__name__)
+from app.services.logging_config import logger # Use structlog logger
 
 
 class FMPClientError(Exception):
@@ -19,17 +17,22 @@ class FMPClient:
         self.api_key = api_key
 
     async def _request(self, endpoint: str, **params) -> Any:
+        logger.debug("api_request_start", provider="fmp_client", endpoint=endpoint)
         async with httpx.AsyncClient() as client:
             params["apikey"] = self.api_key
             response = await client.get(f"{self.BASE_URL}{endpoint}", params=params)
+            
+            logger.debug("api_response_received", provider="fmp_client", endpoint=endpoint, status_code=response.status_code)
             
             # Check for subscription/premium-only responses (FMP returns 200 with text message)
             content_type = response.headers.get("content-type", "")
             if response.status_code == 200 and "application/json" not in content_type:
                 text = response.text
                 if "subscription" in text.lower() or "premium" in text.lower():
+                    logger.error("api_premium_required", provider="fmp_client", endpoint=endpoint)
                     raise FMPClientError("Financial data not available for this ticker (may require premium subscription)")
                 if "not found" in text.lower():
+                    logger.warning("api_ticker_not_found", provider="fmp_client", endpoint=endpoint)
                     raise FMPClientError("Data not found for this ticker")
             
             # Handle HTTP errors with context-aware messages
@@ -42,6 +45,8 @@ class FMPClient:
                         error_detail = body.get("error") or body.get("message")
                 except Exception:
                     error_detail = response.text[:200] if response.text else None
+                
+                logger.error("api_error", provider="fmp_client", endpoint=endpoint, status_code=response.status_code, error=error_detail)
                 
                 # Map status codes to user-friendly messages
                 if response.status_code == 401:

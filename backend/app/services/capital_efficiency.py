@@ -31,6 +31,9 @@ class CapitalEfficiencyCalculator:
     # Prior period data for incremental ROIC calculation
     prior_nopat: Optional[float] = None
     prior_invested_capital: Optional[float] = None
+    # For ROTIC (Return on Tangible Invested Capital)
+    goodwill: float = 0.0
+    intangibles: float = 0.0
     
     def roic(self) -> Optional[float]:
         """
@@ -47,6 +50,20 @@ class CapitalEfficiencyCalculator:
         if self.invested_capital <= 0:
             return None
         return self.nopat / self.invested_capital
+    
+    def rotic(self) -> Optional[float]:
+        """
+        Return on Tangible Invested Capital = NOPAT / (Invested Capital - Goodwill - Intangibles).
+        
+        This metric reveals the true operating efficiency of the core business by 
+        excluding assets from past acquisitions. High ROTIC combined with 
+        moderate ROIC indicates an efficient core business that grows via 
+        expensive acquisitions.
+        """
+        tangible_capital = self.invested_capital - self.goodwill - self.intangibles
+        if tangible_capital <= 0:
+            return None
+        return self.nopat / tangible_capital
     
     def incremental_roic(self) -> Optional[float]:
         """
@@ -140,6 +157,8 @@ def analyze_value_creation(
     wacc: float,
     prior_nopat: Optional[float] = None,
     prior_invested_capital: Optional[float] = None,
+    goodwill: float = 0.0,
+    intangibles: float = 0.0,
 ) -> dict:
     """
     Comprehensive value creation analysis.
@@ -147,6 +166,7 @@ def analyze_value_creation(
     Returns:
         Dictionary with:
         - roic: Return on Invested Capital
+        - rotic: Return on Tangible Invested Capital
         - incremental_roic: Return on new capital invested
         - reinvestment_rate: % of earnings needed for growth
         - value_spread: ROIC - WACC
@@ -161,9 +181,12 @@ def analyze_value_creation(
         revenue_growth=revenue_growth,
         prior_nopat=prior_nopat,
         prior_invested_capital=prior_invested_capital,
+        goodwill=goodwill,
+        intangibles=intangibles,
     )
     
     roic = calc.roic()
+    rotic = calc.rotic()
     inc_roic = calc.incremental_roic()
     rr = calc.reinvestment_rate()
     spread = calc.value_spread(wacc)
@@ -171,6 +194,7 @@ def analyze_value_creation(
     is_creating = calc.is_value_creating(wacc)
     
     # Generate main assessment
+    assessment = ""
     if roic is None:
         assessment = "Unable to calculate ROIC (invalid invested capital)"
     elif spread is not None:
@@ -184,6 +208,10 @@ def analyze_value_creation(
             assessment = f"Value destroyer: ROIC ({roic:.1%}) below WACC ({wacc:.1%}). Growth reduces shareholder value."
     else:
         assessment = "Unable to assess value creation"
+    
+    # Add ROTIC assessment if it differs significantly from ROIC
+    if rotic and roic and rotic > roic * 1.2:
+        assessment += f" | NOTE: High ROTIC ({rotic:.1%}) reveals an exceptionally efficient core business masked by goodwill/intangibles."
     
     # Generate incremental ROIC assessment
     incremental_assessment = None
@@ -200,6 +228,7 @@ def analyze_value_creation(
     
     return {
         "roic": roic,
+        "rotic": rotic,
         "incremental_roic": inc_roic,
         "reinvestment_rate": rr,
         "value_spread": spread,
