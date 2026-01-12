@@ -9,8 +9,9 @@ from fastapi import APIRouter, HTTPException, Query, Body, BackgroundTasks
 from fastapi.responses import Response
 
 from app.services.sec_filings import sec_filings_service, SECFilingsError
-from app.services.filing_analyzer import get_filing_analyzer, AnalyzerError
+from app.services.filing_analyzer import get_filing_analyzer, AnalyzerError, RateLimitError
 from app.services.filing_parser import FilingParser
+from app.services.filings_repository import get_filings_repository
 from app.schemas.forensic import FilingForensicResponse, ForensicReport
 
 router = APIRouter(prefix="/api/filings", tags=["filings"])
@@ -74,6 +75,8 @@ async def analyze_filing_section(
             "model": result.model
         }
     except Exception as e:
+        if isinstance(e, RateLimitError):
+            raise HTTPException(status_code=429, detail=str(e))
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
@@ -112,6 +115,8 @@ async def compare_filing_sections(
             "model": result.model
         }
     except Exception as e:
+        if isinstance(e, RateLimitError):
+            raise HTTPException(status_code=429, detail=str(e))
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
@@ -151,6 +156,8 @@ async def run_forensic_audit(
         return FilingForensicResponse(ticker=ticker.upper(), report=report)
         
     except (SECFilingsError, AnalyzerError) as e:
+        if isinstance(e, RateLimitError):
+            raise HTTPException(status_code=429, detail=str(e))
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
@@ -359,7 +366,7 @@ async def download_filing_pdf(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'attachment; filename="{pdf_filename}"'
+                "Content-Disposition": f'inline; filename="{pdf_filename}"'
             }
         )
         
@@ -399,4 +406,6 @@ async def analyze_filing(
         }
         
     except (SECFilingsError, AnalyzerError) as e:
+        if isinstance(e, RateLimitError):
+            raise HTTPException(status_code=429, detail=str(e))
         raise HTTPException(status_code=500, detail=str(e))

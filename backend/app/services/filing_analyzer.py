@@ -99,7 +99,7 @@ class FilingAnalyzer:
         )
     """
     
-    MODEL = "gemini-2.5-flash"  # Best free model with 1M context
+    MODEL = "gemini-flash-latest"  # Stable flash model with generous free tier quota
     
     def __init__(self, api_key: Optional[str] = None):
         """Initialize with API key from env or parameter."""
@@ -294,7 +294,7 @@ For each red flag found, quote the relevant text and explain the economic risk t
 Your task is to analyze the provided SEC filing for accounting shenanigans and financial risk.
 You must output your findings in a strict JSON format matching the requested schema.
 
-Evaluate these categories:
+Evaluate these categories and include them in the 'red_flags' list:
 1. Revenue: Recognition shifts, aggressive accruals, channel stuffing.
 2. Expenses: Capitalization creep (hiding expenses in assets), under-reserving.
 3. Assets: Inventory/Sales divergence, goodwill impairment risk, 'Other Assets' bloat.
@@ -305,20 +305,19 @@ Evaluate these categories:
 8. Auditor: Critical Audit Matters (CAMs), auditor tenure (>20 years is high risk), firm quality.
 
 Critical Tasks:
+- For the 'red_flags' list, include one entry for each category above.
 - Assign a score from 1 (Safe) to 10 (High Danger) for each category.
-- Calculate an overall 'Accounting Consistency Score' from 1 to 100 (100 = most consistent/clean).
-- Identify the 'Reported EPS' (Basic or Diluted) from the filing.
-- Propose specific 'EPS Adjustments' to reach a 'Forensic EPS' that reflects economic reality. 
-  For example, if they capitalized $100M of R&D that should have been expensed, subtract that from net income / shares.
-  If they had a one-time gain on asset sale, subtract that.
-  If they are under-reserving for bad debt, estimate the impact and subtract it."""
+- Calculate an overall 'Accounting Consistency Score' from 1 to 100.
+- Identify the 'Reported EPS' (Basic or Diluted).
+- Propose specific 'EPS Adjustments' to reach a 'Forensic EPS'. 
+- Ensure the JSON is complete and not truncated."""
 
         query = "Perform a complete institutional-grade forensic audit of this filing."
 
         prompt = f"""{system_prompt}
 
 === SEC FILING TEXT ===
-{filing_text[:500000]}
+{filing_text[:300000]}
 === END FILING ===
 
 {query}"""

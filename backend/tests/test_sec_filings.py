@@ -156,6 +156,143 @@ class TestSECFilingsService:
         )
         assert url == "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm"
 
+    @pytest.mark.asyncio
+    async def test_get_company_info(self, service):
+        """Test fetching company info from SEC."""
+        mock_submissions = {
+            "name": "Apple Inc.",
+            "sic": "3571",
+            "sicDescription": "Electronic Computers",
+        }
+        
+        with patch.object(service, '_get_cik', new_callable=AsyncMock) as mock_get_cik:
+            with patch.object(service, '_request', new_callable=AsyncMock) as mock_request:
+                mock_get_cik.return_value = "0000320193"
+                mock_response = MagicMock()
+                mock_response.json.return_value = mock_submissions
+                mock_request.return_value = mock_response
+                
+                info = await service.get_company_info("AAPL")
+                
+                assert info["name"] == "Apple Inc."
+                assert info["ticker"] == "AAPL"
+                assert info["cik"] == "0000320193"
+                assert info["sic"] == "3571"
+
+    @pytest.mark.asyncio
+    async def test_audit_ticker_history_resilience(self, service):
+        """Test audit_ticker_history skips entries with missing document_name."""
+        mock_metadata = [
+            {
+                "accession_number": "001",
+                "cik": "123",
+                "document_name": None, # Should be skipped
+                "parsed_status": "pending"
+            },
+            {
+                "accession_number": "002",
+                "cik": "123",
+                "document_name": "doc.htm",
+                "parsed_status": "pending"
+            }
+        ]
+        
+        with patch("app.services.sec_filings.get_filings_repository") as mock_repo_func:
+            with patch("app.services.sec_filings.get_filing_analyzer") as mock_analyzer_func:
+                mock_repo = AsyncMock()
+                mock_repo.list_metadata.return_value = mock_metadata
+                mock_repo_func.return_value = mock_repo
+                
+                mock_analyzer = AsyncMock()
+                mock_analyzer_func.return_value = mock_analyzer
+                
+                with patch.object(service, 'get_filing_html', new_callable=AsyncMock) as mock_get_html:
+                    mock_get_html.return_value = "<html></html>"
+                    
+                    # Also patch asyncio.sleep to avoid waiting
+                    with patch("asyncio.sleep", new_callable=AsyncMock):
+                        await service.audit_ticker_history("AAPL", limit=2)
+                
+                # Verify get_filing_html was called only once (for the second entry)
+                assert mock_get_html.call_count == 1
+                assert "002" in mock_get_html.call_args[0][0]
+                
+                # Verify update_forensic_report was called only once
+                assert mock_repo.update_forensic_report.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_get_company_info(self, service):
+        """Test fetching company info from SEC."""
+        mock_submissions = {
+            "name": "Apple Inc.",
+            "sic": "3571",
+            "sicDescription": "Electronic Computers",
+        }
+        
+        with patch.object(service, '_get_cik', new_callable=AsyncMock) as mock_get_cik:
+            with patch.object(service, '_request', new_callable=AsyncMock) as mock_request:
+                mock_get_cik.return_value = "0000320193"
+                mock_response = MagicMock()
+                mock_response.json.return_value = mock_submissions
+                mock_request.return_value = mock_response
+                
+                info = await service.get_company_info("AAPL")
+                
+                assert info["name"] == "Apple Inc."
+                assert info["ticker"] == "AAPL"
+                assert info["cik"] == "0000320193"
+                assert info["sic"] == "3571"
+
+    @pytest.mark.asyncio
+    async def test_audit_ticker_history_skips_missing_doc_name(self, service):
+        """Test that audit_ticker_history skips entries with NULL document_name."""
+        mock_metadata = [
+            {
+                "accession_number": "001",
+                "cik": "123",
+                "document_name": None, # Should be skipped
+                "parsed_status": "pending"
+            },
+            {
+                "accession_number": "002",
+                "cik": "123",
+                "document_name": "doc.htm",
+                "parsed_status": "pending"
+            }
+        ]
+        
+        with patch("app.services.sec_filings.get_filings_repository") as mock_repo_func:
+            with patch("app.services.sec_filings.get_filing_analyzer") as mock_analyzer_func:
+                mock_repo = AsyncMock()
+                mock_repo.list_metadata.return_value = mock_metadata
+                mock_repo_func.return_value = mock_repo
+                
+                mock_analyzer = AsyncMock()
+                mock_analyzer_func.return_value = mock_analyzer
+                
+                with patch.object(service, 'get_filing_html', new_callable=AsyncMock) as mock_get_html:
+                    mock_get_html.return_value = "<html></html>"
+                    mock_report = MagicMock()
+                    mock_report.accounting_consistency_score = 90
+                    mock_report.model_dump_json.return_value = "{}"
+                    mock_analyzer.analyze_forensic.return_value = mock_report
+                    
+                    # Also patch asyncio.sleep to avoid waiting
+                    with patch("asyncio.sleep", new_callable=AsyncMock):
+                        await service.audit_ticker_history("AAPL", limit=2)
+                
+                # Verify get_filing_html was called only once (for the second entry)
+                assert mock_get_html.call_count == 1
+                assert "002" in mock_get_html.call_args[0][0]
+                
+                # Verify update_forensic_report was called only once
+                assert mock_repo.update_forensic_report.call_count == 1
+                mock_repo.update_forensic_report.assert_called_with(
+                    accession_number="002",
+                    consistency_score=90,
+                    report_json="{}"
+                )
+
 
 class TestFilingsRouter:
     """Test filings API router."""
