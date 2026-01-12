@@ -1033,3 +1033,161 @@ class TestGrowthMarginCorrelation:
         # (not just 120% of historical as in current implementation)
         # This test verifies correlation IS being applied
         assert bull.operating_margin <= hints["operating_margin"] * 1.2  # Should be less than naive
+
+
+class TestMaintenanceCapex:
+    """
+    NOTES4.md: Use Maintenance CapEx for Growth Companies.
+    
+    Problem: Growth companies (META, NVDA) have CapEx >> D&A during heavy
+    investment phases. Using current CapEx ratio (e.g., 33%) in DCF projections
+    produces negative FCF and nonsensical valuations.
+    
+    Solution: When use_maintenance_capex=True, automatically substitute
+    D&A ratio (~9%) for CapEx ratio when CapEx significantly exceeds D&A.
+    This produces sensible steady-state projections.
+    """
+    
+    def test_maintenance_capex_substitutes_da_when_capex_high(self):
+        """
+        When CapEx > 1.5 × D&A and use_maintenance_capex=True,
+        should use D&A ratio instead of CapEx ratio.
+        """
+        # META-like case: D&A ~9%, CapEx ~33%
+        da_ratio = 0.09
+        capex_ratio = 0.33  # 3.7x D&A - definitely exceeds threshold
+        
+        calculator = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=50,
+            cash=100,
+            base_wacc=0.10,
+            da_ratio=da_ratio,
+            capex_ratio=capex_ratio,
+            use_maintenance_capex=True,  # Enable substitution
+        )
+        
+        # Should have substituted D&A ratio for CapEx
+        assert calculator.capex_ratio == da_ratio
+    
+    def test_maintenance_capex_no_substitution_when_capex_reasonable(self):
+        """
+        When CapEx < 1.5 × D&A, should keep original CapEx ratio even
+        when use_maintenance_capex=True.
+        """
+        da_ratio = 0.09
+        capex_ratio = 0.10  # Only 1.1x D&A - reasonable
+        
+        calculator = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=50,
+            cash=100,
+            base_wacc=0.10,
+            da_ratio=da_ratio,
+            capex_ratio=capex_ratio,
+            use_maintenance_capex=True,
+        )
+        
+        # Should keep original CapEx ratio since it's reasonable
+        assert calculator.capex_ratio == capex_ratio
+    
+    def test_maintenance_capex_disabled_keeps_original(self):
+        """
+        When use_maintenance_capex=False, should always use original CapEx ratio.
+        """
+        da_ratio = 0.09
+        capex_ratio = 0.33  # High CapEx
+        
+        calculator = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[20],
+            historical_da=[5],
+            historical_capex=[-8],
+            historical_working_capital=[10],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=50,
+            cash=100,
+            base_wacc=0.10,
+            da_ratio=da_ratio,
+            capex_ratio=capex_ratio,
+            use_maintenance_capex=False,  # Disabled
+        )
+        
+        # Should keep original high CapEx ratio
+        assert calculator.capex_ratio == capex_ratio
+    
+    def test_maintenance_capex_produces_positive_fcf(self):
+        """
+        For growth companies, using maintenance CapEx should produce
+        positive FCF scenarios instead of negative.
+        
+        META example: 43% margin - 33% CapEx = negative FCF
+        With maintenance CapEx: 43% margin - 9% CapEx = positive FCF
+        """
+        # META-like financials
+        da_ratio = 0.09
+        capex_ratio = 0.33  # Heavy investment phase
+        operating_margin = 0.43
+        
+        # Without maintenance CapEx substitution
+        calc_high_capex = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[43],  # 43% margin
+            historical_da=[9],     # 9% D&A
+            historical_capex=[-33],  # 33% CapEx
+            historical_working_capital=[5],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=50,
+            cash=100,
+            base_wacc=0.10,
+            da_ratio=da_ratio,
+            capex_ratio=capex_ratio,
+            use_maintenance_capex=False,
+        )
+        
+        # With maintenance CapEx substitution
+        calc_maint_capex = ScenarioCalculator(
+            historical_revenue=[100],
+            historical_ebit=[43],
+            historical_da=[9],
+            historical_capex=[-33],
+            historical_working_capital=[5],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=50,
+            cash=100,
+            base_wacc=0.10,
+            da_ratio=da_ratio,
+            capex_ratio=capex_ratio,
+            use_maintenance_capex=True,  # Use D&A as CapEx
+        )
+        
+        scenario = Scenario(
+            name="Base",
+            revenue_growth=0.10,
+            operating_margin=operating_margin,
+            terminal_growth=0.03,
+        )
+        
+        result_high = calc_high_capex.run_scenario(scenario)
+        result_maint = calc_maint_capex.run_scenario(scenario)
+        
+        # Maintenance CapEx should produce higher valuation
+        assert result_maint.intrinsic_value > result_high.intrinsic_value
+        
+        # And the difference should be substantial (not just rounding)
+        assert result_maint.intrinsic_value > result_high.intrinsic_value * 1.5

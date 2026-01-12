@@ -280,6 +280,10 @@ export interface ScenarioRequest {
   // -0.2 = high growth -> lower margin (competition effect)
   // 0.0 = disabled (independent variables)
   growth_margin_correlation?: number;
+  // NOTES4.md: Use Maintenance CapEx for Scenarios
+  // When true, uses D&A ratio instead of current CapEx ratio
+  // Prevents negative FCF for growth companies (META, NVDA, etc.)
+  use_maintenance_capex?: boolean;
 }
 
 export interface ScenarioResultItem {

@@ -222,6 +222,8 @@ export interface RunScenariosParams {
   wcRatio?: number;
   // NOTES2.md III.3: Growth-Margin Correlation
   growthMarginCorrelation?: number;
+  // NOTES4.md: Use Maintenance CapEx for Scenarios
+  useMaintenanceCapex?: boolean;
 }
 
 export async function runScenarios(
@@ -237,6 +239,7 @@ export async function runScenarios(
     capex_ratio: params.capexRatio,
     wc_ratio: params.wcRatio,
     growth_margin_correlation: params.growthMarginCorrelation,
+    use_maintenance_capex: params.useMaintenanceCapex,
   };
 
   const res = await fetch(
