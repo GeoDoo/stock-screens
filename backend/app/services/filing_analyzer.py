@@ -45,6 +45,12 @@ FORENSIC_PROMPT_SUITE = {
     1. Tone Shifts: Compare to previous year if available. Is language becoming more legalistic/passive?
     2. Risk Factor Changes: Identify new or significantly expanded risk disclosures.
     3. Vague Language: Flag evasive answers regarding liquidity or competitive pressures.
+    """,
+    "auditor_skepticism": """
+    Analyze the Auditor's Report (Item 8 or separate section):
+    1. Critical Audit Matters (CAMs): Identify highlighted risks (e.g., 'Revenue Recognition', 'Inventory Valuation'). 
+    2. Auditor Tenure: How long has the firm been auditing? (Flag if > 20 years - risk of capture).
+    3. Audit Firm Quality: Is it a Big 4 firm? (Flag if small/unknown firm for a multi-billion cap).
     """
 }
 
@@ -296,6 +302,7 @@ Evaluate these categories:
 5. Cash Flow: Divergence from Net Income, unsustainable financing.
 6. Disclosures: Vague language in MD&A, removal of previously positive statements.
 7. Management: Tone shifts, risk factor bloat, executive turnover mentions.
+8. Auditor: Critical Audit Matters (CAMs), auditor tenure (>20 years is high risk), firm quality.
 
 Critical Tasks:
 - Assign a score from 1 (Safe) to 10 (High Danger) for each category.

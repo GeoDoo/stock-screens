@@ -19,7 +19,9 @@ import {
   fetchFilingSections,
   analyzeFilingSection,
   compareFilingSections,
-  runForensicAudit
+  runForensicAudit,
+  fetchForensicHistory,
+  type ForensicHistoryItem
 } from '../api';
 import type { 
   SECFiling, 
@@ -31,6 +33,7 @@ import type {
 import { ForensicRedFlags } from '../components/ForensicRedFlags';
 import { RedFlagHeatmap } from '../components/RedFlagHeatmap';
 import { TruthBridge } from '../components/TruthBridge';
+import { ForensicTimeline } from '../components/ForensicTimeline';
 import { Layout } from '../components/Layout';
 
 export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string }) {
@@ -44,6 +47,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
   const [compareWithPrevious, setCompareWithPrevious] = useState(false);
   const [analysis, setAnalysis] = useState<FilingAnalysisResponse | null>(null);
   const [forensicReport, setForensicReport] = useState<FilingForensicResponse | null>(null);
+  const [forensicHistory, setForensicHistory] = useState<ForensicHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSections, setLoadingSections] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -65,12 +69,14 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
     setLoading(true);
     setError(null);
     try {
-      const [filingsRes, infoRes] = await Promise.all([
+      const [filingsRes, infoRes, historyRes] = await Promise.all([
         fetchFilings({ ticker: symbol!, formTypes: ['10-K', '10-Q'], limit: 20 }),
-        fetchCompanyInfo(symbol!)
+        fetchCompanyInfo(symbol!),
+        fetchForensicHistory(symbol!)
       ]);
       setFilings(filingsRes.filings);
       setCompanyInfo(infoRes);
+      setForensicHistory(historyRes.history);
       if (filingsRes.filings.length > 0) {
         setSelectedFiling(filingsRes.filings[0]);
       }
@@ -397,6 +403,10 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                     <div className="text-xs opacity-90 mt-1">{error}</div>
                   </div>
                 </div>
+              )}
+
+              {forensicHistory.length > 0 && !analyzing && (
+                <ForensicTimeline history={forensicHistory} ticker={symbol!} />
               )}
 
               {analyzing ? (

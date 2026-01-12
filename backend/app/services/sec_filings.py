@@ -17,6 +17,8 @@ from playwright.async_api import async_playwright
 
 from app.services.filings_repository import get_filings_repository
 from app.services.rate_limiter_sqlite import rate_limiter
+from app.services.filing_analyzer import get_filing_analyzer
+from app.services.filing_parser import FilingParser
 from app.services.telemetry_repository import get_telemetry_repository
 from app.services.logging_config import logger # Use structlog logger
 from app.services.resilience import get_circuit_breaker
@@ -68,6 +70,7 @@ class SECFilingsService:
         }
         self._cik_cache: Dict[str, str] = {}
         self._ticker_map: Optional[Dict[str, str]] = None
+        self.parser = FilingParser()
     
     async def _request(self, url: str, accept: str = "application/json") -> httpx.Response:
         """Make HTTP request with proper headers and rate limiting."""
@@ -314,21 +317,53 @@ class SECFilingsService:
             "timestamp": date.today().isoformat()
         }
 
-    async def get_company_info(self, ticker: str) -> Dict[str, Any]:
-        """Get company information from SEC."""
-        cik = await self._get_cik(ticker)
+    async def audit_ticker_history(self, ticker: str, limit: int = 5):
+        """
+        Background task: Perform forensic audits on historical 10-Ks.
         
-        url = f"{self.BASE_URL}/submissions/CIK{cik}.json"
-        response = await self._request(url)
-        data = response.json()
+        This builds the 'Forensic Timeline' for a company.
+        """
+        repo = get_filings_repository()
+        analyzer = get_filing_analyzer()
         
-        return {
-            "cik": cik,
-            "name": data.get("name", ""),
-            "ticker": ticker.upper(),
-            "sic": data.get("sic"),
-            "sic_description": data.get("sicDescription"),
-        }
+        # 1. Get recent 10-Ks from local metadata
+        metadata = await repo.list_metadata(ticker=ticker, form_type="10-K", limit=limit)
+        
+        logger.info("batch_audit_start", ticker=ticker, count=len(metadata))
+        
+        for entry in metadata:
+            # Skip if already audited
+            if entry.get("parsed_status") == "completed":
+                continue
+                
+            acc = entry["accession_number"]
+            doc_url = entry["document_url"]
+            
+            try:
+                # Fetch and clean
+                html = await self.get_filing_html(doc_url)
+                text = self.parser.clean_html(html)
+                
+                # Audit
+                report = await analyzer.analyze_forensic(text)
+                
+                # Persist
+                await repo.update_forensic_report(
+                    accession_number=acc,
+                    consistency_score=report.accounting_consistency_score,
+                    report_json=report.model_dump_json()
+                )
+                
+                logger.info("historical_audit_complete", ticker=ticker, accession=acc)
+                
+                # Small sleep to respect LLM rate limits
+                await asyncio.sleep(2.0)
+                
+            except Exception as e:
+                logger.error("historical_audit_failed", ticker=ticker, accession=acc, error=str(e))
+                continue
+                
+        logger.info("batch_audit_complete", ticker=ticker)
     
     async def get_filing_html(self, document_url: str) -> str:
         """Fetch SEC filing HTML content with SEC-compliant headers."""

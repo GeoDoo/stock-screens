@@ -494,6 +494,25 @@ export async function compareFilingSections(
   return handleResponse<FilingAnalysisResponse>(res);
 }
 
+export interface ForensicHistoryItem {
+  accession_number: string;
+  filing_date: string;
+  consistency_score: number;
+  report: string; // JSON string
+  form_type: string;
+}
+
+export interface ForensicHistoryResponse {
+  ticker: string;
+  history: ForensicHistoryItem[];
+  count: number;
+}
+
+export async function fetchForensicHistory(ticker: string): Promise<ForensicHistoryResponse> {
+  const res = await fetch(`${API_BASE}/api/filings/${ticker}/forensic-history`);
+  return handleResponse<ForensicHistoryResponse>(res);
+}
+
 export async function runForensicAudit(params: {
   ticker: string;
   documentUrl: string;
