@@ -232,6 +232,66 @@ GET /api/audit/{symbol}/field/{field}
 
 ## filings
 
+### Get Filing Sections
+
+Extract major sections (Items) from an SEC filing.
+
+```
+GET /api/filings/sections
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `document_url` | string | Yes | SEC URL of the filing HTML |
+
+
+
+---
+
+### Analyze Filing Section
+
+Run analysis on a specific section of a filing.
+
+```
+POST /api/filings/analyze-section
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ticker` | string | Yes | Stock ticker symbol |
+| `document_url` | string | Yes | SEC URL of the filing HTML |
+| `section_name` | string | Yes | Name of the section to analyze (e.g., 'Item 7') |
+| `query` | string | null | No | Optional custom query for this section |
+
+
+
+---
+
+### Compare Filing Sections
+
+Compare the same section across two filings (Year-over-Year).
+
+```
+POST /api/filings/compare-sections
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ticker` | string | Yes | Stock ticker symbol |
+| `current_url` | string | Yes | SEC URL of current filing |
+| `previous_url` | string | Yes | SEC URL of previous filing |
+| `section_name` | string | Yes | Name of section to compare |
+
+
+
+---
+
 ### Get Filings
 
 Get SEC filings for a company.
@@ -347,66 +407,6 @@ POST /api/filings/{ticker}/analyze
 | `ticker` | string | Yes |  |
 | `document_url` | string | Yes | SEC URL of the filing HTML |
 | `query` | string | null | No | Optional custom query for analysis |
-
-
-
----
-
-### Get Filing Sections
-
-Extract major sections (Items) from an SEC filing.
-
-```
-GET /api/filings/sections
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `document_url` | string | Yes | SEC URL of the filing HTML |
-
-
-
----
-
-### Analyze Filing Section
-
-Run analysis on a specific section of a filing.
-
-```
-POST /api/filings/analyze-section
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `ticker` | string | Yes | Stock ticker symbol |
-| `document_url` | string | Yes | SEC URL of the filing HTML |
-| `section_name` | string | Yes | Name of the section to analyze (e.g., 'Item 7') |
-| `query` | string | null | No | Optional custom query for this section |
-
-
-
----
-
-### Compare Filing Sections
-
-Compare the same section across two filings (Year-over-Year).
-
-```
-POST /api/filings/compare-sections
-```
-
-**Parameters**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `ticker` | string | Yes | Stock ticker symbol |
-| `current_url` | string | Yes | SEC URL of current filing |
-| `previous_url` | string | Yes | SEC URL of previous filing |
-| `section_name` | string | Yes | Name of section to compare |
 
 
 
