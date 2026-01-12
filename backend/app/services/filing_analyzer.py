@@ -13,7 +13,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict
 
 from google import genai
@@ -69,7 +69,7 @@ class AnalysisResult:
     
     def __post_init__(self):
         if self.timestamp is None:
-            self.timestamp = datetime.utcnow()
+            self.timestamp = datetime.now(timezone.utc)
 
 
 class FilingAnalyzer:
@@ -101,13 +101,13 @@ class FilingAnalyzer:
         self.client = genai.Client(api_key=self.api_key)
         self._provider_name = "gemini"
     
-    def _check_rate_limit(self):
+    async def _check_rate_limit(self):
         """Ensure we don't exceed rate limits using central SQLite rate limiter."""
-        if rate_limiter.is_at_limit(self._provider_name):
-            wait_time = rate_limiter.get_time_until_reset(self._provider_name) or 60
+        if await rate_limiter.is_at_limit(self._provider_name):
+            wait_time = await rate_limiter.get_time_until_reset(self._provider_name) or 60
             raise RateLimitError(retry_after=wait_time)
         
-        rate_limiter.record_call(self._provider_name)
+        await rate_limiter.record_call(self._provider_name)
     
     async def analyze(
         self,
@@ -130,7 +130,7 @@ class FilingAnalyzer:
             RateLimitError: If rate limit would be exceeded
             AnalyzerError: For other errors
         """
-        self._check_rate_limit()
+        await self._check_rate_limit()
         
         default_system = """You are an expert forensic accountant analyzing SEC filings.
 Your job is to identify:

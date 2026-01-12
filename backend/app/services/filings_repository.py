@@ -26,7 +26,8 @@ class CachedFiling:
     filing_date: date
     document_name: str
     pdf_data: bytes
-    pdf_size_kb: int
+    compressed_size_kb: int    # Database footprint (compressed)
+    uncompressed_size_kb: int  # Actual PDF size (uncompressed)
     created_at: datetime
     
     @property
@@ -48,12 +49,13 @@ class FilingsRepository:
     def __init__(self, db_path: Optional[str] = None):
         """Initialize repository with database path."""
         self.db_path = db_path or str(DEFAULT_DB_PATH)
-        self._init_db()
+        # Note: _init_db() should be called externally or handled via an async init
+        # to avoid blocking the event loop in the constructor.
     
-    def _init_db(self):
-        """Initialize database schema (Synchronous for startup)."""
-        with get_connection(self.db_path) as conn:
-            conn.executescript("""
+    async def _init_db(self):
+        """Initialize database schema (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            await db.executescript("""
                 CREATE TABLE IF NOT EXISTS filing_pdfs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     ticker TEXT NOT NULL,
@@ -64,6 +66,7 @@ class FilingsRepository:
                     document_name TEXT NOT NULL,
                     pdf_data BLOB NOT NULL,
                     pdf_size_kb INTEGER NOT NULL,
+                    original_size_kb INTEGER,
                     created_at TEXT NOT NULL,
                     
                     -- Unique constraint: one PDF per document
@@ -81,7 +84,14 @@ class FilingsRepository:
                 CREATE INDEX IF NOT EXISTS idx_filing_pdfs_filing_date 
                     ON filing_pdfs(filing_date DESC);
             """)
-            conn.commit()
+            
+            # Migration: add original_size_kb if it doesn't exist
+            async with db.execute("PRAGMA table_info(filing_pdfs)") as cursor:
+                columns = [row["name"] for row in await cursor.fetchall()]
+                if "original_size_kb" not in columns:
+                    await db.execute("ALTER TABLE filing_pdfs ADD COLUMN original_size_kb INTEGER")
+            
+            await db.commit()
     
     async def get_pdf(
         self,
@@ -146,8 +156,8 @@ class FilingsRepository:
                 """
                 INSERT OR REPLACE INTO filing_pdfs (
                     ticker, cik, accession_number, form_type, filing_date,
-                    document_name, pdf_data, pdf_size_kb, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    document_name, pdf_data, pdf_size_kb, original_size_kb, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticker.upper(),
@@ -158,6 +168,7 @@ class FilingsRepository:
                     document_name,
                     compressed_data,
                     compressed_size_kb,
+                    original_size_kb,
                     created_at.isoformat(),
                 ),
             ) as cursor:
@@ -179,7 +190,8 @@ class FilingsRepository:
                 filing_date=filing_date,
                 document_name=document_name,
                 pdf_data=pdf_data,
-                pdf_size_kb=compressed_size_kb,
+                compressed_size_kb=compressed_size_kb,
+                uncompressed_size_kb=original_size_kb,
                 created_at=created_at,
             )
     
@@ -193,7 +205,8 @@ class FilingsRepository:
         async with get_async_connection(self.db_path) as db:
             query = """
                 SELECT id, ticker, cik, accession_number, form_type, 
-                       filing_date, document_name, pdf_size_kb, created_at
+                       filing_date, document_name, pdf_size_kb as compressed_size_kb, 
+                       original_size_kb as uncompressed_size_kb, created_at
                 FROM filing_pdfs
                 WHERE 1=1
             """
@@ -222,7 +235,8 @@ class FilingsRepository:
                         filing_date=date.fromisoformat(row["filing_date"]),
                         document_name=row["document_name"],
                         pdf_data=b"",  # Don't load blob in list view
-                        pdf_size_kb=row["pdf_size_kb"],
+                        compressed_size_kb=row["compressed_size_kb"],
+                        uncompressed_size_kb=row["uncompressed_size_kb"] or 0,
                         created_at=datetime.fromisoformat(row["created_at"]),
                     )
                     for row in rows
@@ -252,16 +266,22 @@ class FilingsRepository:
             async with db.execute("""
                 SELECT 
                     COUNT(*) as total_files,
-                    SUM(pdf_size_kb) as total_size_kb,
+                    SUM(pdf_size_kb) as total_compressed_kb,
+                    SUM(original_size_kb) as total_uncompressed_kb,
                     COUNT(DISTINCT ticker) as unique_tickers,
                     COUNT(DISTINCT form_type) as unique_form_types
                 FROM filing_pdfs
             """) as cursor:
                 row = await cursor.fetchone()
                 
+                compressed_kb = row["total_compressed_kb"] or 0
+                uncompressed_kb = row["total_uncompressed_kb"] or 0
+                
                 return {
                     "total_files": row["total_files"] or 0,
-                    "total_size_mb": round((row["total_size_kb"] or 0) / 1024, 2),
+                    "total_size_mb": round(compressed_kb / 1024, 2),
+                    "original_size_mb": round(uncompressed_kb / 1024, 2),
+                    "savings_percent": round((1 - compressed_kb / uncompressed_kb) * 100, 1) if uncompressed_kb > 0 else 0,
                     "unique_tickers": row["unique_tickers"] or 0,
                     "unique_form_types": row["unique_form_types"] or 0,
                 }
