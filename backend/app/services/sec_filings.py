@@ -337,7 +337,11 @@ class SECFilingsService:
                 continue
                 
             acc = entry["accession_number"]
-            doc_url = entry["document_url"]
+            cik = entry["cik"]
+            doc_name = entry["document_name"]
+            
+            # Reconstruction of document URL since it's not stored in metadata table
+            doc_url = self._build_document_url(cik, acc, doc_name)
             
             try:
                 # Fetch and clean
@@ -364,6 +368,22 @@ class SECFilingsService:
                 continue
                 
         logger.info("batch_audit_complete", ticker=ticker)
+
+    async def get_company_info(self, ticker: str) -> Dict[str, Any]:
+        """Get company information from SEC."""
+        cik = await self._get_cik(ticker)
+        
+        url = f"{self.BASE_URL}/submissions/CIK{cik}.json"
+        response = await self._request(url)
+        data = response.json()
+        
+        return {
+            "cik": cik,
+            "name": data.get("name", ""),
+            "ticker": ticker.upper(),
+            "sic": data.get("sic"),
+            "sic_description": data.get("sicDescription"),
+        }
     
     async def get_filing_html(self, document_url: str) -> str:
         """Fetch SEC filing HTML content with SEC-compliant headers."""
