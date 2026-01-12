@@ -66,7 +66,7 @@ class FilingAnalyzer:
         )
     """
     
-    MODEL = "gemini-2.0-flash"  # Best free model with 1M context
+    MODEL = "gemini-2.5-flash"  # Best free model with 1M context
     
     def __init__(self, api_key: Optional[str] = None):
         """Initialize with API key from env or parameter."""
