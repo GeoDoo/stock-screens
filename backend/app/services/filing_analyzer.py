@@ -250,16 +250,18 @@ PREVIOUS YEAR FILING:
 {previous_filing[:400000]}
 
 Identify:
-1. Material changes in accounting policies
-2. New risk disclosures
-3. Changes in management tone
-4. Removed or added language
-5. Any red flags"""
+1. Material changes in accounting policies or estimates
+2. New or significantly expanded risk disclosures
+3. Shifts in management tone (becoming more defensive/legalistic)
+4. Removed language that was previously positive
+5. Any forensic red flags regarding revenue or liabilities
+
+Highlight specific wording changes that indicate a shift in economic reality."""
 
         return await self.analyze(
             filing_text="",  # Text is in query
             query=query,
-            system_prompt="You are comparing two SEC filings year-over-year. Focus on material changes.",
+            system_prompt="You are an expert forensic accountant comparing two SEC filings year-over-year. Focus on material changes and linguistic shifts.",
         )
     
     async def extract_red_flags(self, filing_text: str) -> AnalysisResult:

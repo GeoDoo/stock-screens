@@ -15,7 +15,10 @@ import {
   fetchFilings, 
   analyzeFiling, 
   getFilingPdfUrl, 
-  fetchCompanyInfo 
+  fetchCompanyInfo,
+  fetchFilingSections,
+  analyzeFilingSection,
+  compareFilingSections
 } from '../api';
 import type { SECFiling, FilingsListResponse, FilingAnalysisResponse, CompanyInfoResponse } from '../types';
 import { ForensicRedFlags } from '../components/ForensicRedFlags';
@@ -27,8 +30,12 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
   const [filings, setFilings] = useState<SECFiling[]>([]);
   const [companyInfo, setCompanyInfo] = useState<CompanyInfoResponse | null>(null);
   const [selectedFiling, setSelectedFiling] = useState<SECFiling | null>(null);
+  const [sections, setSections] = useState<string[]>([]);
+  const [selectedSection, setSelectedSection] = useState<string>('');
+  const [compareWithPrevious, setCompareWithPrevious] = useState(false);
   const [analysis, setAnalysis] = useState<FilingAnalysisResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingSections, setLoadingSections] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +44,12 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
       loadData();
     }
   }, [symbol]);
+
+  useEffect(() => {
+    if (selectedFiling) {
+      loadSections();
+    }
+  }, [selectedFiling]);
 
   const loadData = async () => {
     setLoading(true);
@@ -58,16 +71,58 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
     }
   };
 
+  const loadSections = async () => {
+    if (!selectedFiling) return;
+    setLoadingSections(true);
+    try {
+      const res = await fetchFilingSections(selectedFiling.document_url);
+      setSections(res.sections);
+      // Auto-select Item 7 (MD&A) if available, otherwise first section
+      const mda = res.sections.find(s => s.toLowerCase().includes('item 7'));
+      setSelectedSection(mda || res.sections[0] || '');
+    } catch (err) {
+      console.error('Failed to load sections', err);
+    } finally {
+      setLoadingSections(false);
+    }
+  };
+
   const runAnalysis = async () => {
     if (!selectedFiling || !symbol) return;
     
     setAnalyzing(true);
     setAnalysis(null);
     try {
-      const res = await analyzeFiling({
-        ticker: symbol,
-        documentUrl: selectedFiling.document_url
-      });
+      let res;
+      if (compareWithPrevious && selectedSection) {
+        // Find previous filing of same type
+        const previousFiling = filings.find(f => 
+          f.form_type === selectedFiling.form_type && 
+          f.filing_date < selectedFiling.filing_date
+        );
+        
+        if (!previousFiling) {
+          throw new Error(`No previous ${selectedFiling.form_type} found for comparison.`);
+        }
+        
+        res = await compareFilingSections({
+          ticker: symbol,
+          currentUrl: selectedFiling.document_url,
+          previousUrl: previousFiling.document_url,
+          sectionName: selectedSection
+        });
+      } else if (selectedSection) {
+        res = await analyzeFilingSection({
+          ticker: symbol,
+          documentUrl: selectedFiling.document_url,
+          sectionName: selectedSection
+        });
+      } else {
+        res = await analyzeFiling({
+          ticker: symbol,
+          documentUrl: selectedFiling.document_url
+        });
+      }
       setAnalysis(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
@@ -116,6 +171,44 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
         </div>
 
         <div className="flex items-center gap-3">
+          {selectedFiling && (
+            <div className="flex items-center gap-2 mr-4">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Section:</span>
+              <select
+                value={selectedSection}
+                onChange={(e) => setSelectedSection(e.target.value)}
+                disabled={loadingSections || analyzing}
+                className="bg-gray-50 border border-gray-200 text-gray-900 text-xs rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-48 p-2 font-semibold transition-all"
+              >
+                {loadingSections ? (
+                  <option>Loading Sections...</option>
+                ) : sections.length > 0 ? (
+                  <>
+                    <option value="">Full Filing</option>
+                    {sections.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </>
+                ) : (
+                  <option value="">Full Filing (Auto-extract failed)</option>
+                )}
+              </select>
+            </div>
+          )}
+          {selectedFiling && selectedSection && (
+            <div className="flex items-center gap-2 mr-4">
+              <input
+                type="checkbox"
+                id="compareToggle"
+                checked={compareWithPrevious}
+                onChange={(e) => setCompareWithPrevious(e.target.checked)}
+                className="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded focus:ring-indigo-500"
+              />
+              <label htmlFor="compareToggle" className="text-xs font-bold text-gray-600 cursor-pointer">
+                YoY Compare
+              </label>
+            </div>
+          )}
           {selectedFiling && (
             <button
               onClick={runAnalysis}
@@ -279,13 +372,17 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                   <Brain className="w-10 h-10 text-indigo-200 mx-auto mb-4" />
                   <h3 className="text-sm font-bold text-indigo-900 mb-2">Ready for Audit</h3>
                   <p className="text-xs text-indigo-700/70 mb-4 leading-relaxed">
-                    Select a filing and click 'Run Forensic Audit' to scan for financial shenanigans.
+                    {compareWithPrevious && selectedSection
+                      ? `Comparing ${selectedSection} YoY for material shifts.`
+                      : selectedSection 
+                        ? `Targeting ${selectedSection} for institutional-grade red flag analysis.`
+                        : "Select a filing and click 'Run Forensic Audit' to scan for financial shenanigans."}
                   </p>
                   <button
                     onClick={runAnalysis}
                     className="w-full py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-md hover:bg-indigo-700 transition-colors"
                   >
-                    Start Analysis
+                    {compareWithPrevious ? 'Run YoY Comparison' : `Start ${selectedSection || 'Full'} Analysis`}
                   </button>
                 </div>
               )}

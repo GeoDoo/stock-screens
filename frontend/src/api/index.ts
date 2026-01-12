@@ -432,3 +432,59 @@ export async function analyzeFiling(
   );
   return handleResponse<FilingAnalysisResponse>(res);
 }
+
+export interface FilingSectionsResponse {
+  sections: string[];
+  section_lengths: Record<string, number>;
+  count: number;
+}
+
+export async function fetchFilingSections(documentUrl: string): Promise<FilingSectionsResponse> {
+  const query = new URLSearchParams();
+  query.set('document_url', documentUrl);
+  const res = await fetch(`${API_BASE}/api/filings/sections?${query.toString()}`);
+  return handleResponse<FilingSectionsResponse>(res);
+}
+
+export interface AnalyzeFilingSectionParams extends AnalyzeFilingParams {
+  sectionName: string;
+}
+
+export async function analyzeFilingSection(
+  params: AnalyzeFilingSectionParams
+): Promise<FilingAnalysisResponse> {
+  const query = new URLSearchParams();
+  query.set('document_url', params.documentUrl);
+  query.set('section_name', params.sectionName);
+  if (params.query) {
+    query.set('query', params.query);
+  }
+  
+  const res = await fetch(
+    `${API_BASE}/api/filings/analyze-section?ticker=${params.ticker}&${query.toString()}`,
+    { method: 'POST' }
+  );
+  return handleResponse<FilingAnalysisResponse>(res);
+}
+
+export interface CompareFilingSectionsParams {
+  ticker: string;
+  currentUrl: string;
+  previousUrl: string;
+  sectionName: string;
+}
+
+export async function compareFilingSections(
+  params: CompareFilingSectionsParams
+): Promise<FilingAnalysisResponse> {
+  const query = new URLSearchParams();
+  query.set('current_url', params.currentUrl);
+  query.set('previous_url', params.previousUrl);
+  query.set('section_name', params.sectionName);
+  
+  const res = await fetch(
+    `${API_BASE}/api/filings/compare-sections?ticker=${params.ticker}&${query.toString()}`,
+    { method: 'POST' }
+  );
+  return handleResponse<FilingAnalysisResponse>(res);
+}
