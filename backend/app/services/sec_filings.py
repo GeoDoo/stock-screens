@@ -1,0 +1,276 @@
+"""SEC EDGAR filings service with PDF generation.
+
+Fetches SEC filings and converts HTML to PDF using headless Chrome (playwright).
+"""
+import logging
+from dataclasses import dataclass
+from datetime import date
+from typing import List, Optional, Dict, Any
+
+import httpx
+from playwright.async_api import async_playwright
+
+logger = logging.getLogger(__name__)
+
+
+class SECFilingsError(Exception):
+    """Error fetching or processing SEC filings."""
+    pass
+
+
+@dataclass
+class Filing:
+    """SEC filing metadata."""
+    accession_number: str
+    form_type: str
+    filing_date: date
+    description: str
+    document_url: str
+    cik: str
+    ticker: str
+
+    @property
+    def viewer_url(self) -> str:
+        """URL to SEC filing index page."""
+        clean_accession = self.accession_number.replace("-", "")
+        cik_num = self.cik.lstrip("0")
+        return f"https://www.sec.gov/Archives/edgar/data/{cik_num}/{clean_accession}/{clean_accession}-index.htm"
+
+
+class SECFilingsService:
+    """
+    Service for fetching SEC EDGAR filings and generating PDFs.
+    
+    SEC API requires User-Agent header with contact info.
+    Rate limit: 10 requests/second.
+    
+    PDF generation uses headless Chrome via playwright.
+    """
+    
+    BASE_URL = "https://data.sec.gov"
+    TICKER_URL = "https://www.sec.gov/files/company_tickers.json"
+    
+    def __init__(self, user_agent: str = "StockScreens support@stockscreens.app"):
+        self.headers = {
+            "User-Agent": user_agent,
+            "Accept": "application/json",
+        }
+        self._cik_cache: Dict[str, str] = {}
+        self._ticker_map: Optional[Dict[str, str]] = None
+    
+    async def _request(self, url: str, accept: str = "application/json") -> httpx.Response:
+        """Make HTTP request with proper headers."""
+        headers = {**self.headers, "Accept": accept}
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            return response
+    
+    async def _load_ticker_map(self) -> Dict[str, str]:
+        """Load ticker to CIK mapping from SEC."""
+        if self._ticker_map is not None:
+            return self._ticker_map
+        
+        try:
+            response = await self._request(self.TICKER_URL)
+            data = response.json()
+            # Build ticker -> CIK map
+            self._ticker_map = {}
+            for item in data.values():
+                ticker = item.get("ticker", "").upper()
+                cik = str(item.get("cik_str", "")).zfill(10)
+                if ticker and cik:
+                    self._ticker_map[ticker] = cik
+            return self._ticker_map
+        except Exception as e:
+            raise SECFilingsError(f"Failed to load ticker mapping: {e}")
+    
+    async def _get_cik(self, ticker: str) -> str:
+        """Get CIK for a ticker symbol."""
+        ticker = ticker.upper().strip().replace(".", "-")
+        
+        if ticker in self._cik_cache:
+            return self._cik_cache[ticker]
+        
+        ticker_map = await self._load_ticker_map()
+        cik = ticker_map.get(ticker)
+        
+        if not cik:
+            raise SECFilingsError(f"Ticker '{ticker}' not found in SEC database")
+        
+        self._cik_cache[ticker] = cik
+        return cik
+    
+    def _build_document_url(self, cik: str, accession: str, document: str) -> str:
+        """Build URL to SEC filing document."""
+        cik_num = cik.lstrip("0")
+        accession_clean = accession.replace("-", "")
+        return f"https://www.sec.gov/Archives/edgar/data/{cik_num}/{accession_clean}/{document}"
+    
+    async def get_filings(
+        self,
+        ticker: str,
+        form_types: Optional[List[str]] = None,
+        limit: int = 100,
+    ) -> List[Filing]:
+        """
+        Get SEC filings for a company.
+        
+        Args:
+            ticker: Stock ticker symbol
+            form_types: Filter by form types (e.g., ["10-K", "10-Q"])
+            limit: Maximum filings to return
+            
+        Returns:
+            List of Filing objects
+        """
+        cik = await self._get_cik(ticker)
+        ticker = ticker.upper().strip()
+        
+        url = f"{self.BASE_URL}/submissions/CIK{cik}.json"
+        response = await self._request(url)
+        data = response.json()
+        
+        recent = data.get("filings", {}).get("recent", {})
+        filings = []
+        
+        accessions = recent.get("accessionNumber", [])
+        forms = recent.get("form", [])
+        dates = recent.get("filingDate", [])
+        documents = recent.get("primaryDocument", [])
+        descriptions = recent.get("primaryDocDescription", [])
+        
+        for i in range(min(len(accessions), limit * 2)):  # Fetch extra to account for filtering
+            if len(filings) >= limit:
+                break
+            
+            form_type = forms[i] if i < len(forms) else ""
+            
+            # Filter by form type if specified
+            if form_types and form_type not in form_types:
+                continue
+            
+            try:
+                filing_date = date.fromisoformat(dates[i]) if i < len(dates) else date.today()
+            except ValueError:
+                continue
+            
+            accession = accessions[i]
+            document = documents[i] if i < len(documents) else ""
+            description = descriptions[i] if i < len(descriptions) else form_type
+            
+            filings.append(Filing(
+                accession_number=accession,
+                form_type=form_type,
+                filing_date=filing_date,
+                description=description or form_type,
+                document_url=self._build_document_url(cik, accession, document),
+                cik=cik,
+                ticker=ticker,
+            ))
+        
+        return filings
+    
+    async def get_company_info(self, ticker: str) -> Dict[str, Any]:
+        """Get company information from SEC."""
+        cik = await self._get_cik(ticker)
+        
+        url = f"{self.BASE_URL}/submissions/CIK{cik}.json"
+        response = await self._request(url)
+        data = response.json()
+        
+        return {
+            "cik": cik,
+            "name": data.get("name", ""),
+            "ticker": ticker.upper(),
+            "sic": data.get("sic"),
+            "sic_description": data.get("sicDescription"),
+        }
+    
+    async def get_filing_html(self, document_url: str) -> str:
+        """Fetch SEC filing HTML content with SEC-compliant headers."""
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.get(
+                    document_url,
+                    headers={
+                        # SEC requires User-Agent with email for programmatic access
+                        "User-Agent": self.headers["User-Agent"],
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        "Accept-Language": "en-US,en;q=0.9",
+                    },
+                    follow_redirects=True,
+                )
+                response.raise_for_status()
+                return response.text
+        except Exception as e:
+            raise SECFilingsError(f"Failed to fetch filing HTML: {e}")
+    
+    async def get_filing_pdf(self, document_url: str) -> bytes:
+        """
+        Convert SEC filing HTML to PDF.
+        
+        Fetches HTML via httpx (SEC allows with proper User-Agent),
+        then renders to PDF via headless Chromium.
+        
+        Args:
+            document_url: URL to SEC filing HTML document
+            
+        Returns:
+            PDF bytes
+        """
+        try:
+            # Fetch HTML ourselves with SEC-compliant headers
+            html_content = await self.get_filing_html(document_url)
+            
+            # Get base URL for relative links (images, CSS, etc.)
+            base_url = document_url.rsplit("/", 1)[0] + "/"
+            
+            # Inject base tag so relative URLs resolve correctly
+            if "<head>" in html_content:
+                html_content = html_content.replace(
+                    "<head>", 
+                    f'<head><base href="{base_url}">'
+                )
+            elif "<HEAD>" in html_content:
+                html_content = html_content.replace(
+                    "<HEAD>", 
+                    f'<HEAD><base href="{base_url}">'
+                )
+            
+            async with async_playwright() as p:
+                # Chromium required for PDF generation
+                browser = await p.chromium.launch(headless=True)
+                page = await browser.new_page(viewport={"width": 1280, "height": 900})
+                
+                # Load our fetched HTML directly
+                await page.set_content(html_content, wait_until="networkidle")
+                
+                # Give page time to render fully
+                await page.wait_for_timeout(2000)
+                
+                # Generate PDF
+                pdf_bytes = await page.pdf(
+                    format="Letter",
+                    margin={
+                        "top": "0.5in",
+                        "right": "0.5in", 
+                        "bottom": "0.5in",
+                        "left": "0.5in",
+                    },
+                    print_background=True,
+                    scale=0.65,  # Scale down to fit tables
+                )
+                
+                await browser.close()
+                return pdf_bytes
+                
+        except SECFilingsError:
+            raise
+        except Exception as e:
+            logger.error(f"PDF generation failed for {document_url}: {e}")
+            raise SECFilingsError(f"Failed to generate PDF: {e}")
+
+
+# Shared service instance
+sec_filings_service = SECFilingsService()

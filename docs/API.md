@@ -230,6 +230,76 @@ GET /api/audit/{symbol}/field/{field}
 
 ---
 
+## filings
+
+### Get Filings
+
+Get SEC filings for a company.
+
+Returns filing metadata with URLs to documents.
+Use the /pdf endpoint to download filings as PDF.
+
+```
+GET /api/filings/{ticker}
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ticker` | string | Yes |  |
+| `form_types` | array | null | No | Filter by form types (e.g., 10-K, 10-Q, 8-K) |
+| `limit` | integer | No | Maximum filings to return (default: `100`) |
+
+
+
+---
+
+### Get Company Info
+
+Get SEC company information.
+
+```
+GET /api/filings/{ticker}/info
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ticker` | string | Yes |  |
+
+
+
+---
+
+### Download Filing Pdf
+
+Download SEC filing as PDF.
+
+Converts the SEC HTML filing to PDF on-demand.
+
+Args:
+    cik: Company CIK number
+    accession_number: Filing accession number
+    document: Document filename (e.g., "aapl-20230930.htm")
+
+```
+GET /api/filings/pdf/{cik}/{accession_number}/{document}
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `cik` | string | Yes |  |
+| `accession_number` | string | Yes |  |
+| `document` | string | Yes |  |
+
+
+
+---
+
 ## memos
 
 ### Create Memo

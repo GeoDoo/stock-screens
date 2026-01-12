@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-12 12:21
+> Last updated: 2026-01-12 16:01
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -42,6 +42,7 @@ Stock Screens is a full-stack stock analysis application with:
 | `rate_limiter_sqlite.py` | When the rate limit resets. |
 | `ratio_calculator.py` | Valuation metrics. |
 | `scenario_calculator.py` | A single scenario with its assumptions. |
+| `sec_filings.py` | Error fetching or processing SEC filings. |
 | `sensitivity_calculator.py` | Calculates sensitivity matrix for DCF valuation. |
 | `stock_data_client.py` | Smart stock data client with automatic fallback between prov |
 | `technical_indicators.py` | Single indicator data point. |
@@ -111,6 +112,7 @@ Weighted Average Cost of Capital calculator.
 | `CEOEfficiencyWarning.tsx` | CEOEfficiencyWarning |
 | `CapitalEfficiencyPanel.tsx` | CapitalEfficiencyPanel |
 | `DiscountRateModal.tsx` | DiscountRateModal |
+| `FilingsPage.tsx` | FilingsPage |
 | `FinancialRatiosTable.tsx` | FinancialRatiosTable |
 | `GlossaryPage.tsx` | GlossaryPage |
 | `GlossaryRef.tsx` | GlossaryRef |
@@ -156,7 +158,7 @@ Weighted Average Cost of Capital calculator.
 
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
-| Backend | 32 test files | pytest |
+| Backend | 33 test files | pytest |
 | Frontend | 23 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)
