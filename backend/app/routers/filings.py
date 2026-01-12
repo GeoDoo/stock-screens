@@ -105,6 +105,7 @@ async def compare_filing_sections(
         return {
             "ticker": ticker.upper(),
             "section": section_name,
+            "query": result.query,
             "analysis": result.response,
             "timestamp": result.timestamp.isoformat(),
             "model": result.model
