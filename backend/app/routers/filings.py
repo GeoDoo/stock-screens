@@ -11,6 +11,7 @@ from fastapi.responses import Response
 from app.services.sec_filings import sec_filings_service, SECFilingsError
 from app.services.filing_analyzer import get_filing_analyzer, AnalyzerError
 from app.services.filing_parser import FilingParser
+from app.schemas.forensic import FilingForensicResponse, ForensicReport
 
 router = APIRouter(prefix="/api/filings", tags=["filings"])
 parser = FilingParser()
@@ -116,6 +117,45 @@ async def compare_filing_sections(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/{ticker}/forensic-audit", response_model=FilingForensicResponse)
+async def run_forensic_audit(
+    ticker: str,
+    document_url: str = Query(..., description="SEC URL of the filing HTML"),
+    accession_number: Optional[str] = Query(None, description="SEC accession number for persistence"),
+):
+    """
+    Perform a complete institutional-grade forensic audit of a filing.
+    Returns a structured report with an Accounting Consistency Score and category red flags.
+    """
+    analyzer = get_filing_analyzer()
+    
+    try:
+        # Fetch full filing HTML
+        html_content = await sec_filings_service.get_filing_html(document_url)
+        
+        # Clean HTML to text for LLM
+        text_content = parser.clean_html(html_content)
+        
+        # Run structured forensic analysis
+        report = await analyzer.analyze_forensic(text_content)
+        
+        # PERSISTENCE: Save to DB if accession_number is provided
+        if accession_number:
+            repo = get_filings_repository()
+            await repo.update_forensic_report(
+                accession_number=accession_number,
+                consistency_score=report.accounting_consistency_score,
+                report_json=report.model_dump_json()
+            )
+        
+        return FilingForensicResponse(ticker=ticker.upper(), report=report)
+        
+    except (SECFilingsError, AnalyzerError) as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+
 @router.get("/{ticker}")
 async def get_filings(
     ticker: str,
@@ -146,7 +186,7 @@ async def get_filings(
         # Get company info
         company_info = await sec_filings_service.get_company_info(ticker)
         
-        return {
+        response_data = {
             "ticker": ticker.upper(),
             "company_name": company_info.get("name"),
             "cik": company_info.get("cik"),
@@ -159,11 +199,28 @@ async def get_filings(
                     "document_url": f.document_url,
                     "document_name": f.document_name,
                     "viewer_url": f.viewer_url,
+                    "consistency_score": None,
+                    "sentiment_score": None,
+                    "parsed_status": "pending",
                 }
                 for f in filings
             ],
             "count": len(filings),
         }
+
+        # Merge with local metadata if available
+        repo = get_filings_repository()
+        local_metadata = await repo.list_metadata(ticker=ticker, limit=limit)
+        local_map = {m["accession_number"]: m for m in local_metadata}
+        
+        for filing_dict in response_data["filings"]:
+            acc = filing_dict["accession_number"]
+            if acc in local_map:
+                filing_dict["consistency_score"] = local_map[acc].get("consistency_score")
+                filing_dict["parsed_status"] = local_map[acc].get("parsed_status")
+                filing_dict["sentiment_score"] = local_map[acc].get("sentiment_score")
+        
+        return response_data
         
     except SECFilingsError as e:
         if "not found" in str(e).lower():

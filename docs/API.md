@@ -292,6 +292,50 @@ POST /api/filings/compare-sections
 
 ---
 
+### Run Forensic Audit
+
+Perform a complete institutional-grade forensic audit of a filing.
+Returns a structured report with an Accounting Consistency Score and category red flags.
+
+```
+POST /api/filings/{ticker}/forensic-audit
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ticker` | string | Yes |  |
+| `document_url` | string | Yes | SEC URL of the filing HTML |
+| `accession_number` | string | null | No | SEC accession number for persistence |
+
+
+**Response**
+
+```json
+{
+  "ticker": "string",
+  "report": {
+    "accounting_consistency_score": 0,
+    "red_flags": {},
+    "summary": "string",
+    "reported_eps": 0.0,
+    "forensic_eps_adjustment": 0.0,
+    "adjustments": [
+      {
+        "reason": "string",
+        "amount": 0.0,
+        "impact": "string"
+      }
+    ],
+    "timestamp": "2024-01-15T10:30:00Z",
+    "model": "string"
+  }
+}
+```
+
+---
+
 ### Get Filings
 
 Get SEC filings for a company.

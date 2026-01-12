@@ -18,10 +18,19 @@ import {
   fetchCompanyInfo,
   fetchFilingSections,
   analyzeFilingSection,
-  compareFilingSections
+  compareFilingSections,
+  runForensicAudit
 } from '../api';
-import type { SECFiling, FilingsListResponse, FilingAnalysisResponse, CompanyInfoResponse } from '../types';
+import type { 
+  SECFiling, 
+  FilingsListResponse, 
+  FilingAnalysisResponse, 
+  CompanyInfoResponse,
+  FilingForensicResponse 
+} from '../types';
 import { ForensicRedFlags } from '../components/ForensicRedFlags';
+import { RedFlagHeatmap } from '../components/RedFlagHeatmap';
+import { TruthBridge } from '../components/TruthBridge';
 import { Layout } from '../components/Layout';
 
 export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string }) {
@@ -34,6 +43,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [compareWithPrevious, setCompareWithPrevious] = useState(false);
   const [analysis, setAnalysis] = useState<FilingAnalysisResponse | null>(null);
+  const [forensicReport, setForensicReport] = useState<FilingForensicResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingSections, setLoadingSections] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -131,6 +141,28 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
     }
   };
 
+  const runDeepAudit = async () => {
+    if (!selectedFiling || !symbol) return;
+    
+    setAnalyzing(true);
+    setForensicReport(null);
+    setAnalysis(null);
+    setError(null);
+    
+    try {
+      const res = await runForensicAudit({
+        ticker: symbol,
+        documentUrl: selectedFiling.document_url,
+        accessionNumber: selectedFiling.accession_number
+      });
+      setForensicReport(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Forensic audit failed');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -210,23 +242,33 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
             </div>
           )}
           {selectedFiling && (
-            <button
-              onClick={runAnalysis}
-              disabled={analyzing}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all"
-            >
-              {analyzing ? (
-                <>
+            <div className="flex gap-2">
+              <button
+                onClick={runAnalysis}
+                disabled={analyzing}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all"
+              >
+                {analyzing ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Analyzing Shenanigans...
-                </>
-              ) : (
-                <>
+                ) : (
                   <Brain className="w-4 h-4" />
-                  Run Forensic Audit
-                </>
-              )}
-            </button>
+                )}
+                {compareWithPrevious ? 'Compare YoY' : selectedSection ? 'Analyze Section' : 'Quick Scan'}
+              </button>
+
+              <button
+                onClick={runDeepAudit}
+                disabled={analyzing}
+                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all"
+              >
+                {analyzing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                )}
+                Deep Forensic Audit
+              </button>
+            </div>
           )}
         </div>
       </header>
@@ -364,6 +406,19 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                     <p className="text-sm font-bold text-gray-900">Digitizing Footnotes</p>
                     <p className="text-xs text-gray-500 mt-1">Applying Forensic Prompt Suite...</p>
                   </div>
+                </div>
+              ) : forensicReport ? (
+                <div className="space-y-8">
+                  <TruthBridge 
+                    reportedEps={forensicReport.report.reported_eps}
+                    adjustments={forensicReport.report.adjustments}
+                    totalAdjustment={forensicReport.report.forensic_eps_adjustment}
+                  />
+                  
+                  <RedFlagHeatmap 
+                    redFlags={forensicReport.report.red_flags} 
+                    consistencyScore={forensicReport.report.accounting_consistency_score} 
+                  />
                 </div>
               ) : analysis ? (
                 <ForensicRedFlags analysis={analysis.analysis} />

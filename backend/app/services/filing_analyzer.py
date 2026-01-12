@@ -15,7 +15,7 @@ import time
 import structlog
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
 from google import genai
 from google.genai import types
@@ -24,6 +24,7 @@ from app.services.rate_limiter_sqlite import rate_limiter
 from app.services.telemetry_repository import get_telemetry_repository
 from app.services.logging_config import logger # Use structlog logger
 from app.services.resilience import get_circuit_breaker
+from app.schemas.forensic import ForensicReport
 
 
 # Institutional Forensic Prompt Suite
@@ -276,6 +277,90 @@ Highlight specific wording changes that indicate a shift in economic reality."""
 
 For each red flag found, quote the relevant text and explain the economic risk to a long-term investor."""
         )
+
+    async def analyze_forensic(self, filing_text: str) -> ForensicReport:
+        """
+        Run a deep forensic scan and return a structured report (Async).
+        """
+        await self._check_rate_limit()
+        
+        system_prompt = """You are a senior forensic accountant at a Tier-1 hedge fund.
+Your task is to analyze the provided SEC filing for accounting shenanigans and financial risk.
+You must output your findings in a strict JSON format matching the requested schema.
+
+Evaluate these categories:
+1. Revenue: Recognition shifts, aggressive accruals, channel stuffing.
+2. Expenses: Capitalization creep (hiding expenses in assets), under-reserving.
+3. Assets: Inventory/Sales divergence, goodwill impairment risk, 'Other Assets' bloat.
+4. Liabilities: Unrecorded obligations, 'Cookie Jar' reserves, off-balance sheet items.
+5. Cash Flow: Divergence from Net Income, unsustainable financing.
+6. Disclosures: Vague language in MD&A, removal of previously positive statements.
+7. Management: Tone shifts, risk factor bloat, executive turnover mentions.
+
+Critical Tasks:
+- Assign a score from 1 (Safe) to 10 (High Danger) for each category.
+- Calculate an overall 'Accounting Consistency Score' from 1 to 100 (100 = most consistent/clean).
+- Identify the 'Reported EPS' (Basic or Diluted) from the filing.
+- Propose specific 'EPS Adjustments' to reach a 'Forensic EPS' that reflects economic reality. 
+  For example, if they capitalized $100M of R&D that should have been expensed, subtract that from net income / shares.
+  If they had a one-time gain on asset sale, subtract that.
+  If they are under-reserving for bad debt, estimate the impact and subtract it."""
+
+        query = "Perform a complete institutional-grade forensic audit of this filing."
+
+        prompt = f"""{system_prompt}
+
+=== SEC FILING TEXT ===
+{filing_text[:500000]}
+=== END FILING ===
+
+{query}"""
+
+        start_time = time.time()
+        telemetry_repo = get_telemetry_repository()
+        trace_id = structlog.contextvars.get_contextvars().get("trace_id", "unknown")
+
+        try:
+            # Use the new GenerateContentConfig with response_mime_type and response_schema
+            response = await self.client.aio.models.generate_content(
+                model=self.MODEL,
+                contents=[prompt],
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=8192,
+                    response_mime_type="application/json",
+                    response_schema=ForensicReport,
+                ),
+            )
+            
+            duration_ms = (time.time() - start_time) * 1000
+            await telemetry_repo.record_metric(
+                trace_id=trace_id,
+                operation="gemini_forensic_analysis",
+                duration_ms=duration_ms,
+                status="success"
+            )
+
+            # The response.parsed should contain the model instance if response_schema was used
+            report = response.parsed
+            if not isinstance(report, ForensicReport):
+                # Fallback if parsing didn't return the model
+                report = ForensicReport.model_validate_json(response.text)
+            
+            report.model = self.MODEL
+            return report
+            
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            await telemetry_repo.record_metric(
+                trace_id=trace_id,
+                operation="gemini_forensic_analysis",
+                duration_ms=duration_ms,
+                status="failed",
+                error_message=str(e)
+            )
+            logger.error(f"Forensic analysis failed: {e}")
+            raise AnalyzerError(f"Forensic analysis failed: {e}")
 
 
 # Singleton instance
