@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from app.services.database import get_async_connection, get_connection, DEFAULT_DB_PATH
+from app.services.logging_config import logger # Use structlog logger
 from app.models.memo import (
     InvestmentMemo,
     AssumptionsSnapshot,
@@ -38,6 +39,7 @@ class MemoRepository:
     
     def _init_db(self):
         """Initialize database schema (Synchronous for startup)."""
+        logger.info("db_init_start", repository="MemoRepository", path=self.db_path)
         with get_connection(self.db_path) as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS memos (
@@ -113,6 +115,7 @@ class MemoRepository:
     
     async def save_memo(self, memo: InvestmentMemo) -> InvestmentMemo:
         """Save a new investment memo (Async)."""
+        logger.debug("memo_save_start", symbol=memo.symbol, title=memo.title)
         async with get_async_connection(self.db_path) as db:
             async with db.execute("""
                 INSERT INTO memos (
@@ -157,6 +160,8 @@ class MemoRepository:
                 ))
             
             await db.commit()
+            
+            logger.info("memo_save_complete", symbol=memo.symbol, memo_id=memo_id)
             
             memo.id = memo_id
             return memo

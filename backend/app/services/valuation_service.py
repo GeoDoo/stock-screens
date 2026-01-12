@@ -1,4 +1,6 @@
 from typing import Optional, List, Dict
+import time
+import structlog
 from datetime import datetime, timezone
 from app.constants import DEFAULT_TAX_RATE
 from app.services.stock_data_client import StockDataClient
@@ -9,6 +11,8 @@ from app.services.fcf_projector import FCFProjector
 from app.services.dcf_calculator import DCFCalculator
 from app.services.sensitivity_calculator import SensitivityCalculator
 from app.services.capital_efficiency import analyze_value_creation
+from app.services.telemetry_repository import get_telemetry_repository
+from app.services.logging_config import logger # Use structlog logger
 
 
 class ValuationService:
@@ -76,298 +80,318 @@ class ValuationService:
     ) -> dict:
         """
         Perform full DCF valuation for a stock.
-        
-        Args:
-            symbol: Stock ticker
-            projection_years: Years to project (default 5)
-            terminal_growth_rate: Perpetual growth rate (default 3%)
-            revenue_growth: Override historical growth rate
-            operating_margin: Override historical margin
-            market_risk_premium: Override default 6%
-            discount_rate_override: If set, use this instead of calculated WACC
-        
-        Returns:
-            Dict with intrinsic value, WACC, projections, and inputs used
         """
-        # Record data fetch timestamp for provenance
-        data_fetched_at = datetime.now(timezone.utc).isoformat()
+        start_time = time.perf_counter()
+        trace_id = structlog.contextvars.get_contextvars().get("trace_id", "unknown")
+        telemetry_repo = get_telemetry_repository()
         
-        # 1. Fetch data (with automatic provider fallback)
-        stock_data = await self.client.get_stock_data(symbol)
-        risk_free_rate = await self.client.get_treasury_rate()
-
-        # 2. Convert to legacy format and extract inputs
-        data = stock_data_to_legacy(stock_data)
-        extractor = DataExtractor(data, market_risk_premium=market_risk_premium)
+        logger.info("valuation_start", symbol=symbol, projection_years=projection_years)
         
-        # P2.8: Check for financial companies and generate warning
-        business_type_warning = self._get_business_type_warning(
-            sector=stock_data.profile.sector,
-            industry=stock_data.profile.industry,
-        )
+        try:
+            # Record data fetch timestamp for provenance
+            data_fetched_at = datetime.now(timezone.utc).isoformat()
+            
+            # 1. Fetch data (with automatic provider fallback)
+            stock_data = await self.client.get_stock_data(symbol)
+            risk_free_rate = await self.client.get_treasury_rate()
 
-        # 3. Calculate WACC (only if all required components are available)
-        beta = extractor.beta()
-        cost_of_debt = extractor.cost_of_debt(risk_free_rate=risk_free_rate)
-        tax_rate = extractor.tax_rate()
-        market_cap = extractor.market_cap()
-        total_debt = extractor.total_debt()
-
-        # Check if we can calculate WACC - requires beta, market_cap, and cost_of_debt
-        can_calculate_wacc = (
-            beta is not None and 
-            market_cap is not None and market_cap > 0 and
-            cost_of_debt is not None
-        )
-        
-        calculated_wacc = None
-        if can_calculate_wacc:
-            wacc_calculator = WACCCalculator(
-                risk_free_rate=risk_free_rate,
-                beta=beta,
-                market_risk_premium=extractor.market_risk_premium(),
-                cost_of_debt=cost_of_debt,
-                tax_rate=tax_rate if tax_rate is not None else DEFAULT_TAX_RATE,
-                market_cap=market_cap,
-                total_debt=total_debt if total_debt is not None else 0,
-            )
-            calculated_wacc = wacc_calculator.calculate()
-        
-        # Use custom discount rate if provided, otherwise use calculated WACC
-        # If WACC couldn't be calculated and no custom rate, we can't proceed
-        if discount_rate_override is not None:
-            discount_rate = discount_rate_override
-        elif calculated_wacc is not None:
-            discount_rate = calculated_wacc
-        else:
-            raise ValueError("Cannot calculate WACC (missing beta, market cap, or cost of debt). Please provide a custom discount rate.")
-
-        # CRITICAL GUARDRAIL: Discount rate must exceed terminal growth
-        # Otherwise terminal value formula produces nonsense (negative or infinite)
-        if discount_rate <= terminal_growth_rate:
-            raise ValueError(
-                f"Discount rate ({discount_rate:.2%}) must be greater than "
-                f"terminal growth rate ({terminal_growth_rate:.2%}). "
-                "This is a fundamental DCF constraint - otherwise terminal value is undefined."
+            # 2. Convert to legacy format and extract inputs
+            data = stock_data_to_legacy(stock_data)
+            extractor = DataExtractor(data, market_risk_premium=market_risk_premium)
+            
+            # P2.8: Check for financial companies and generate warning
+            business_type_warning = self._get_business_type_warning(
+                sector=stock_data.profile.sector,
+                industry=stock_data.profile.industry,
             )
 
-        # 4. Project FCF
-        fcf_projector = FCFProjector(
-            historical_revenue=extractor.revenue_history(),
-            historical_ebit=extractor.ebit_history(),
-            historical_da=extractor.da_history(),
-            historical_capex=extractor.capex_history(),
-            historical_working_capital=extractor.working_capital_history(),
-            tax_rate=extractor.tax_rate() or 0.25,
-        )
+            # 3. Calculate WACC (only if all required components are available)
+            beta = extractor.beta()
+            cost_of_debt = extractor.cost_of_debt(risk_free_rate=risk_free_rate)
+            tax_rate = extractor.tax_rate()
+            market_cap = extractor.market_cap()
+            total_debt = extractor.total_debt()
 
-        projections = fcf_projector.project(
-            years=projection_years,
-            revenue_growth=revenue_growth,
-            operating_margin=operating_margin,
-            da_ratio=da_ratio,
-            capex_ratio=capex_ratio,
-            wc_ratio=wc_ratio,
-            wc_mode=wc_mode,
-            growth_schedule=growth_schedule,
-            # Multi-stage economics schedules
-            margin_schedule=margin_schedule,
-            da_schedule=da_schedule,
-            capex_schedule=capex_schedule,
-            wc_schedule=wc_schedule,
-            # Conservative FCF: SBC as real expense (NOTES2.md)
-            sbc_ratio=sbc_ratio,
-        )
+            # Check if we can calculate WACC - requires beta, market_cap, and cost_of_debt
+            can_calculate_wacc = (
+                beta is not None and 
+                market_cap is not None and market_cap > 0 and
+                cost_of_debt is not None
+            )
+            
+            calculated_wacc = None
+            if can_calculate_wacc:
+                wacc_calculator = WACCCalculator(
+                    risk_free_rate=risk_free_rate,
+                    beta=beta,
+                    market_risk_premium=extractor.market_risk_premium(),
+                    cost_of_debt=cost_of_debt,
+                    tax_rate=tax_rate if tax_rate is not None else DEFAULT_TAX_RATE,
+                    market_cap=market_cap,
+                    total_debt=total_debt if total_debt is not None else 0,
+                )
+                calculated_wacc = wacc_calculator.calculate()
+            
+            # Use custom discount rate if provided, otherwise use calculated WACC
+            # If WACC couldn't be calculated and no custom rate, we can't proceed
+            if discount_rate_override is not None:
+                discount_rate = discount_rate_override
+            elif calculated_wacc is not None:
+                discount_rate = calculated_wacc
+            else:
+                raise ValueError("Cannot calculate WACC (missing beta, market cap, or cost of debt). Please provide a custom discount rate.")
 
-        # 5. Run DCF
-        projected_fcf = [p["fcf"] for p in projections]
-        
-        # Mid-year discounting: assumes cash flows occur mid-year instead of year-end
-        # This typically increases value by ~2-5% as cash flows are "closer"
-        discount_offset = 0.5 if use_mid_year_discounting else 0.0
-        
-        # Use the projected FCFs directly instead of growth-based projection
-        # Calculate PV of projected FCFs
-        pv_fcf = sum(
-            fcf / ((1 + discount_rate) ** (year - discount_offset))
-            for year, fcf in enumerate(projected_fcf, start=1)
-        )
+            # CRITICAL GUARDRAIL: Discount rate must exceed terminal growth
+            # Otherwise terminal value formula produces nonsense (negative or infinite)
+            if discount_rate <= terminal_growth_rate:
+                raise ValueError(
+                    f"Discount rate ({discount_rate:.2%}) must be greater than "
+                    f"terminal growth rate ({terminal_growth_rate:.2%}). "
+                    "This is a fundamental DCF constraint - otherwise terminal value is undefined."
+                )
 
-        # Terminal value
-        final_fcf = projected_fcf[-1]
-        terminal_value = final_fcf * (1 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
-        pv_terminal = terminal_value / ((1 + discount_rate) ** (projection_years - discount_offset))
+            # 4. Project FCF
+            fcf_projector = FCFProjector(
+                historical_revenue=extractor.revenue_history(),
+                historical_ebit=extractor.ebit_history(),
+                historical_da=extractor.da_history(),
+                historical_capex=extractor.capex_history(),
+                historical_working_capital=extractor.working_capital_history(),
+                tax_rate=extractor.tax_rate() or 0.25,
+            )
 
-        enterprise_value = pv_fcf + pv_terminal
+            projections = fcf_projector.project(
+                years=projection_years,
+                revenue_growth=revenue_growth,
+                operating_margin=operating_margin,
+                da_ratio=da_ratio,
+                capex_ratio=capex_ratio,
+                wc_ratio=wc_ratio,
+                wc_mode=wc_mode,
+                growth_schedule=growth_schedule,
+                # Multi-stage economics schedules
+                margin_schedule=margin_schedule,
+                da_schedule=da_schedule,
+                capex_schedule=capex_schedule,
+                wc_schedule=wc_schedule,
+                # Conservative FCF: SBC as real expense (NOTES2.md)
+                sbc_ratio=sbc_ratio,
+            )
 
-        # Net debt adjustment
-        total_debt = extractor.total_debt() or 0
-        cash = extractor.cash() or 0
-        net_debt = total_debt - cash
-        
-        # Institutional-grade Equity Bridge components
-        minority_interest = extractor.minority_interest() or 0
-        preferred_stock = extractor.preferred_stock() or 0
-        deferred_tax_assets = extractor.deferred_tax_assets() or 0
-        pension_deficit = extractor.pension_liability() or 0
-        
-        # Full Equity Bridge:
-        # Equity = EV - Net Debt - Minority Interest - Preferred + NOLs - Pension
-        equity_value = (
-            enterprise_value
-            - net_debt
-            - minority_interest
-            - preferred_stock
-            + deferred_tax_assets
-            - pension_deficit
-        )
-        
-        # Store equity bridge for transparency
-        equity_bridge = {
-            "net_debt": net_debt,
-            "minority_interest": minority_interest,
-            "preferred_stock": preferred_stock,
-            "deferred_tax_assets": deferred_tax_assets,
-            "pension_deficit": pension_deficit,
-        }
+            # 5. Run DCF
+            projected_fcf = [p["fcf"] for p in projections]
+            
+            # Mid-year discounting: assumes cash flows occur mid-year instead of year-end
+            # This typically increases value by ~2-5% as cash flows are "closer"
+            discount_offset = 0.5 if use_mid_year_discounting else 0.0
+            
+            # Use the projected FCFs directly instead of growth-based projection
+            # Calculate PV of projected FCFs
+            pv_fcf = sum(
+                fcf / ((1 + discount_rate) ** (year - discount_offset))
+                for year, fcf in enumerate(projected_fcf, start=1)
+            )
 
-        # Intrinsic value per share (prefer diluted shares for DCF)
-        current_shares = extractor.shares_outstanding() or 1
-        # Determine which shares figure was used for transparency
-        shares_type = extractor.shares_outstanding_type()
-        
-        # Account for SBC dilution over projection period
-        # Terminal shares = current shares * (1 + dilution_rate)^years
-        terminal_shares = current_shares * ((1 + annual_dilution_rate) ** projection_years)
-        
-        # Use terminal shares for per-share value (accounts for future dilution)
-        intrinsic_value_per_share = equity_value / terminal_shares
+            # Terminal value
+            final_fcf = projected_fcf[-1]
+            terminal_value = final_fcf * (1 + terminal_growth_rate) / (discount_rate - terminal_growth_rate)
+            pv_terminal = terminal_value / ((1 + discount_rate) ** (projection_years - discount_offset))
 
-        # 6. Sensitivity Analysis
-        sensitivity_calc = SensitivityCalculator(
-            projected_fcfs=projected_fcf,
-            projection_years=projection_years,
-            shares_outstanding=terminal_shares,  # Use terminal shares for consistency
-            total_debt=total_debt,
-            cash=cash,
-            # Pass equity bridge components for consistency
-            minority_interest=minority_interest,
-            preferred_stock=preferred_stock,
-            deferred_tax_assets=deferred_tax_assets,
-            pension_deficit=pension_deficit,
-        )
-        
-        # Generate matrix with discount rate vs terminal growth
-        # Discount rate: current ± 2% in 1% steps
-        # Terminal growth: 1.5% to 4.5% in 0.5% steps
-        sensitivity = sensitivity_calc.generate_matrix(
-            base_discount_rate=discount_rate,
-            base_terminal_growth=terminal_growth_rate,
-            discount_rate_steps=[-0.02, -0.01, 0, 0.01, 0.02],
-            terminal_growth_steps=[-0.015, -0.01, -0.005, 0, 0.005, 0.01, 0.015],
-        )
+            enterprise_value = pv_fcf + pv_terminal
 
-        # 7. Calculate value drivers (what moves intrinsic value most)
-        # Pass FCF projector and base ratios so we can perturb-and-revalue
-        effective_revenue_growth = revenue_growth or fcf_projector.revenue_cagr()
-        effective_operating_margin = operating_margin or fcf_projector.operating_margin()
-        effective_da_ratio = da_ratio or fcf_projector.da_to_revenue_ratio()
-        effective_capex_ratio = capex_ratio or fcf_projector.capex_to_revenue_ratio()
-        effective_wc_ratio = wc_ratio or fcf_projector.wc_to_revenue_ratio()
-        
-        value_drivers = self._calculate_value_drivers(
-            base_value=intrinsic_value_per_share,
-            fcf_projector=fcf_projector,
-            discount_rate=discount_rate,
-            terminal_growth_rate=terminal_growth_rate,
-            projection_years=projection_years,
-            shares=terminal_shares,  # Use terminal shares for consistency
-            net_debt=net_debt,
-            revenue_growth=effective_revenue_growth,
-            operating_margin=effective_operating_margin,
-            da_ratio=effective_da_ratio,
-            capex_ratio=effective_capex_ratio,
-            wc_ratio=effective_wc_ratio,
-            # Match main valuation methodology
-            wc_mode=wc_mode,
-            use_mid_year_discounting=use_mid_year_discounting,
-            # Multi-stage schedules (if provided, match main valuation)
-            growth_schedule=growth_schedule,
-            margin_schedule=margin_schedule,
-            da_schedule=da_schedule,
-            capex_schedule=capex_schedule,
-            wc_schedule=wc_schedule,
-            # Equity bridge for full calculation
-            minority_interest=minority_interest,
-            preferred_stock=preferred_stock,
-            deferred_tax_assets=deferred_tax_assets,
-            pension_deficit=pension_deficit,
-        )
+            # Net debt adjustment
+            total_debt = extractor.total_debt() or 0
+            cash = extractor.cash() or 0
+            net_debt = total_debt - cash
+            
+            # Institutional-grade Equity Bridge components
+            minority_interest = extractor.minority_interest() or 0
+            preferred_stock = extractor.preferred_stock() or 0
+            deferred_tax_assets = extractor.deferred_tax_assets() or 0
+            pension_deficit = extractor.pension_liability() or 0
+            
+            # Full Equity Bridge:
+            # Equity = EV - Net Debt - Minority Interest - Preferred + NOLs - Pension
+            equity_value = (
+                enterprise_value
+                - net_debt
+                - minority_interest
+                - preferred_stock
+                + deferred_tax_assets
+                - pension_deficit
+            )
+            
+            # Store equity bridge for transparency
+            equity_bridge = {
+                "net_debt": net_debt,
+                "minority_interest": minority_interest,
+                "preferred_stock": preferred_stock,
+                "deferred_tax_assets": deferred_tax_assets,
+                "pension_deficit": pension_deficit,
+            }
 
-        # 8. Terminal Value sanity check via Exit Multiple AND dominance warning
-        # Professional valuation cross-checks Gordon Growth with implied EV/EBITDA
-        # Also warns if terminal value dominates (>70% of EV)
-        # P0 Fix: Also checks implied terminal ROIC vs WACC for economic sanity
-        terminal_value_check = self._calculate_terminal_value_check(
-            terminal_value=terminal_value,
-            terminal_year_projection=projections[-1],
-            pv_terminal=pv_terminal,
-            enterprise_value=enterprise_value,
-            sector_ev_ebitda_multiple=sector_ev_ebitda_multiple,
-            terminal_growth_rate=terminal_growth_rate,
-            wacc=discount_rate,
-        )
+            # Intrinsic value per share (prefer diluted shares for DCF)
+            current_shares = extractor.shares_outstanding() or 1
+            # Determine which shares figure was used for transparency
+            shares_type = extractor.shares_outstanding_type()
+            
+            # Account for SBC dilution over projection period
+            # Terminal shares = current shares * (1 + dilution_rate)^years
+            terminal_shares = current_shares * ((1 + annual_dilution_rate) ** projection_years)
+            
+            # Use terminal shares for per-share value (accounts for future dilution)
+            intrinsic_value_per_share = equity_value / terminal_shares
 
-        # 9. Capital Efficiency - ROIC, Value Spread, Economic Profit
-        # NOTES4: Add capital efficiency metrics to main valuation response
-        # IMPORTANT: Use calculated_wacc (true cost of capital), not discount_rate
-        # (which may be a user override). Value creation should be measured against
-        # the actual WACC, not an arbitrary discount rate.
-        # Pass calculated_wacc directly - if None, _calculate_capital_efficiency
-        # will return a data_issue rather than use an arbitrary rate.
-        capital_efficiency = self._calculate_capital_efficiency(
-            extractor=extractor,
-            wacc=calculated_wacc,
-            revenue_growth=effective_revenue_growth,
-        )
+            # 6. Sensitivity Analysis
+            sensitivity_calc = SensitivityCalculator(
+                projected_fcfs=projected_fcf,
+                projection_years=projection_years,
+                shares_outstanding=terminal_shares,  # Use terminal shares for consistency
+                total_debt=total_debt,
+                cash=cash,
+                # Pass equity bridge components for consistency
+                minority_interest=minority_interest,
+                preferred_stock=preferred_stock,
+                deferred_tax_assets=deferred_tax_assets,
+                pension_deficit=pension_deficit,
+            )
+            
+            # Generate matrix with discount rate vs terminal growth
+            # Discount rate: current ± 2% in 1% steps
+            # Terminal growth: 1.5% to 4.5% in 0.5% steps
+            sensitivity = sensitivity_calc.generate_matrix(
+                base_discount_rate=discount_rate,
+                base_terminal_growth=terminal_growth_rate,
+                discount_rate_steps=[-0.02, -0.01, 0, 0.01, 0.02],
+                terminal_growth_steps=[-0.015, -0.01, -0.005, 0, 0.005, 0.01, 0.015],
+            )
 
-        return {
-            "symbol": symbol,
-            "data_provider": stock_data.provider,
-            "data_fetched_at": data_fetched_at,
-            "intrinsic_value_per_share": intrinsic_value_per_share,
-            "enterprise_value": enterprise_value,
-            "equity_value": equity_value,
-            "market_cap": extractor.market_cap(),
-            "net_debt": net_debt,
-            "equity_bridge": equity_bridge,
-            "wacc": calculated_wacc,
-            "discount_rate": discount_rate,
-            "using_custom_discount_rate": discount_rate_override is not None,
-            "terminal_value": terminal_value,
-            "projections": projections,
-            "inputs": {
-                "risk_free_rate": risk_free_rate,
-                "beta": extractor.beta(),
-                "market_risk_premium": extractor.market_risk_premium(),
-                "cost_of_debt": extractor.cost_of_debt(risk_free_rate=risk_free_rate),
-                "tax_rate": extractor.tax_rate(),
-                "revenue_growth": revenue_growth or fcf_projector.revenue_cagr(),
-                "operating_margin": operating_margin or fcf_projector.operating_margin(),
-                "terminal_growth_rate": terminal_growth_rate,
-                "projection_years": projection_years,
-                "discount_rate_override": discount_rate_override,
-                "shares_outstanding": current_shares,
-                "shares_type": shares_type,  # "diluted" (preferred) or "basic" (fallback)
-                "annual_dilution_rate": annual_dilution_rate,
-                "terminal_shares": terminal_shares,  # Shares at end of projection period
-            },
-            "sensitivity": sensitivity,
-            "value_drivers": value_drivers,
-            "terminal_value_check": terminal_value_check,
-            "business_type_warning": business_type_warning,
-            "capital_efficiency": capital_efficiency,
-        }
+            # 7. Calculate value drivers (what moves intrinsic value most)
+            # Pass FCF projector and base ratios so we can perturb-and-revalue
+            effective_revenue_growth = revenue_growth or fcf_projector.revenue_cagr()
+            effective_operating_margin = operating_margin or fcf_projector.operating_margin()
+            effective_da_ratio = da_ratio or fcf_projector.da_to_revenue_ratio()
+            effective_capex_ratio = capex_ratio or fcf_projector.capex_to_revenue_ratio()
+            effective_wc_ratio = wc_ratio or fcf_projector.wc_to_revenue_ratio()
+            
+            value_drivers = self._calculate_value_drivers(
+                base_value=intrinsic_value_per_share,
+                fcf_projector=fcf_projector,
+                discount_rate=discount_rate,
+                terminal_growth_rate=terminal_growth_rate,
+                projection_years=projection_years,
+                shares=terminal_shares,  # Use terminal shares for consistency
+                net_debt=net_debt,
+                revenue_growth=effective_revenue_growth,
+                operating_margin=effective_operating_margin,
+                da_ratio=effective_da_ratio,
+                capex_ratio=effective_capex_ratio,
+                wc_ratio=effective_wc_ratio,
+                # Match main valuation methodology
+                wc_mode=wc_mode,
+                use_mid_year_discounting=use_mid_year_discounting,
+                # Multi-stage schedules (if provided, match main valuation)
+                growth_schedule=growth_schedule,
+                margin_schedule=margin_schedule,
+                da_schedule=da_schedule,
+                capex_schedule=capex_schedule,
+                wc_schedule=wc_schedule,
+                # Equity bridge for full calculation
+                minority_interest=minority_interest,
+                preferred_stock=preferred_stock,
+                deferred_tax_assets=deferred_tax_assets,
+                pension_deficit=pension_deficit,
+            )
+
+            # 8. Terminal Value sanity check via Exit Multiple AND dominance warning
+            # Professional valuation cross-checks Gordon Growth with implied EV/EBITDA
+            # Also warns if terminal value dominates (>70% of EV)
+            # P0 Fix: Also checks implied terminal ROIC vs WACC for economic sanity
+            terminal_value_check = self._calculate_terminal_value_check(
+                terminal_value=terminal_value,
+                terminal_year_projection=projections[-1],
+                pv_terminal=pv_terminal,
+                enterprise_value=enterprise_value,
+                sector_ev_ebitda_multiple=sector_ev_ebitda_multiple,
+                terminal_growth_rate=terminal_growth_rate,
+                wacc=discount_rate,
+            )
+
+            # 9. Capital Efficiency - ROIC, Value Spread, Economic Profit
+            # NOTES4: Add capital efficiency metrics to main valuation response
+            # IMPORTANT: Use calculated_wacc (true cost of capital), not discount_rate
+            # (which may be a user override). Value creation should be measured against
+            # the actual WACC, not an arbitrary discount rate.
+            # Pass calculated_wacc directly - if None, _calculate_capital_efficiency
+            # will return a data_issue rather than use an arbitrary rate.
+            capital_efficiency = self._calculate_capital_efficiency(
+                extractor=extractor,
+                wacc=calculated_wacc,
+                revenue_growth=effective_revenue_growth,
+            )
+
+            result = {
+                "symbol": symbol,
+                "data_provider": stock_data.provider,
+                "data_fetched_at": data_fetched_at,
+                "intrinsic_value_per_share": intrinsic_value_per_share,
+                "enterprise_value": enterprise_value,
+                "equity_value": equity_value,
+                "market_cap": extractor.market_cap(),
+                "net_debt": net_debt,
+                "equity_bridge": equity_bridge,
+                "wacc": calculated_wacc,
+                "discount_rate": discount_rate,
+                "using_custom_discount_rate": discount_rate_override is not None,
+                "terminal_value": terminal_value,
+                "projections": projections,
+                "inputs": {
+                    "risk_free_rate": risk_free_rate,
+                    "beta": extractor.beta(),
+                    "market_risk_premium": extractor.market_risk_premium(),
+                    "cost_of_debt": extractor.cost_of_debt(risk_free_rate=risk_free_rate),
+                    "tax_rate": extractor.tax_rate(),
+                    "revenue_growth": revenue_growth or fcf_projector.revenue_cagr(),
+                    "operating_margin": operating_margin or fcf_projector.operating_margin(),
+                    "terminal_growth_rate": terminal_growth_rate,
+                    "projection_years": projection_years,
+                    "discount_rate_override": discount_rate_override,
+                    "shares_outstanding": current_shares,
+                    "shares_type": shares_type,  # "diluted" (preferred) or "basic" (fallback)
+                    "annual_dilution_rate": annual_dilution_rate,
+                    "terminal_shares": terminal_shares,  # Shares at end of projection period
+                },
+                "sensitivity": sensitivity,
+                "value_drivers": value_drivers,
+                "terminal_value_check": terminal_value_check,
+                "business_type_warning": business_type_warning,
+                "capital_efficiency": capital_efficiency,
+            }
+            
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            await telemetry_repo.record_metric(
+                trace_id=trace_id,
+                operation="valuation",
+                duration_ms=duration_ms,
+                status="success",
+                ticker=symbol
+            )
+            logger.info("valuation_complete", symbol=symbol, duration_ms=round(duration_ms, 2))
+            
+            return result
+
+        except Exception as e:
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            await telemetry_repo.record_metric(
+                trace_id=trace_id,
+                operation="valuation",
+                duration_ms=duration_ms,
+                status="failed",
+                ticker=symbol,
+                error_message=str(e)
+            )
+            logger.error("valuation_failed", symbol=symbol, error=str(e), duration_ms=round(duration_ms, 2))
+            raise e
     
     def _calculate_value_drivers(
         self,
@@ -850,10 +874,15 @@ class ValuationService:
         if total_equity is not None:
             invested_capital = total_equity + total_debt - excess_cash
         
+        # Get goodwill and intangibles for ROTIC (Return on Tangible Invested Capital)
+        goodwill = extractor.goodwill() or 0.0
+        intangibles = extractor.intangible_assets() or 0.0
+        
         # Return early if missing data
         if nopat is None or invested_capital is None or invested_capital <= 0:
             return {
                 "roic": None,
+                "rotic": None,
                 "value_spread": None,
                 "economic_profit": None,
                 "is_value_creating": None,
@@ -862,20 +891,29 @@ class ValuationService:
                 "data_issue": "Missing operating income or invested capital data",
             }
         
-        # Calculate ROIC even if WACC is unavailable
+        # Calculate ROIC and ROTIC even if WACC is unavailable
         roic = nopat / invested_capital
         
-        # If WACC is unavailable, we can still show ROIC but not value spread/EVA
+        # Tangible Invested Capital for ROTIC
+        tangible_capital = invested_capital - goodwill - intangibles
+        rotic = nopat / tangible_capital if tangible_capital > 0 else None
+        
+        # If WACC is unavailable, we can still show ROIC/ROTIC but not value spread/EVA
         # This is better than using an arbitrary discount rate as WACC
         if wacc is None:
+            assessment = f"ROIC: {roic:.1%} (value spread unavailable - WACC could not be calculated)"
+            if rotic and rotic > roic * 1.2:
+                assessment += f" | NOTE: High ROTIC ({rotic:.1%}) reveals an exceptionally efficient core business masked by goodwill/intangibles."
+                
             return {
                 "roic": roic,
+                "rotic": rotic,
                 "value_spread": None,
                 "economic_profit": None,
                 "is_value_creating": None,
                 "invested_capital": invested_capital,
                 "nopat": nopat,
-                "assessment": f"ROIC: {roic:.1%} (value spread unavailable - WACC could not be calculated)",
+                "assessment": assessment,
                 "data_issue": "WACC unavailable - missing market data (beta, market cap, or cost of debt)",
             }
         
@@ -885,6 +923,8 @@ class ValuationService:
             invested_capital=invested_capital,
             revenue_growth=revenue_growth,
             wacc=wacc,
+            goodwill=goodwill,
+            intangibles=intangibles,
         )
         
         # Add invested_capital and nopat for consistent schema with error case

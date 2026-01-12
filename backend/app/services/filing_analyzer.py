@@ -9,9 +9,10 @@ Free tier limits:
 - 1 million tokens per day
 """
 import asyncio
-import logging
 import os
 import re
+import time
+import structlog
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional, List, Dict
@@ -20,8 +21,9 @@ from google import genai
 from google.genai import types
 
 from app.services.rate_limiter_sqlite import rate_limiter
-
-logger = logging.getLogger(__name__)
+from app.services.telemetry_repository import get_telemetry_repository
+from app.services.logging_config import logger # Use structlog logger
+from app.services.resilience import get_circuit_breaker
 
 
 # Institutional Forensic Prompt Suite
@@ -117,18 +119,30 @@ class FilingAnalyzer:
     ) -> AnalysisResult:
         """
         Analyze a filing section with a specific query (Async).
-        
-        Args:
-            filing_text: The SEC filing text (can be very long - 1M context)
-            query: What to analyze (e.g., "List all related party transactions")
-            system_prompt: Optional custom system prompt
-            
-        Returns:
-            AnalysisResult with the response
-            
-        Raises:
-            RateLimitError: If rate limit would be exceeded
-            AnalyzerError: For other errors
+        Wrapped in a circuit breaker to prevent cascading failures.
+        """
+        breaker = get_circuit_breaker(self._provider_name)
+        try:
+            return await breaker.call(
+                self._analyze_internal,
+                filing_text,
+                query,
+                system_prompt
+            )
+        except Exception as e:
+            # Re-raise known errors, wrap others
+            if isinstance(e, (RateLimitError, AnalyzerError)):
+                raise e
+            raise AnalyzerError(f"Analysis engine failure: {str(e)}")
+
+    async def _analyze_internal(
+        self,
+        filing_text: str,
+        query: str,
+        system_prompt: Optional[str] = None,
+    ) -> AnalysisResult:
+        """
+        Internal implementation of analysis.
         """
         await self._check_rate_limit()
         
@@ -152,6 +166,11 @@ ANALYSIS REQUEST: {query}
 
 Provide a detailed, specific analysis with evidence from the filing."""
 
+        start_time = time.time()
+        telemetry_repo = get_telemetry_repository()
+        # Attempt to get trace_id from current context
+        trace_id = structlog.contextvars.get_contextvars().get("trace_id", "unknown")
+
         try:
             # P0 Bug Fix: Use asynchronous client to avoid blocking the event loop
             response = await self.client.aio.models.generate_content(
@@ -163,6 +182,22 @@ Provide a detailed, specific analysis with evidence from the filing."""
                 ),
             )
             
+            duration_ms = (time.time() - start_time) * 1000
+            
+            # Record telemetry
+            await telemetry_repo.record_metric(
+                trace_id=trace_id,
+                operation="gemini_analysis",
+                duration_ms=duration_ms,
+                status="success"
+            )
+
+            logger.info(
+                "gemini_analysis_completed",
+                duration_ms=round(duration_ms, 2),
+                trace_id=trace_id
+            )
+            
             return AnalysisResult(
                 query=query,
                 response=response.text,
@@ -171,7 +206,18 @@ Provide a detailed, specific analysis with evidence from the filing."""
             )
             
         except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
             error_str = str(e)
+            
+            # Record failed telemetry
+            await telemetry_repo.record_metric(
+                trace_id=trace_id,
+                operation="gemini_analysis",
+                duration_ms=duration_ms,
+                status="failed",
+                error_message=error_str
+            )
+
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
                 # Extract retry time if available
                 match = re.search(r'retry in (\d+\.?\d*)s', error_str.lower())

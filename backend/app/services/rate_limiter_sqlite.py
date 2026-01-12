@@ -17,6 +17,7 @@ from typing import Dict, Optional
 from enum import Enum
 
 from app.services.database import get_async_connection, get_connection, DEFAULT_DB_PATH
+from app.services.logging_config import logger # Use structlog logger
 
 
 class ResetSchedule(Enum):
@@ -60,6 +61,7 @@ class RateLimiterSQLite:
     
     def _init_db(self):
         """Initialize database schema (Synchronous for startup)."""
+        logger.info("db_init_start", repository="RateLimiterSQLite", path=self.db_path)
         with get_connection(self.db_path) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS api_calls (
@@ -164,6 +166,7 @@ class RateLimiterSQLite:
         """Mark provider as rate-limited (API returned 429)."""
         provider = provider.lower()
         timestamp = datetime.now(timezone.utc).isoformat()
+        logger.warning("api_rate_limit_hit", provider=provider)
         
         async with get_async_connection(self.db_path) as db:
             await db.execute(

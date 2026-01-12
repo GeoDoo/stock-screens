@@ -3,15 +3,13 @@ Filings Repository - SQLite persistence for SEC filing PDFs.
 
 Caches generated PDFs to avoid repeated expensive HTML-to-PDF conversions.
 """
-import logging
 import zlib
 from dataclasses import dataclass
 from datetime import datetime, timezone, date
 from typing import Optional
 
 from app.services.database import get_async_connection, get_connection, DEFAULT_DB_PATH
-
-logger = logging.getLogger(__name__)
+from app.services.logging_config import logger # Use structlog logger
 
 
 @dataclass
@@ -117,8 +115,10 @@ class FilingsRepository:
                 
                 if row:
                     logger.info(
-                        f"Cache hit for {document_name} (CIK: {cik}, "
-                        f"Accession: {accession_number})"
+                        "cache_hit",
+                        document_name=document_name,
+                        cik=cik,
+                        accession_number=accession_number
                     )
                     try:
                         # Decompress data on retrieval
@@ -176,9 +176,13 @@ class FilingsRepository:
                 filing_id = cursor.lastrowid
             
             logger.info(
-                f"Cached PDF for {ticker} {form_type} ({document_name}): "
-                f"{original_size_kb} KB -> {compressed_size_kb} KB "
-                f"({round((1 - compressed_size_kb/original_size_kb)*100, 1) if original_size_kb > 0 else 0}% saving)"
+                "pdf_cached",
+                ticker=ticker,
+                form_type=form_type,
+                document_name=document_name,
+                original_size_kb=original_size_kb,
+                compressed_size_kb=compressed_size_kb,
+                savings_percent=round((1 - compressed_size_kb/original_size_kb)*100, 1) if original_size_kb > 0 else 0
             )
             
             return CachedFiling(
@@ -313,7 +317,7 @@ class FilingsRepository:
                     await db.commit()
                     deleted = cursor.rowcount
             
-            logger.info(f"Cleared {deleted} cached PDFs")
+            logger.info("cache_cleared", count=deleted)
             return deleted
 
 

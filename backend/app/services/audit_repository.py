@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from app.services.database import get_async_connection, get_connection, DEFAULT_DB_PATH
+from app.services.logging_config import logger # Use structlog logger
 from app.models.assumption_audit import (
     AssumptionField,
     AssumptionChange,
@@ -36,6 +37,7 @@ class AuditRepository:
     
     def _init_db(self):
         """Initialize database schema if not exists (Synchronous for startup)."""
+        logger.info("db_init_start", repository="AuditRepository", path=self.db_path)
         with get_connection(self.db_path) as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS audit_entries (
@@ -110,6 +112,7 @@ class AuditRepository:
     
     async def save_entry(self, entry: AuditEntry) -> AuditEntry:
         """Save an audit entry with its changes (Async)."""
+        logger.debug("audit_save_start", symbol=entry.symbol, changes_count=len(entry.changes))
         async with get_async_connection(self.db_path) as db:
             # Insert entry
             async with db.execute("""
@@ -139,6 +142,8 @@ class AuditRepository:
                 ))
             
             await db.commit()
+            
+            logger.info("audit_save_complete", symbol=entry.symbol, entry_id=entry_id)
             
             return AuditEntry(
                 id=entry_id,

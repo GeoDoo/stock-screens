@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
 import { 
   FileText, 
   ArrowLeft, 
@@ -20,9 +19,11 @@ import {
 } from '../api';
 import type { SECFiling, FilingsListResponse, FilingAnalysisResponse, CompanyInfoResponse } from '../types';
 import { ForensicRedFlags } from '../components/ForensicRedFlags';
+import { Layout } from '../components/Layout';
 
-export function FilingsAnalysisPage() {
-  const { symbol } = useParams<{ symbol: string }>();
+export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string }) {
+  // Use symbol from props (passed by custom router) or fallback to nothing
+  const symbol = propSymbol;
   const [filings, setFilings] = useState<SECFiling[]>([]);
   const [companyInfo, setCompanyInfo] = useState<CompanyInfoResponse | null>(null);
   const [selectedFiling, setSelectedFiling] = useState<SECFiling | null>(null);
@@ -77,26 +78,27 @@ export function FilingsAnalysisPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
+      <Layout>
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
           <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
           <p className="text-sm text-gray-500 font-medium">Retrieving SEC Archive...</p>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+    <Layout fullWidth={true}>
+      <div className="h-screen flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-4">
-          <Link 
-            to={`/stock/${symbol}`}
+          <a 
+            href={`/?symbol=${symbol}`}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
           >
             <ArrowLeft className="w-5 h-5" />
-          </Link>
+          </a>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900">{symbol} Forensic Intelligence</h1>
@@ -311,5 +313,6 @@ export function FilingsAnalysisPage() {
         </main>
       </div>
     </div>
-  );
+  </Layout>
+);
 }

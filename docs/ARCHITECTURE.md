@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-12 18:07
+> Last updated: 2026-01-12 19:06
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -36,6 +36,7 @@ Stock Screens is a full-stack stock analysis application with:
 | `fmp_client.py` | Custom exception for FMP API errors. |
 | `fmp_provider.py` | Financial Modeling Prep data provider. |
 | `historical_valuation.py` | Valuation metrics for a single year. |
+| `logging_config.py` | — |
 | `massive_provider.py` | Massive (Polygon.io) data provider. |
 | `memo_repository.py` | Asynchronous SQLite-based repository for investment memos. |
 | `monte_carlo.py` | Configuration for a single Monte Carlo input variable. |
@@ -43,12 +44,14 @@ Stock Screens is a full-stack stock analysis application with:
 | `multi_stage_growth.py` | How values transition from start to end over a growth stage. |
 | `rate_limiter_sqlite.py` | When the rate limit resets. |
 | `ratio_calculator.py` | Valuation metrics. |
+| `resilience.py` | Simple Circuit Breaker to prevent cascading failures. |
 | `scenario_calculator.py` | A single scenario with its assumptions. |
 | `sec_filings.py` | Error fetching or processing SEC filings. |
 | `sensitivity_calculator.py` | Calculates sensitivity matrix for DCF valuation. |
 | `stock_data_client.py` | Smart stock data client with automatic fallback between prov |
 | `technical_indicators.py` | Single indicator data point. |
 | `technical_service.py` | Service for running technical analysis on a stock. |
+| `telemetry_repository.py` | Asynchronous repository for recording system telemetry. |
 | `valuation_service.py` | Orchestrates the full DCF valuation: |
 | `wacc_calculator.py` | Weighted Average Cost of Capital calculator. |
 | `yahoo_provider.py` | Yahoo Finance data provider using yfinance library. |
@@ -177,7 +180,7 @@ The application uses a single SQLite database (`stock_screens.db`) with the foll
 
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
-| Backend | 36 test files | pytest |
+| Backend | 37 test files | pytest |
 | Frontend | 24 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)

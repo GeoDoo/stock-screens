@@ -2,7 +2,7 @@
 
 > **Auto-generated** from package files.
 > 
-> Last updated: 2026-01-12 18:07
+> Last updated: 2026-01-12 19:06
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -48,6 +48,8 @@ npm run dev
 | `playwright` | latest |
 | `google-genai` | latest |
 | `aiosqlite` | latest |
+| `structlog` | latest |
+| `tenacity` | latest |
 
 ## Frontend Dependencies
 
@@ -60,7 +62,7 @@ npm run dev
 
 ## Running Tests
 
-### Backend Tests (36 test files)
+### Backend Tests (37 test files)
 
 ```bash
 cd backend

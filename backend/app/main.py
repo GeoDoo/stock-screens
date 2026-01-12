@@ -7,17 +7,22 @@ This is a thin wiring layer. Business logic lives in:
 - routers/audit.py - Assumption audit trail endpoints
 """
 import os
-import logging
+import time
+import uuid
+import structlog
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 
-logger = logging.getLogger(__name__)
+from app.services.logging_config import configure_logging, get_logger
+
+# Configure structured logging at startup
+configure_logging()
+logger = get_logger(__name__)
 
 # Load .env BEFORE any imports that read environment variables
-# (routers read API keys at module level)
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import stock, memos, audit, filings
@@ -28,6 +33,46 @@ from app.services.fmp_provider import FMPProvider
 from app.services.massive_provider import MassiveProvider
 
 app = FastAPI(title="Stock Screens API")
+
+@app.middleware("http")
+async def add_request_tracing(request: Request, call_next):
+    """
+    Middleware to inject X-Trace-ID and log request metrics.
+    Correlates all logs for a single request across services.
+    """
+    trace_id = str(uuid.uuid4())
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(
+        trace_id=trace_id,
+        method=request.method,
+        path=request.url.path,
+    )
+    
+    start_time = time.time()
+    
+    try:
+        response = await call_next(request)
+        duration = time.time() - start_time
+        
+        # Log summary of request
+        logger.info(
+            "request_completed",
+            status_code=response.status_code,
+            duration_ms=round(duration * 1000, 2)
+        )
+        
+        response.headers["X-Trace-ID"] = trace_id
+        return response
+        
+    except Exception as e:
+        duration = time.time() - start_time
+        logger.error(
+            "request_failed",
+            error=str(e),
+            duration_ms=round(duration * 1000, 2),
+            exc_info=True
+        )
+        raise
 
 # CORS configuration
 # For production, set CORS_ORIGINS env var to comma-separated list of allowed origins

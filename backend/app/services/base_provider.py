@@ -127,6 +127,11 @@ class RateLimitError(ProviderError):
     pass
 
 
+class TransientProviderError(ProviderError):
+    """Raised for transient errors that may succeed on retry (e.g., 5xx)."""
+    pass
+
+
 class StockDataProvider(ABC):
     """Abstract base class for stock data providers."""
     

@@ -3,8 +3,11 @@
 Fetches SEC filings and converts HTML to PDF using headless Chrome (playwright).
 PDFs are cached in SQLite to avoid repeated expensive conversions.
 """
-import logging
 import asyncio
+import os
+import re
+import time
+import structlog
 from dataclasses import dataclass
 from datetime import date
 from typing import List, Optional, Dict, Any
@@ -14,8 +17,9 @@ from playwright.async_api import async_playwright
 
 from app.services.filings_repository import get_filings_repository
 from app.services.rate_limiter_sqlite import rate_limiter
-
-logger = logging.getLogger(__name__)
+from app.services.telemetry_repository import get_telemetry_repository
+from app.services.logging_config import logger # Use structlog logger
+from app.services.resilience import get_circuit_breaker
 
 
 class SECFilingsError(Exception):
@@ -279,11 +283,44 @@ class SECFilingsService:
     ) -> bytes:
         """
         Convert SEC filing HTML to PDF with architectural improvements.
-        
-        Note: Playwright is resource-intensive. For production, consider 
-        moving this to a dedicated worker or using a lighter HTML-to-PDF library.
+        Wrapped in a circuit breaker to protect system resources.
+        """
+        breaker = get_circuit_breaker("pdf_generation", failure_threshold=3, reset_timeout=300.0)
+        try:
+            return await breaker.call(
+                self._get_filing_pdf_internal,
+                document_url,
+                ticker=ticker,
+                cik=cik,
+                accession_number=accession_number,
+                form_type=form_type,
+                filing_date=filing_date,
+                document_name=document_name,
+                use_cache=use_cache
+            )
+        except Exception as e:
+            if isinstance(e, SECFilingsError):
+                raise e
+            raise SECFilingsError(f"Institutional PDF engine failure: {str(e)}")
+
+    async def _get_filing_pdf_internal(
+        self,
+        document_url: str,
+        *,
+        ticker: Optional[str] = None,
+        cik: Optional[str] = None,
+        accession_number: Optional[str] = None,
+        form_type: Optional[str] = None,
+        filing_date: Optional[date] = None,
+        document_name: Optional[str] = None,
+        use_cache: bool = True,
+    ) -> bytes:
+        """
+        Internal implementation of PDF generation.
         """
         repo = get_filings_repository()
+        telemetry_repo = get_telemetry_repository()
+        trace_id = structlog.contextvars.get_contextvars().get("trace_id", "unknown")
         
         # Check cache first
         if use_cache and cik and accession_number and document_name:
@@ -295,6 +332,7 @@ class SECFilingsService:
         # Don't launch browser if we hit a critical resource limit
         # (This is a placeholder for more advanced resource management)
         
+        start_time = time.time()
         try:
             html_content = await self.get_filing_html(document_url)
             
@@ -338,6 +376,22 @@ class SECFilingsService:
                         scale=0.7, 
                     )
                     
+                    duration_ms = (time.time() - start_time) * 1000
+                    await telemetry_repo.record_metric(
+                        trace_id=trace_id,
+                        operation="pdf_generation",
+                        ticker=ticker,
+                        duration_ms=duration_ms,
+                        status="success"
+                    )
+
+                    logger.info(
+                        "pdf_generation_completed",
+                        ticker=ticker,
+                        duration_ms=round(duration_ms, 2),
+                        trace_id=trace_id
+                    )
+
                     if (use_cache and ticker and cik and accession_number 
                             and form_type and filing_date and document_name):
                         await repo.save_pdf(
@@ -355,7 +409,22 @@ class SECFilingsService:
                     await browser.close()
                 
         except Exception as e:
-            logger.error(f"Managed PDF generation failed: {e}")
+            duration_ms = (time.time() - start_time) * 1000
+            await telemetry_repo.record_metric(
+                trace_id=trace_id,
+                operation="pdf_generation",
+                ticker=ticker,
+                duration_ms=duration_ms,
+                status="failed",
+                error_message=str(e)
+            )
+            logger.error(
+                "pdf_generation_failed",
+                ticker=ticker,
+                error=str(e),
+                duration_ms=round(duration_ms, 2),
+                trace_id=trace_id
+            )
             raise SECFilingsError(f"Institutional PDF engine failure: {e}")
 
 
