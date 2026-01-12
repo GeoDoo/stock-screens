@@ -404,7 +404,11 @@ export default function App() {
   // Re-run scenarios when toggles change (if scenarios were previously run)
   useEffect(() => {
     if (stockData && scenarioResult) {
-      runScenariosWithData(stockData);
+      // Preserve custom discount rate if user set one
+      const discountOverride = useCustomDiscountRate && customDiscountRate 
+        ? parseFloat(customDiscountRate) / 100 
+        : undefined;
+      runScenariosWithData(stockData, discountOverride);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useGrowthMarginCorrelation, useMaintenanceCapex]);
