@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone, date
 from typing import Optional
 
-from app.services.database import get_connection, DEFAULT_DB_PATH
+from app.services.database import get_async_connection, get_connection, DEFAULT_DB_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class CachedFiling:
 
 class FilingsRepository:
     """
-    SQLite-based repository for caching SEC filing PDFs.
+    Asynchronous SQLite-based repository for caching SEC filing PDFs.
     
     Tables:
     - filing_pdfs: Cached PDF data with metadata
@@ -51,7 +51,7 @@ class FilingsRepository:
         self._init_db()
     
     def _init_db(self):
-        """Initialize database schema."""
+        """Initialize database schema (Synchronous for startup)."""
         with get_connection(self.db_path) as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS filing_pdfs (
@@ -83,44 +83,43 @@ class FilingsRepository:
             """)
             conn.commit()
     
-    def get_pdf(
+    async def get_pdf(
         self,
         cik: str,
         accession_number: str,
         document_name: str,
     ) -> Optional[bytes]:
         """
-        Get a cached PDF by its unique identifier.
+        Get a cached PDF by its unique identifier (Async).
         
         Returns:
             PDF bytes if cached, None otherwise.
         """
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
+        async with get_async_connection(self.db_path) as db:
+            async with db.execute(
                 """
                 SELECT pdf_data FROM filing_pdfs
                 WHERE cik = ? AND accession_number = ? AND document_name = ?
                 """,
                 (cik, accession_number, document_name),
-            )
-            row = cursor.fetchone()
-            
-            if row:
-                logger.info(
-                    f"Cache hit for {document_name} (CIK: {cik}, "
-                    f"Accession: {accession_number})"
-                )
-                try:
-                    # Decompress data on retrieval
-                    return zlib.decompress(row["pdf_data"])
-                except zlib.error:
-                    # Fallback for uncompressed legacy data
-                    return row["pdf_data"]
-            
-            return None
+            ) as cursor:
+                row = await cursor.fetchone()
+                
+                if row:
+                    logger.info(
+                        f"Cache hit for {document_name} (CIK: {cik}, "
+                        f"Accession: {accession_number})"
+                    )
+                    try:
+                        # Decompress data on retrieval
+                        return zlib.decompress(row["pdf_data"])
+                    except zlib.error:
+                        # Fallback for uncompressed legacy data
+                        return row["pdf_data"]
+                
+                return None
     
-    def save_pdf(
+    async def save_pdf(
         self,
         ticker: str,
         cik: str,
@@ -131,7 +130,7 @@ class FilingsRepository:
         pdf_data: bytes,
     ) -> CachedFiling:
         """
-        Save a PDF to the cache with Zlib compression.
+        Save a PDF to the cache with Zlib compression (Async).
         
         If the PDF already exists, it will be replaced.
         """
@@ -142,12 +141,8 @@ class FilingsRepository:
         
         created_at = datetime.now(timezone.utc)
         
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            # Use INSERT OR REPLACE to handle duplicates
-            # Store compressed_size_kb to accurately reflect database footprint (P0 Fix)
-            cursor.execute(
+        async with get_async_connection(self.db_path) as db:
+            async with db.execute(
                 """
                 INSERT OR REPLACE INTO filing_pdfs (
                     ticker, cik, accession_number, form_type, filing_date,
@@ -165,11 +160,9 @@ class FilingsRepository:
                     compressed_size_kb,
                     created_at.isoformat(),
                 ),
-            )
-            
-            conn.commit()
-            
-            filing_id = cursor.lastrowid
+            ) as cursor:
+                await db.commit()
+                filing_id = cursor.lastrowid
             
             logger.info(
                 f"Cached PDF for {ticker} {form_type} ({document_name}): "
@@ -190,16 +183,14 @@ class FilingsRepository:
                 created_at=created_at,
             )
     
-    def list_cached(
+    async def list_cached(
         self,
         ticker: Optional[str] = None,
         form_type: Optional[str] = None,
         limit: int = 100,
     ) -> list[CachedFiling]:
-        """List cached filings with optional filtering (without PDF data)."""
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
+        """List cached filings with optional filtering (without PDF data) (Async)."""
+        async with get_async_connection(self.db_path) as db:
             query = """
                 SELECT id, ticker, cik, accession_number, form_type, 
                        filing_date, document_name, pdf_size_kb, created_at
@@ -219,69 +210,65 @@ class FilingsRepository:
             query += " ORDER BY filing_date DESC LIMIT ?"
             params.append(limit)
             
-            cursor.execute(query, params)
-            
-            return [
-                CachedFiling(
-                    id=row["id"],
-                    ticker=row["ticker"],
-                    cik=row["cik"],
-                    accession_number=row["accession_number"],
-                    form_type=row["form_type"],
-                    filing_date=date.fromisoformat(row["filing_date"]),
-                    document_name=row["document_name"],
-                    pdf_data=b"",  # Don't load blob in list view
-                    pdf_size_kb=row["pdf_size_kb"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                )
-                for row in cursor.fetchall()
-            ]
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                return [
+                    CachedFiling(
+                        id=row["id"],
+                        ticker=row["ticker"],
+                        cik=row["cik"],
+                        accession_number=row["accession_number"],
+                        form_type=row["form_type"],
+                        filing_date=date.fromisoformat(row["filing_date"]),
+                        document_name=row["document_name"],
+                        pdf_data=b"",  # Don't load blob in list view
+                        pdf_size_kb=row["pdf_size_kb"],
+                        created_at=datetime.fromisoformat(row["created_at"]),
+                    )
+                    for row in rows
+                ]
     
-    def delete_pdf(
+    async def delete_pdf(
         self,
         cik: str,
         accession_number: str,
         document_name: str,
     ) -> bool:
-        """Delete a cached PDF. Returns True if deleted, False if not found."""
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
+        """Delete a cached PDF. Returns True if deleted, False if not found (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            async with db.execute(
                 """
                 DELETE FROM filing_pdfs
                 WHERE cik = ? AND accession_number = ? AND document_name = ?
                 """,
                 (cik, accession_number, document_name),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+            ) as cursor:
+                await db.commit()
+                return cursor.rowcount > 0
     
-    def get_cache_stats(self) -> dict:
-        """Get cache statistics."""
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            cursor.execute("""
+    async def get_cache_stats(self) -> dict:
+        """Get cache statistics (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            async with db.execute("""
                 SELECT 
                     COUNT(*) as total_files,
                     SUM(pdf_size_kb) as total_size_kb,
                     COUNT(DISTINCT ticker) as unique_tickers,
                     COUNT(DISTINCT form_type) as unique_form_types
                 FROM filing_pdfs
-            """)
-            
-            row = cursor.fetchone()
-            
-            return {
-                "total_files": row["total_files"] or 0,
-                "total_size_mb": round((row["total_size_kb"] or 0) / 1024, 2),
-                "unique_tickers": row["unique_tickers"] or 0,
-                "unique_form_types": row["unique_form_types"] or 0,
-            }
+            """) as cursor:
+                row = await cursor.fetchone()
+                
+                return {
+                    "total_files": row["total_files"] or 0,
+                    "total_size_mb": round((row["total_size_kb"] or 0) / 1024, 2),
+                    "unique_tickers": row["unique_tickers"] or 0,
+                    "unique_form_types": row["unique_form_types"] or 0,
+                }
     
-    def clear_cache(self, older_than_days: Optional[int] = None) -> int:
+    async def clear_cache(self, older_than_days: Optional[int] = None) -> int:
         """
-        Clear cached PDFs.
+        Clear cached PDFs (Async).
         
         Args:
             older_than_days: If provided, only clear PDFs older than N days.
@@ -290,22 +277,21 @@ class FilingsRepository:
         Returns:
             Number of PDFs deleted.
         """
-        with get_connection(self.db_path) as conn:
-            cursor = conn.cursor()
-            
+        async with get_async_connection(self.db_path) as db:
             if older_than_days is not None:
-                cursor.execute(
+                async with db.execute(
                     """
                     DELETE FROM filing_pdfs
                     WHERE datetime(created_at) < datetime('now', ?)
                     """,
                     (f"-{older_than_days} days",),
-                )
+                ) as cursor:
+                    await db.commit()
+                    deleted = cursor.rowcount
             else:
-                cursor.execute("DELETE FROM filing_pdfs")
-            
-            conn.commit()
-            deleted = cursor.rowcount
+                async with db.execute("DELETE FROM filing_pdfs") as cursor:
+                    await db.commit()
+                    deleted = cursor.rowcount
             
             logger.info(f"Cleared {deleted} cached PDFs")
             return deleted

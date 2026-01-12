@@ -68,8 +68,8 @@ class SECFilingsService:
     async def _request(self, url: str, accept: str = "application/json") -> httpx.Response:
         """Make HTTP request with proper headers and rate limiting."""
         # Check SEC rate limit (10 req/s)
-        while rate_limiter.is_at_limit("sec"):
-            wait_time = rate_limiter.get_time_until_reset("sec") or 0.1
+        while await rate_limiter.is_at_limit("sec"):
+            wait_time = await rate_limiter.get_time_until_reset("sec") or 0.1
             await asyncio.sleep(min(wait_time, 1.0))
         
         headers = {**self.headers, "Accept": accept}
@@ -77,11 +77,11 @@ class SECFilingsService:
             response = await client.get(url, headers=headers)
             
             if response.status_code == 429:
-                rate_limiter.mark_api_limited("sec")
+                await rate_limiter.mark_api_limited("sec")
                 raise SECFilingsError("SEC rate limit exceeded. Retrying in background.")
             
             response.raise_for_status()
-            rate_limiter.record_call("sec")
+            await rate_limiter.record_call("sec")
             return response
     
     async def _load_ticker_map(self) -> Dict[str, str]:
@@ -287,7 +287,7 @@ class SECFilingsService:
         
         # Check cache first
         if use_cache and cik and accession_number and document_name:
-            cached = repo.get_pdf(cik, accession_number, document_name)
+            cached = await repo.get_pdf(cik, accession_number, document_name)
             if cached:
                 return cached
         
@@ -340,7 +340,7 @@ class SECFilingsService:
                     
                     if (use_cache and ticker and cik and accession_number 
                             and form_type and filing_date and document_name):
-                        repo.save_pdf(
+                        await repo.save_pdf(
                             ticker=ticker,
                             cik=cik,
                             accession_number=accession_number,

@@ -37,7 +37,7 @@ async def record_assumptions(
     symbol = symbol.upper()
     
     # Get previous snapshot (or empty if first analysis)
-    previous = repo.get_latest_snapshot(symbol)
+    previous = await repo.get_latest_snapshot(symbol)
     is_initial = previous is None
     
     if previous is None:
@@ -65,7 +65,7 @@ async def record_assumptions(
         pe_ratio_at_time=request.pe_ratio_at_time,
     )
     
-    saved = repo.save_entry(entry)
+    saved = await repo.save_entry(entry)
     
     return saved.to_dict()
 
@@ -86,7 +86,7 @@ async def get_audit_history(
     Returns:
         List of audit entries, most recent first.
     """
-    history = repo.get_history(symbol.upper(), limit=limit)
+    history = await repo.get_history(symbol.upper(), limit=limit)
     return [entry.to_dict() for entry in history]
 
 
@@ -103,7 +103,7 @@ async def get_audit_snapshot(
     Returns:
         Current assumption values, or 404 if no history exists.
     """
-    snapshot = repo.get_latest_snapshot(symbol.upper())
+    snapshot = await repo.get_latest_snapshot(symbol.upper())
     
     if snapshot is None:
         raise HTTPException(status_code=404, detail=f"No audit history for {symbol}")
@@ -145,7 +145,7 @@ async def get_field_history(
             detail=f"Invalid field '{field}'. Valid fields: {valid_fields}"
         )
     
-    changes = repo.get_field_history(symbol.upper(), field_enum)
+    changes = await repo.get_field_history(symbol.upper(), field_enum)
     
     return [
         {
