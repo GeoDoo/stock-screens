@@ -906,3 +906,32 @@ export interface FilingAnalysisResponse {
   timestamp: string;
   model: string;
 }
+
+export interface RedFlagCategory {
+  score: number;
+  severity: string;
+  findings: string[];
+  evidence_quotes: string[];
+}
+
+export interface EPSAdjustment {
+  reason: string;
+  amount: number;
+  impact: string;
+}
+
+export interface ForensicReport {
+  accounting_consistency_score: number;
+  red_flags: Record<string, RedFlagCategory>;
+  summary: string;
+  reported_eps?: number | null;
+  forensic_eps_adjustment: number;
+  adjustments: EPSAdjustment[];
+  timestamp: string;
+  model: string;
+}
+
+export interface FilingForensicResponse {
+  ticker: string;
+  report: ForensicReport;
+}

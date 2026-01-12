@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-12 20:09
+> Last updated: 2026-01-12 20:19
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -132,7 +132,9 @@ Weighted Average Cost of Capital calculator.
 | `MonteCarloPanel.tsx` | MonteCarloPanel |
 | `MultiStageGrowth.tsx` | MultiStageGrowth |
 | `ProvenanceBadge.tsx` | ProvenanceBadge |
+| `RedFlagHeatmap.tsx` | RedFlagHeatmap |
 | `SensitivityMatrixPanel.tsx` | SensitivityMatrixPanel |
+| `TruthBridge.tsx` | TruthBridge |
 | `ValuationTrustStrip.tsx` | ValuationTrustStrip |
 | `ValueDrivers.tsx` | ValueDrivers |
 | `VolumeSignals.tsx` | VolumeSignals |
@@ -181,7 +183,7 @@ The application uses a single SQLite database (`stock_screens.db`) with the foll
 
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
-| Backend | 45 test files | pytest |
+| Backend | 46 test files | pytest |
 | Frontend | 24 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)

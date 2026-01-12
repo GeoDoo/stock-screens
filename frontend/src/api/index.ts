@@ -367,7 +367,12 @@ export async function closeMemo(params: CloseMemoParams): Promise<void> {
 // SEC Filings endpoints (Phase 1: Forensic Intelligence Roadmap)
 // ============================================================================
 
-import type { FilingsListResponse, CompanyInfoResponse, FilingAnalysisResponse } from '../types';
+import type { 
+  FilingsListResponse, 
+  CompanyInfoResponse, 
+  FilingAnalysisResponse,
+  FilingForensicResponse 
+} from '../types';
 
 export interface FetchFilingsParams {
   ticker: string;
@@ -487,4 +492,22 @@ export async function compareFilingSections(
     { method: 'POST' }
   );
   return handleResponse<FilingAnalysisResponse>(res);
+}
+
+export async function runForensicAudit(params: {
+  ticker: string;
+  documentUrl: string;
+  accessionNumber?: string;
+}): Promise<FilingForensicResponse> {
+  const query = new URLSearchParams();
+  query.set('document_url', params.documentUrl);
+  if (params.accessionNumber) {
+    query.set('accession_number', params.accessionNumber);
+  }
+  
+  const res = await fetch(
+    `${API_BASE}/api/filings/${params.ticker}/forensic-audit?${query.toString()}`,
+    { method: 'POST' }
+  );
+  return handleResponse<FilingForensicResponse>(res);
 }

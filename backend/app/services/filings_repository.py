@@ -91,6 +91,8 @@ class FilingsRepository:
                     description TEXT,
                     document_name TEXT,
                     sentiment_score REAL,
+                    consistency_score INTEGER,
+                    forensic_report_json TEXT,
                     parsed_status TEXT DEFAULT 'pending',
                     created_at TEXT NOT NULL,
                     
@@ -110,6 +112,14 @@ class FilingsRepository:
             columns = [row[1] for row in cursor.fetchall()]
             if "original_size_kb" not in columns:
                 conn.execute("ALTER TABLE filing_pdfs ADD COLUMN original_size_kb INTEGER")
+            
+            # Migration: add forensic columns to sec_filings
+            cursor.execute("PRAGMA table_info(sec_filings)")
+            sec_columns = [row[1] for row in cursor.fetchall()]
+            if "consistency_score" not in sec_columns:
+                conn.execute("ALTER TABLE sec_filings ADD COLUMN consistency_score INTEGER")
+            if "forensic_report_json" not in sec_columns:
+                conn.execute("ALTER TABLE sec_filings ADD COLUMN forensic_report_json TEXT")
             
             conn.commit()
     
@@ -401,6 +411,24 @@ class FilingsRepository:
             async with db.execute(query, params) as cursor:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
+
+    async def update_forensic_report(
+        self,
+        accession_number: str,
+        consistency_score: int,
+        report_json: str,
+    ):
+        """Update a filing with its forensic analysis results (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            await db.execute(
+                """
+                UPDATE sec_filings 
+                SET consistency_score = ?, forensic_report_json = ?, parsed_status = 'completed'
+                WHERE accession_number = ?
+                """,
+                (consistency_score, report_json, accession_number)
+            )
+            await db.commit()
 
 
 # Singleton instance
