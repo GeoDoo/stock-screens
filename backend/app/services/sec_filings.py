@@ -35,10 +35,11 @@ class Filing:
 
     @property
     def viewer_url(self) -> str:
-        """URL to SEC filing index page."""
+        """URL to SEC filing folder (lists all documents)."""
         clean_accession = self.accession_number.replace("-", "")
         cik_num = self.cik.lstrip("0")
-        return f"https://www.sec.gov/Archives/edgar/data/{cik_num}/{clean_accession}/{clean_accession}-index.htm"
+        # Link to folder instead of -index.htm (more reliable, shows all documents)
+        return f"https://www.sec.gov/Archives/edgar/data/{cik_num}/{clean_accession}/"
 
 
 class SECFilingsService:

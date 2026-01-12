@@ -40,10 +40,10 @@ class TestFilingDataclass:
             cik="0000320193",
             ticker="AAPL",
         )
-        # Should link to filing index page
+        # Should link to filing folder (lists all documents)
         assert "320193" in filing.viewer_url
         assert "000032019325000079" in filing.viewer_url
-        assert "-index.htm" in filing.viewer_url
+        assert filing.viewer_url.endswith("/")
 
 
 class TestSECFilingsService:
