@@ -185,6 +185,39 @@ class TestAnalyzeValueCreation:
         assert result["rotic"] is not None
         # ROTIC (28.6%) should be higher than ROIC (20%)
         assert result["rotic"] > result["roic"]
+
+    def test_analyze_value_creation_includes_sloan_ratio(self):
+        """analyze_value_creation should include Sloan Ratio and assessment."""
+        # Case: High Accrual Risk
+        result = analyze_value_creation(
+            nopat=100,
+            invested_capital=500,
+            revenue_growth=0.10,
+            wacc=0.08,
+            net_income=150,
+            fcf=50,
+            total_assets=500,
+        )
+        
+        # Sloan = (150 - 50) / 500 = 0.20 (20%)
+        assert result["sloan_ratio"] == 0.20
+        assert "forensic warning" in result["assessment"].lower()
+        assert "high sloan ratio" in result["assessment"].lower()
+
+        # Case: Conservative/Bullish
+        result = analyze_value_creation(
+            nopat=100,
+            invested_capital=500,
+            revenue_growth=0.10,
+            wacc=0.08,
+            net_income=50,
+            fcf=150,
+            total_assets=500,
+        )
+        
+        # Sloan = (50 - 150) / 500 = -0.20 (-20%)
+        assert result["sloan_ratio"] == -0.20
+        assert "conservative" in result["assessment"].lower()
     
     def test_value_destroyer_assessment(self):
         """Value destroyer gets negative assessment."""
