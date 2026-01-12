@@ -2,7 +2,7 @@
 
 > **Auto-generated** from package files.
 > 
-> Last updated: 2026-01-12 19:53
+> Last updated: 2026-01-12 19:58
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -50,6 +50,8 @@ npm run dev
 | `aiosqlite` | latest |
 | `structlog` | latest |
 | `tenacity` | latest |
+| `beautifulsoup4` | latest |
+| `lxml` | latest |
 
 ## Frontend Dependencies
 
@@ -62,7 +64,7 @@ npm run dev
 
 ## Running Tests
 
-### Backend Tests (41 test files)
+### Backend Tests (42 test files)
 
 ```bash
 cd backend
