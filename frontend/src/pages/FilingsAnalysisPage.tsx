@@ -224,19 +224,20 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
               >
                 <ArrowLeft className="w-4 h-4" />
               </a>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base font-black text-gray-900 tracking-tight">{symbol}</h1>
-                  <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-1.5 py-0.5 rounded">
-                    Forensic Intelligence
-                  </span>
-                </div>
-                {companyInfo && (
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                    {companyInfo.name}
-                  </p>
-                )}
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-lg font-black text-gray-900 tracking-tighter uppercase leading-none">{symbol}</h1>
+                <div className="h-3 w-[1px] bg-gray-200" />
+                <span className="text-[9px] font-black text-indigo-600 uppercase tracking-[0.2em] bg-indigo-50/50 px-2 py-0.5 rounded-full border border-indigo-100/50">
+                  Forensic Intelligence
+                </span>
               </div>
+              {companyInfo && (
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.1em] mt-1 opacity-80">
+                  {companyInfo.name}
+                </p>
+              )}
+            </div>
             </div>
 
             <div className="flex items-center gap-6">
@@ -251,10 +252,10 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar: Filings List */}
           {!isFocusMode && (
-          <aside className="w-40 bg-white border-r border-gray-200 overflow-y-auto flex flex-col shadow-sm">
-            <div className="p-3 border-b border-gray-100 bg-gray-50/50">
+          <aside className="w-40 bg-white border-r border-gray-100 overflow-y-auto flex flex-col">
+            <div className="p-3 border-b border-gray-100 bg-gray-50/30">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em]">
+                <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.25em]">
                   Archives
                 </h2>
               </div>
@@ -310,14 +311,14 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
           )}
 
           {/* Main Content */}
-          <main className="flex-1 flex flex-col bg-gray-50 overflow-hidden">
+          <main className="flex-1 flex flex-col bg-[#FBFBFC] overflow-hidden">
             {/* Action Bar / Tabs Combined */}
             {!isFocusMode && (
-              <div className="bg-white border-b border-gray-200 px-6 py-1 flex items-center justify-between shadow-sm z-10">
-                <div className="flex items-center gap-8">
+              <div className="bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-[0_1px_2px_rgba(0,0,0,0.02)] z-10">
+                <div className="flex items-center gap-8 self-stretch">
                   <button
                     onClick={() => setActiveTab('document')}
-                    className={`py-3 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-2 ${
+                    className={`h-12 text-[10px] font-black uppercase tracking-[0.25em] transition-all border-b-2 -mb-[1px] ${
                       activeTab === 'document' 
                         ? 'border-indigo-600 text-indigo-600' 
                         : 'border-transparent text-gray-400 hover:text-gray-600'
@@ -327,7 +328,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                   </button>
                   <button
                     onClick={() => setActiveTab('intelligence')}
-                    className={`py-3 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-2 flex items-center gap-2 ${
+                    className={`h-12 text-[10px] font-black uppercase tracking-[0.25em] transition-all border-b-2 -mb-[1px] flex items-center gap-2 ${
                       activeTab === 'intelligence' 
                         ? 'border-indigo-600 text-indigo-600' 
                         : 'border-transparent text-gray-400 hover:text-gray-600'
@@ -341,7 +342,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                 </div>
 
                 {/* Contextual Controls Moved Here */}
-                <div className="flex items-center gap-4 py-2">
+                <div className="flex items-center gap-4 h-12">
                   {selectedFiling && (
                     <>
                       <div className="flex items-center gap-2">
