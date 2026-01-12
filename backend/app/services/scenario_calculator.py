@@ -110,6 +110,10 @@ class ScenarioCalculator:
         # High growth often requires high spending → lower margins
         # Negative correlation (default -0.2) matches Monte Carlo engine
         growth_margin_correlation: float = 0.0,
+        # NOTES4.md: Use maintenance CapEx for scenarios
+        # When True, uses D&A ratio instead of current CapEx ratio
+        # Prevents negative FCF for growth companies (META, NVDA, etc.)
+        use_maintenance_capex: bool = False,
     ):
         self.historical_revenue = historical_revenue
         self.historical_ebit = historical_ebit
@@ -125,8 +129,20 @@ class ScenarioCalculator:
         self.current_price = current_price
         # FCF ratio overrides
         self.da_ratio = da_ratio
-        self.capex_ratio = capex_ratio
+        
+        # NOTES4.md: Use maintenance CapEx (≈ D&A) when flag is set
+        # This prevents negative FCF for growth companies in heavy investment phase
+        if use_maintenance_capex and capex_ratio is not None and da_ratio is not None:
+            # Only apply if current CapEx significantly exceeds maintenance
+            if capex_ratio > da_ratio * 1.5:
+                self.capex_ratio = da_ratio  # Use D&A as maintenance CapEx
+            else:
+                self.capex_ratio = capex_ratio
+        else:
+            self.capex_ratio = capex_ratio
+        
         self.wc_ratio = wc_ratio
+        self.use_maintenance_capex = use_maintenance_capex
         # P1 Fix: Full equity bridge
         self.minority_interest = minority_interest
         self.preferred_stock = preferred_stock

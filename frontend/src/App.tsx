@@ -124,6 +124,9 @@ export default function App() {
   // When enabled, default scenarios auto-adjust margins based on growth
   const [useGrowthMarginCorrelation, setUseGrowthMarginCorrelation] = useState(false);
   const growthMarginCorrelation = useGrowthMarginCorrelation ? -0.2 : 0;
+  // NOTES4.md: Use Maintenance CapEx for Scenario Analysis
+  // When enabled, uses D&A ratio instead of current CapEx for growth companies
+  const [useMaintenanceCapex, setUseMaintenanceCapex] = useState(false);
   
   // Valuation state (loading/error tracked but not displayed separately)
   const [_valuationLoading, setValuationLoading] = useState(false);
@@ -381,6 +384,8 @@ export default function App() {
           wc_ratio: periodHints?.wc_ratio ?? null,
           // NOTES2.md III.3: Growth-Margin Correlation
           growth_margin_correlation: growthMarginCorrelation,
+          // NOTES4.md: Use Maintenance CapEx
+          use_maintenance_capex: useMaintenanceCapex,
         }),
       });
       if (!res.ok) {
@@ -2031,8 +2036,9 @@ export default function App() {
               <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Scenario Analysis</h2>
               <p className="text-sm text-gray-400">Bear / Base / Bull case valuations with probability weighting</p>
               
-              {/* Growth-Margin Correlation Toggle */}
-              <div className="mt-3 flex items-center gap-2">
+              {/* Scenario Analysis Toggles */}
+              <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+                {/* Growth-Margin Correlation Toggle */}
                 <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
                   <input
                     type="checkbox"
@@ -2040,12 +2046,27 @@ export default function App() {
                     onChange={(e) => setUseGrowthMarginCorrelation(e.target.checked)}
                     className="rounded border-gray-300 text-gray-700 focus:ring-gray-500"
                   />
-                  <span>Apply Growth-Margin Correlation</span>
-                  <span className="text-gray-400" title="High growth often requires high spending → lower margins. When enabled, Bull scenario margins are adjusted down, Bear scenario margins adjusted up.">ⓘ</span>
+                  <span>Growth-Margin Correlation</span>
+                  <span className="text-gray-400" title="High growth often requires high spending → lower margins. Bull margins adjusted down, Bear margins up.">ⓘ</span>
+                  {useGrowthMarginCorrelation && (
+                    <span className="text-xs text-amber-600">ρ = -0.2</span>
+                  )}
                 </label>
-                {useGrowthMarginCorrelation && (
-                  <span className="text-xs text-amber-600">ρ = -0.2</span>
-                )}
+                
+                {/* Use Maintenance CapEx Toggle */}
+                <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useMaintenanceCapex}
+                    onChange={(e) => setUseMaintenanceCapex(e.target.checked)}
+                    className="rounded border-gray-300 text-gray-700 focus:ring-gray-500"
+                  />
+                  <span>Use Maintenance CapEx</span>
+                  <span className="text-gray-400" title="For growth companies (META, NVDA): use D&A ratio instead of current CapEx ratio. Prevents negative FCF from heavy investment phase.">ⓘ</span>
+                  {useMaintenanceCapex && (
+                    <span className="text-xs text-green-600">≈ D&A</span>
+                  )}
+                </label>
               </div>
               
               {scenarioLoading && <p className="text-sm text-gray-400 mt-2">Analyzing scenarios...</p>}

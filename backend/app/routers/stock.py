@@ -79,6 +79,33 @@ def _build_historical_hints(fcf_projector, extractor) -> HistoricalHints:
     )
 
 
+def _build_historical_hints_dict(fcf_projector, extractor) -> dict:
+    """
+    Build historical hints as dict (for /analyze endpoint response).
+    Same logic as _build_historical_hints but returns dict instead of HistoricalHints.
+    """
+    da_ratio = fcf_projector.da_to_revenue_ratio() if extractor.da_history() else None
+    capex_ratio = fcf_projector.capex_to_revenue_ratio() if extractor.capex_history() else None
+    
+    # Maintenance CapEx ≈ Depreciation (steady-state replacement)
+    maintenance_capex_ratio = da_ratio
+    
+    # Flag if growth CapEx significantly exceeds maintenance
+    capex_exceeds_maintenance = False
+    if capex_ratio is not None and da_ratio is not None and da_ratio > 0:
+        capex_exceeds_maintenance = capex_ratio > da_ratio * 1.5
+    
+    return {
+        "revenue_growth": fcf_projector.revenue_cagr() if extractor.revenue_history() else None,
+        "operating_margin": fcf_projector.operating_margin() if extractor.ebit_history() else None,
+        "da_ratio": da_ratio,
+        "capex_ratio": capex_ratio,
+        "wc_ratio": fcf_projector.wc_to_revenue_ratio() if extractor.working_capital_history() else None,
+        "maintenance_capex_ratio": maintenance_capex_ratio,
+        "capex_exceeds_maintenance": capex_exceeds_maintenance,
+    }
+
+
 # Get API keys from environment
 FMP_API_KEY = os.getenv("FMP_API_KEY", "")
 MASSIVE_API_KEY = os.getenv("POLYGON_API_KEY", "")
@@ -566,6 +593,8 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
         annual_dilution_rate=request.annual_dilution_rate,
         # NOTES2.md III.3: Growth-Margin Correlation
         growth_margin_correlation=request.growth_margin_correlation,
+        # NOTES4.md: Use Maintenance CapEx for growth companies
+        use_maintenance_capex=request.use_maintenance_capex,
     )
     
     if request.scenarios:
@@ -1100,13 +1129,7 @@ async def batch_analyze(symbol: str, provider: str):
             "revenue": extractor.latest_revenue(),
             "working_capital": extractor.latest_working_capital(),
         },
-        "hints_annual": {
-            "revenue_growth": fcf_projector.revenue_cagr(),
-            "operating_margin": fcf_projector.operating_margin(),
-            "da_ratio": fcf_projector.da_to_revenue_ratio(),
-            "capex_ratio": fcf_projector.capex_to_revenue_ratio(),
-            "wc_ratio": fcf_projector.wc_to_revenue_ratio(),
-        },
+        "hints_annual": _build_historical_hints_dict(fcf_projector, extractor),
         "hints_ttm": None,
         "validation": validation_result.to_dict(),
         "data_provider": stock_data.provider,
@@ -1179,6 +1202,12 @@ async def batch_analyze(symbol: str, provider: str):
         ttm_financials = await yahoo.get_ttm_financials(symbol)
         
         if ttm_financials:
+            # Calculate incomeBeforeTax for ROIC calculation
+            # ROIC requires: operating_income, equity, income_before_tax, net_income, revenue
+            income_before_tax = None
+            if ttm_financials.net_income is not None and ttm_financials.income_tax_expense is not None:
+                income_before_tax = ttm_financials.net_income + ttm_financials.income_tax_expense
+            
             ttm_data = {
                 "profile": data.get("profile", {}),
                 "income_statement": [{
@@ -1187,6 +1216,8 @@ async def batch_analyze(symbol: str, provider: str):
                     "operatingIncome": ttm_financials.operating_income,
                     "netIncome": ttm_financials.net_income,
                     "interestExpense": ttm_financials.interest_expense,
+                    # P0 Fix: Add incomeBeforeTax for ROIC calculation
+                    "incomeBeforeTax": income_before_tax,
                 }],
                 "balance_sheet": [{
                     "totalAssets": ttm_financials.total_assets,
