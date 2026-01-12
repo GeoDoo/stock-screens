@@ -112,43 +112,25 @@ class SECFilingsService:
         accession_clean = accession.replace("-", "")
         return f"https://www.sec.gov/Archives/edgar/data/{cik_num}/{accession_clean}/{document}"
     
-    async def get_filings(
+    def _parse_filings_array(
         self,
+        filings_data: Dict[str, List],
+        cik: str,
         ticker: str,
-        form_types: Optional[List[str]] = None,
-        limit: int = 100,
+        form_types: Optional[List[str]],
+        limit: int,
+        existing: List[Filing],
     ) -> List[Filing]:
-        """
-        Get SEC filings for a company.
+        """Parse filings from a SEC submissions array."""
+        filings = list(existing)
         
-        Args:
-            ticker: Stock ticker symbol
-            form_types: Filter by form types (e.g., ["10-K", "10-Q"])
-            limit: Maximum filings to return
-            
-        Returns:
-            List of Filing objects
-        """
-        cik = await self._get_cik(ticker)
-        ticker = ticker.upper().strip()
+        accessions = filings_data.get("accessionNumber", [])
+        forms = filings_data.get("form", [])
+        dates = filings_data.get("filingDate", [])
+        documents = filings_data.get("primaryDocument", [])
+        descriptions = filings_data.get("primaryDocDescription", [])
         
-        url = f"{self.BASE_URL}/submissions/CIK{cik}.json"
-        response = await self._request(url)
-        data = response.json()
-        
-        recent = data.get("filings", {}).get("recent", {})
-        filings = []
-        
-        accessions = recent.get("accessionNumber", [])
-        forms = recent.get("form", [])
-        dates = recent.get("filingDate", [])
-        documents = recent.get("primaryDocument", [])
-        descriptions = recent.get("primaryDocDescription", [])
-        
-        # When filtering, we need to scan through all available filings
-        # since filtered types (like 10-K) may be spread throughout history
-        scan_limit = len(accessions) if form_types else limit * 2
-        for i in range(scan_limit):
+        for i in range(len(accessions)):
             if len(filings) >= limit:
                 break
             
@@ -177,6 +159,61 @@ class SECFilingsService:
                 cik=cik,
                 ticker=ticker,
             ))
+        
+        return filings
+
+    async def get_filings(
+        self,
+        ticker: str,
+        form_types: Optional[List[str]] = None,
+        limit: int = 100,
+    ) -> List[Filing]:
+        """
+        Get SEC filings for a company.
+        
+        Fetches from both recent filings and historical filing archives
+        to ensure complete coverage (e.g., all 10-Ks since IPO).
+        
+        Args:
+            ticker: Stock ticker symbol
+            form_types: Filter by form types (e.g., ["10-K", "10-Q"])
+            limit: Maximum filings to return
+            
+        Returns:
+            List of Filing objects
+        """
+        cik = await self._get_cik(ticker)
+        ticker = ticker.upper().strip()
+        
+        url = f"{self.BASE_URL}/submissions/CIK{cik}.json"
+        response = await self._request(url)
+        data = response.json()
+        
+        # Start with recent filings
+        recent = data.get("filings", {}).get("recent", {})
+        filings = self._parse_filings_array(recent, cik, ticker, form_types, limit, [])
+        
+        # If filtering and haven't hit limit, fetch from older filing archives
+        if form_types and len(filings) < limit:
+            older_files = data.get("filings", {}).get("files", [])
+            
+            for file_info in older_files:
+                if len(filings) >= limit:
+                    break
+                    
+                file_name = file_info.get("name")
+                if not file_name:
+                    continue
+                
+                try:
+                    older_url = f"{self.BASE_URL}/submissions/{file_name}"
+                    older_response = await self._request(older_url)
+                    older_data = older_response.json()
+                    filings = self._parse_filings_array(
+                        older_data, cik, ticker, form_types, limit, filings
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to fetch older filings from {file_name}: {e}")
         
         return filings
     
