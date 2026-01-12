@@ -770,7 +770,8 @@ POST /api/stock/{symbol}/scenarios
   "da_ratio": 0.0,
   "capex_ratio": 0.0,
   "wc_ratio": 0.0,
-  "annual_dilution_rate": 0.0
+  "annual_dilution_rate": 0.0,
+  "growth_margin_correlation": 0.0
 }
 ```
 
@@ -786,6 +787,7 @@ POST /api/stock/{symbol}/scenarios
 | `capex_ratio` | number | null | No |  |
 | `wc_ratio` | number | null | No |  |
 | `annual_dilution_rate` | number | No |  |
+| `growth_margin_correlation` | number | No |  |
 
 
 ---

@@ -106,6 +106,10 @@ class ScenarioCalculator:
         pension_deficit: float = 0.0,
         # P1 Fix: Dilution support (match main valuation)
         annual_dilution_rate: float = 0.0,
+        # NOTES2.md III.3: Growth-Margin Correlation
+        # High growth often requires high spending → lower margins
+        # Negative correlation (default -0.2) matches Monte Carlo engine
+        growth_margin_correlation: float = 0.0,
     ):
         self.historical_revenue = historical_revenue
         self.historical_ebit = historical_ebit
@@ -136,10 +140,57 @@ class ScenarioCalculator:
                 f"and can cause mathematical errors (negative terminal shares)."
             )
         self.annual_dilution_rate = annual_dilution_rate
+        # Growth-Margin Correlation (NOTES2.md III.3)
+        self.growth_margin_correlation = growth_margin_correlation
+    
+    def suggest_correlated_margin(
+        self,
+        target_growth: float,
+        base_growth: float,
+        base_margin: float,
+    ) -> float:
+        """
+        Suggest a margin that's correlated with growth deviation.
+        
+        NOTES2.md Section III.3: Scenario Analysis "Growth-Margin" Correlation
+        
+        In reality, growth and margin are highly correlated. Capturing 20% growth
+        usually requires massive spending (lower margins). This applies the
+        correlation coefficient from the Monte Carlo engine to scenario analysis.
+        
+        Args:
+            target_growth: The growth rate for this scenario
+            base_growth: Historical or expected growth rate
+            base_margin: Historical or expected margin
+            
+        Returns:
+            Suggested operating margin, bounded between 1% and 60%
+        """
+        if self.growth_margin_correlation == 0.0:
+            return base_margin
+        
+        # Calculate growth deviation (as percentage points)
+        growth_deviation = target_growth - base_growth
+        
+        # Apply correlation to margin
+        # A simple linear model: Δmargin = correlation × Δgrowth
+        # With negative correlation, higher growth → lower margin
+        margin_adjustment = self.growth_margin_correlation * growth_deviation
+        
+        suggested_margin = base_margin + margin_adjustment
+        
+        # Bound the result to reasonable range
+        min_margin = 0.01  # 1% minimum
+        max_margin = 0.60  # 60% maximum (very few companies exceed this)
+        
+        return max(min_margin, min(max_margin, suggested_margin))
     
     def get_default_scenarios(self, hints: dict) -> List[Scenario]:
         """
         Get default scenarios adjusted to the company's historical performance.
+        
+        When growth_margin_correlation is set, margins are adjusted based on
+        the growth deviation from historical (NOTES2.md III.3).
         
         Args:
             hints: Dict with historical metrics (revenue_growth, operating_margin, etc.)
@@ -147,27 +198,45 @@ class ScenarioCalculator:
         hist_growth = hints.get("revenue_growth") or 0.06
         hist_margin = hints.get("operating_margin") or 0.20
         
+        # Calculate target growth rates for each scenario
+        bear_growth = max(0, hist_growth * 0.3)  # 30% of historical
+        base_growth = hist_growth * 0.8  # 80% of historical (conservative)
+        bull_growth = hist_growth * 1.2  # 120% of historical
+        
+        # Calculate margins with correlation applied (NOTES2.md III.3)
+        # If correlation is 0, this returns the naive scaled margins
+        if self.growth_margin_correlation != 0.0:
+            # Use correlation to adjust margins based on growth deviation
+            bear_margin = self.suggest_correlated_margin(bear_growth, hist_growth, hist_margin)
+            base_margin = self.suggest_correlated_margin(base_growth, hist_growth, hist_margin)
+            bull_margin = self.suggest_correlated_margin(bull_growth, hist_growth, hist_margin)
+        else:
+            # Original behavior: naive scaling without correlation
+            bear_margin = max(0.05, hist_margin * 0.6)  # 60% of historical
+            base_margin = hist_margin * 0.9  # 90% of historical
+            bull_margin = min(0.40, hist_margin * 1.2)  # 120% capped at 40%
+        
         return [
             Scenario(
                 name="Bear",
-                revenue_growth=max(0, hist_growth * 0.3),  # 30% of historical
-                operating_margin=max(0.05, hist_margin * 0.6),  # 60% of historical
+                revenue_growth=bear_growth,
+                operating_margin=bear_margin,
                 terminal_growth=0.02,
                 probability=0.25,
                 description="Weak economy, competitive pressure, margin compression"
             ),
             Scenario(
                 name="Base",
-                revenue_growth=hist_growth * 0.8,  # 80% of historical (conservative)
-                operating_margin=hist_margin * 0.9,  # 90% of historical
+                revenue_growth=base_growth,
+                operating_margin=base_margin,
                 terminal_growth=0.025,
                 probability=0.50,
                 description="Business as usual, steady growth"
             ),
             Scenario(
                 name="Bull",
-                revenue_growth=hist_growth * 1.2,  # 120% of historical
-                operating_margin=min(0.40, hist_margin * 1.2),  # 120% capped at 40%
+                revenue_growth=bull_growth,
+                operating_margin=bull_margin,
                 terminal_growth=0.03,
                 probability=0.25,
                 description="Strong execution, market tailwinds, expanding margins"

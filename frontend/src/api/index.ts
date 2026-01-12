@@ -220,6 +220,8 @@ export interface RunScenariosParams {
   daRatio?: number;
   capexRatio?: number;
   wcRatio?: number;
+  // NOTES2.md III.3: Growth-Margin Correlation
+  growthMarginCorrelation?: number;
 }
 
 export async function runScenarios(
@@ -234,6 +236,7 @@ export async function runScenarios(
     da_ratio: params.daRatio,
     capex_ratio: params.capexRatio,
     wc_ratio: params.wcRatio,
+    growth_margin_correlation: params.growthMarginCorrelation,
   };
 
   const res = await fetch(

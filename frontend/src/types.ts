@@ -273,6 +273,10 @@ export interface ScenarioRequest {
   da_ratio?: number | null;
   capex_ratio?: number | null;
   wc_ratio?: number | null;
+  // NOTES2.md III.3: Growth-Margin Correlation
+  // -0.2 = high growth -> lower margin (competition effect)
+  // 0.0 = disabled (independent variables)
+  growth_margin_correlation?: number;
 }
 
 export interface ScenarioResultItem {

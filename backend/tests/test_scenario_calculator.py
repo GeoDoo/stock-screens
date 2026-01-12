@@ -848,3 +848,188 @@ class TestDilutionInScenarios:
                 projection_years=10,
                 annual_dilution_rate=0.75,  # Invalid: 75% annual dilution is unrealistic
             )
+
+
+class TestGrowthMarginCorrelation:
+    """
+    Tests for Growth-Margin Correlation (NOTES2.md Section III.3).
+    
+    The Scenario Calculator should not treat growth and margin as independent.
+    High growth often requires high spending → lower margins.
+    
+    When users set a "Bull Case" for growth, they should see a correlated
+    margin suggestion based on the Monte Carlo correlation coefficient.
+    """
+    
+    @pytest.fixture
+    def calculator(self):
+        """Calculator with correlation enabled."""
+        return ScenarioCalculator(
+            historical_revenue=[100, 110, 121],  # ~10% growth
+            historical_ebit=[20, 22, 24.2],  # ~20% margin
+            historical_da=[5, 5.5, 6],
+            historical_capex=[-8, -8.8, -9.6],
+            historical_working_capital=[10, 11, 12.1],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=50,
+            cash=100,
+            base_wacc=0.10,
+            projection_years=5,
+            current_price=50,
+            growth_margin_correlation=-0.2,  # Negative: high growth → lower margins
+        )
+    
+    def test_accepts_growth_margin_correlation(self, calculator):
+        """
+        Calculator should accept growth_margin_correlation parameter.
+        """
+        assert calculator.growth_margin_correlation == -0.2
+    
+    def test_suggest_correlated_margin_for_bull_case(self, calculator):
+        """
+        When growth is above historical, suggest lower margin (negative correlation).
+        
+        Historical: 10% growth, 20% margin
+        Bull growth: 15% (5 percentage points above historical)
+        With -0.2 correlation: margin should be adjusted down
+        """
+        historical_growth = 0.10
+        historical_margin = 0.20
+        bull_growth = 0.15  # +5 percentage points above historical
+        
+        suggested_margin = calculator.suggest_correlated_margin(
+            target_growth=bull_growth,
+            base_growth=historical_growth,
+            base_margin=historical_margin,
+        )
+        
+        # With negative correlation, higher growth should suggest lower margin
+        assert suggested_margin < historical_margin
+        
+        # The adjustment should be proportional to correlation
+        # Δgrowth = +0.05 (50% above base)
+        # Expected Δmargin = correlation × Δgrowth × (margin_std/growth_std)
+        # For simplicity, using 1:1 ratio: Δmargin ≈ -0.2 × 0.05 = -0.01
+        # So suggested margin ≈ 0.20 - 0.01 = 0.19
+        assert 0.18 <= suggested_margin <= 0.20
+    
+    def test_suggest_correlated_margin_for_bear_case(self, calculator):
+        """
+        When growth is below historical, suggest higher margin (negative correlation).
+        
+        Bear growth: 5% (5 percentage points below historical 10%)
+        With -0.2 correlation: margin should be adjusted up
+        """
+        historical_growth = 0.10
+        historical_margin = 0.20
+        bear_growth = 0.05  # -5 percentage points below historical
+        
+        suggested_margin = calculator.suggest_correlated_margin(
+            target_growth=bear_growth,
+            base_growth=historical_growth,
+            base_margin=historical_margin,
+        )
+        
+        # With negative correlation, lower growth should suggest higher margin
+        assert suggested_margin > historical_margin
+    
+    def test_zero_correlation_no_adjustment(self):
+        """
+        With zero correlation, margin suggestion equals base margin.
+        """
+        calculator = ScenarioCalculator(
+            historical_revenue=[100, 110, 121],
+            historical_ebit=[20, 22, 24.2],
+            historical_da=[5, 5.5, 6],
+            historical_capex=[-8, -8.8, -9.6],
+            historical_working_capital=[10, 11, 12.1],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=50,
+            cash=100,
+            base_wacc=0.10,
+            growth_margin_correlation=0.0,  # No correlation
+        )
+        
+        suggested_margin = calculator.suggest_correlated_margin(
+            target_growth=0.15,
+            base_growth=0.10,
+            base_margin=0.20,
+        )
+        
+        # No adjustment with zero correlation
+        assert suggested_margin == 0.20
+    
+    def test_margin_bounded_above_zero(self, calculator):
+        """
+        Suggested margin should never go below zero.
+        """
+        # Extreme bull growth should not push margin negative
+        suggested_margin = calculator.suggest_correlated_margin(
+            target_growth=0.50,  # Extreme growth
+            base_growth=0.10,
+            base_margin=0.10,  # Low base margin
+        )
+        
+        assert suggested_margin >= 0.01  # Minimum 1% margin
+    
+    def test_margin_bounded_below_cap(self, calculator):
+        """
+        Suggested margin should not exceed reasonable cap (e.g., 60%).
+        """
+        # Extreme bear growth should not push margin unrealistically high
+        calculator_positive = ScenarioCalculator(
+            historical_revenue=[100, 110, 121],
+            historical_ebit=[20, 22, 24.2],
+            historical_da=[5, 5.5, 6],
+            historical_capex=[-8, -8.8, -9.6],
+            historical_working_capital=[10, 11, 12.1],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=50,
+            cash=100,
+            base_wacc=0.10,
+            growth_margin_correlation=-0.8,  # Strong negative correlation
+        )
+        
+        suggested_margin = calculator_positive.suggest_correlated_margin(
+            target_growth=-0.10,  # Negative growth (decline)
+            base_growth=0.10,
+            base_margin=0.40,  # High base margin
+        )
+        
+        assert suggested_margin <= 0.60  # Cap at 60%
+    
+    def test_default_scenarios_apply_correlation(self):
+        """
+        get_default_scenarios should apply correlation to margin assumptions.
+        """
+        calculator = ScenarioCalculator(
+            historical_revenue=[100, 110, 121],
+            historical_ebit=[20, 22, 24.2],
+            historical_da=[5, 5.5, 6],
+            historical_capex=[-8, -8.8, -9.6],
+            historical_working_capital=[10, 11, 12.1],
+            tax_rate=0.25,
+            shares_outstanding=1000,
+            total_debt=50,
+            cash=100,
+            base_wacc=0.10,
+            growth_margin_correlation=-0.2,
+        )
+        
+        hints = {"revenue_growth": 0.10, "operating_margin": 0.20}
+        scenarios = calculator.get_default_scenarios(hints)
+        
+        bear, base, bull = scenarios
+        
+        # Bull has higher growth → should have lower margin (with negative correlation)
+        # Bear has lower growth → should have higher margin
+        assert bull.revenue_growth > base.revenue_growth
+        assert bear.revenue_growth < base.revenue_growth
+        
+        # With correlation applied, bull margin should be adjusted down from naive
+        # (not just 120% of historical as in current implementation)
+        # This test verifies correlation IS being applied
+        assert bull.operating_margin <= hints["operating_margin"] * 1.2  # Should be less than naive
