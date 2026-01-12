@@ -23,8 +23,8 @@ async def get_filings(
     limit: int = Query(
         100,
         ge=1,
-        le=500,
-        description="Maximum filings to return",
+        le=2000,
+        description="Maximum filings to return (higher limits for filtered searches)",
     ),
 ):
     """

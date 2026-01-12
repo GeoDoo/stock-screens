@@ -66,10 +66,14 @@ export default function FilingsPage() {
     setCik(null);
     
     try {
+      // When filtering by form type, fetch more filings since filtered types
+      // may be spread throughout a company's filing history (e.g., 10-Ks are annual)
+      const limit = selectedTypes.length > 0 ? 1000 : 100;
+      
       const result: FilingsListResponse = await fetchFilings({
         ticker: ticker.toUpperCase().trim(),
         formTypes: selectedTypes.length > 0 ? selectedTypes : undefined,
-        limit: 100,
+        limit,
       });
       
       setFilings(result.filings);

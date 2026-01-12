@@ -249,7 +249,7 @@ GET /api/filings/{ticker}
 |------|------|----------|-------------|
 | `ticker` | string | Yes |  |
 | `form_types` | array | null | No | Filter by form types (e.g., 10-K, 10-Q, 8-K) |
-| `limit` | integer | No | Maximum filings to return (default: `100`) |
+| `limit` | integer | No | Maximum filings to return (higher limits for filtered searches) (default: `100`) |
 
 
 
