@@ -156,6 +156,37 @@ async def run_forensic_audit(
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 
+@router.get("/{ticker}/forensic-history")
+async def get_forensic_history(ticker: str):
+    """
+    Get the historical forensic audit results for a company.
+    Used to build the Forensic Timeline dashboard.
+    """
+    repo = get_filings_repository()
+    try:
+        # Get audited 10-Ks
+        metadata = await repo.list_metadata(ticker=ticker, form_type="10-K", limit=10)
+        
+        history = []
+        for m in metadata:
+            if m.get("consistency_score") is not None:
+                history.append({
+                    "accession_number": m["accession_number"],
+                    "filing_date": m["filing_date"],
+                    "consistency_score": m["consistency_score"],
+                    "report": m.get("forensic_report_json"),
+                    "form_type": m["form_type"]
+                })
+        
+        return {
+            "ticker": ticker.upper(),
+            "history": history,
+            "count": len(history)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{ticker}")
 async def get_filings(
     ticker: str,
@@ -260,10 +291,13 @@ async def crawl_filings(
         # Start background crawl
         background_tasks.add_task(sec_filings_service.crawl_ticker_history, ticker)
         
+        # New: Also start background historical audit for the timeline
+        background_tasks.add_task(sec_filings_service.audit_ticker_history, ticker)
+        
         return {
             "ticker": ticker.upper(),
             "status": "crawling_started",
-            "message": f"Filing history crawl for {ticker.upper()} started in background."
+            "message": f"Filing history crawl and forensic audit for {ticker.upper()} started in background."
         }
     except SECFilingsError as e:
         if "not found" in str(e).lower():

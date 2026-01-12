@@ -336,6 +336,25 @@ POST /api/filings/{ticker}/forensic-audit
 
 ---
 
+### Get Forensic History
+
+Get the historical forensic audit results for a company.
+Used to build the Forensic Timeline dashboard.
+
+```
+GET /api/filings/{ticker}/forensic-history
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ticker` | string | Yes |  |
+
+
+
+---
+
 ### Get Filings
 
 Get SEC filings for a company.
