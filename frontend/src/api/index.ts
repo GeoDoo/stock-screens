@@ -362,3 +362,44 @@ export async function closeMemo(params: CloseMemoParams): Promise<void> {
   });
   await handleResponse<void>(res);
 }
+
+// ============================================================================
+// SEC Filings endpoints (Phase 1: Forensic Intelligence Roadmap)
+// ============================================================================
+
+import type { FilingsListResponse, CompanyInfoResponse } from '../types';
+
+export interface FetchFilingsParams {
+  ticker: string;
+  formTypes?: string[];
+  limit?: number;
+}
+
+export async function fetchFilings(
+  params: FetchFilingsParams
+): Promise<FilingsListResponse> {
+  const query = new URLSearchParams();
+  if (params.formTypes && params.formTypes.length > 0) {
+    params.formTypes.forEach((t) => query.append('form_types', t));
+  }
+  if (params.limit) {
+    query.set('limit', params.limit.toString());
+  }
+  
+  const url = `${API_BASE}/api/filings/${params.ticker}${query.toString() ? '?' + query.toString() : ''}`;
+  const res = await fetch(url);
+  return handleResponse<FilingsListResponse>(res);
+}
+
+export async function fetchCompanyInfo(ticker: string): Promise<CompanyInfoResponse> {
+  const res = await fetch(`${API_BASE}/api/filings/${ticker}/info`);
+  return handleResponse<CompanyInfoResponse>(res);
+}
+
+/**
+ * Get the URL to download a filing as PDF.
+ * The backend converts SEC HTML to PDF on-demand.
+ */
+export function getFilingPdfUrl(cik: string, accessionNumber: string, documentFilename: string): string {
+  return `${API_BASE}/api/filings/pdf/${cik}/${accessionNumber}/${documentFilename}`;
+}

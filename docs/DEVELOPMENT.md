@@ -2,7 +2,7 @@
 
 > **Auto-generated** from package files.
 > 
-> Last updated: 2026-01-12 12:21
+> Last updated: 2026-01-12 16:01
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -45,6 +45,7 @@ npm run dev
 | `pytest-asyncio` | 0.21.0 |
 | `yfinance` | latest |
 | `pandas` | latest |
+| `playwright` | latest |
 
 ## Frontend Dependencies
 
@@ -56,7 +57,7 @@ npm run dev
 
 ## Running Tests
 
-### Backend Tests (32 test files)
+### Backend Tests (33 test files)
 
 ```bash
 cd backend

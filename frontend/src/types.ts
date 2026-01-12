@@ -868,3 +868,32 @@ export interface CapitalEfficiencyResult {
   is_value_creating: boolean;
   assessment: string;
 }
+
+// =============================================================================
+// SEC Filings Types (Phase 1: Forensic Intelligence Roadmap)
+// =============================================================================
+
+export interface SECFiling {
+  accession_number: string;
+  form_type: string;
+  filing_date: string;
+  description: string;
+  document_url: string;
+  viewer_url: string;
+}
+
+export interface FilingsListResponse {
+  ticker: string;
+  company_name: string | null;
+  cik: string | null;
+  filings: SECFiling[];
+  count: number;
+}
+
+export interface CompanyInfoResponse {
+  cik: string;
+  name: string;
+  ticker: string;
+  sic?: string;
+  sic_description?: string;
+}

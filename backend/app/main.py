@@ -20,7 +20,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import stock, memos, audit
+from app.routers import stock, memos, audit, filings
 from app.schemas.stock import CapitalEfficiencyRequest
 from app.services.capital_efficiency import analyze_value_creation
 from app.services.rate_limiter_sqlite import rate_limiter
@@ -103,6 +103,7 @@ _startup_warnings = validate_configuration()
 app.include_router(stock.router)
 app.include_router(memos.router)
 app.include_router(audit.router)
+app.include_router(filings.router)  # SEC filings with PDF download
 
 
 # =============================================================================

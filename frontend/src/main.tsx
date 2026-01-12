@@ -6,6 +6,7 @@ import App from './App.tsx'
 import { GlossaryPage } from './components/GlossaryPage.tsx'
 import { MemosPage } from './components/MemosPage.tsx'
 import { MemoDetailPage } from './components/MemoDetailPage.tsx'
+import FilingsPage from './components/FilingsPage.tsx'
 
 function Router() {
   const [path, setPath] = useState(window.location.pathname)
@@ -32,6 +33,10 @@ function Router() {
 
   if (path === '/memos') {
     return <MemosPage />
+  }
+
+  if (path === '/filings') {
+    return <FilingsPage />
   }
 
   // Match /memos/:id
