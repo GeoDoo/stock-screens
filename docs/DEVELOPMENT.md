@@ -2,7 +2,7 @@
 
 > **Auto-generated** from package files.
 > 
-> Last updated: 2026-01-12 16:31
+> Last updated: 2026-01-12 16:48
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -46,6 +46,7 @@ npm run dev
 | `yfinance` | latest |
 | `pandas` | latest |
 | `playwright` | latest |
+| `google-genai` | latest |
 
 ## Frontend Dependencies
 
