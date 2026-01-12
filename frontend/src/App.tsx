@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import type { StockDataResponse, ValuationRequest, ValuationResult, ScenarioAnalysisResult, CreateMemoRequest, GrowthStage } from './types';
+import type { 
+  StockDataResponse, 
+  ValuationRequest, 
+  ValuationResult, 
+  ScenarioAnalysisResult, 
+  CreateMemoRequest, 
+  GrowthStage, 
+  TechnicalAnalysisResult 
+} from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { FinancialRatiosTable } from './components/FinancialRatiosTable';
 import { DiscountRateModal } from './components/DiscountRateModal';
@@ -26,6 +34,7 @@ import { CEOEfficiencyWarning } from './components/CEOEfficiencyWarning';
 import { SensitivityMatrixPanel } from './components/SensitivityMatrixPanel';
 import { ValueDrivers } from './components/ValueDrivers';
 import { VolumeSignals } from './components/VolumeSignals';
+import { Brain } from 'lucide-react';
 
 import { API_BASE } from './config';
 import { createMemo } from './api';
@@ -736,33 +745,54 @@ export default function App() {
           )}
 
           {/* Ticker Search */}
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-3">Stock Ticker</label>
-            <div className="flex gap-3">
-              <input
-                type="text"
-                placeholder={selectedFundamentalProvider ? "AAPL" : "Select provider first"}
-                value={ticker}
-                onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === 'Enter' && analyzeStock()}
-                disabled={!selectedFundamentalProvider}
-                className="w-48 px-4 py-3 text-base font-mono font-medium bg-white border-2 border-gray-200 rounded-lg outline-none transition-colors focus:border-gray-400 placeholder:text-gray-300 placeholder:font-normal disabled:bg-gray-50 disabled:cursor-not-allowed"
-              />
-              <button
-                onClick={analyzeStock}
-                disabled={loading || !ticker.trim() || !selectedFundamentalProvider}
-                className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Analyzing...' : 'Analyze'}
-              </button>
+          <div className="flex flex-col md:flex-row gap-6 items-end">
+            <div className="flex-1 w-full">
+              <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-3">Stock Ticker</label>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder={selectedFundamentalProvider ? "AAPL" : "Select provider first"}
+                  value={ticker}
+                  onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === 'Enter' && analyzeStock()}
+                  disabled={!selectedFundamentalProvider}
+                  className="w-48 px-4 py-3 text-base font-mono font-medium bg-white border-2 border-gray-200 rounded-lg outline-none transition-colors focus:border-gray-400 placeholder:text-gray-300 placeholder:font-normal disabled:bg-gray-50 disabled:cursor-not-allowed"
+                />
+                <button
+                  onClick={analyzeStock}
+                  disabled={loading || !ticker.trim() || !selectedFundamentalProvider}
+                  className="px-8 py-3 text-sm font-semibold bg-gray-900 text-white rounded-lg transition-opacity hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Analyzing...' : 'Analyze'}
+                </button>
+              </div>
             </div>
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-            {fallbackNotice && (
-              <p className="mt-3 text-sm text-amber-600">
-                {fallbackNotice}
-              </p>
+
+            {/* Forensic Analysis Link */}
+            {stockData && (
+              <div className="flex gap-2">
+                <a
+                  href={`/analysis/${stockData.symbol}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.history.pushState({}, '', `/analysis/${stockData.symbol}`);
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                  }}
+                  className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-700 rounded-lg font-bold hover:bg-indigo-100 transition-all border border-indigo-100 shadow-sm whitespace-nowrap text-sm"
+                >
+                  <Brain className="w-4 h-4" />
+                  Forensic Audit
+                </a>
+              </div>
             )}
           </div>
+
+          {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+          {fallbackNotice && (
+            <p className="mt-3 text-sm text-amber-600">
+              {fallbackNotice}
+            </p>
+          )}
         </section>
 
         {/* Tab Switcher */}
