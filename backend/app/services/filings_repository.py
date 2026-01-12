@@ -49,13 +49,12 @@ class FilingsRepository:
     def __init__(self, db_path: Optional[str] = None):
         """Initialize repository with database path."""
         self.db_path = db_path or str(DEFAULT_DB_PATH)
-        # Note: _init_db() should be called externally or handled via an async init
-        # to avoid blocking the event loop in the constructor.
+        self._init_db()
     
-    async def _init_db(self):
-        """Initialize database schema (Async)."""
-        async with get_async_connection(self.db_path) as db:
-            await db.executescript("""
+    def _init_db(self):
+        """Initialize database schema (Synchronous for startup)."""
+        with get_connection(self.db_path) as conn:
+            conn.executescript("""
                 CREATE TABLE IF NOT EXISTS filing_pdfs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     ticker TEXT NOT NULL,
@@ -86,12 +85,13 @@ class FilingsRepository:
             """)
             
             # Migration: add original_size_kb if it doesn't exist
-            async with db.execute("PRAGMA table_info(filing_pdfs)") as cursor:
-                columns = [row["name"] for row in await cursor.fetchall()]
-                if "original_size_kb" not in columns:
-                    await db.execute("ALTER TABLE filing_pdfs ADD COLUMN original_size_kb INTEGER")
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(filing_pdfs)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "original_size_kb" not in columns:
+                conn.execute("ALTER TABLE filing_pdfs ADD COLUMN original_size_kb INTEGER")
             
-            await db.commit()
+            conn.commit()
     
     async def get_pdf(
         self,
