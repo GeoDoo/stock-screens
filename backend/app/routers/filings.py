@@ -16,6 +16,105 @@ router = APIRouter(prefix="/api/filings", tags=["filings"])
 parser = FilingParser()
 
 
+@router.get("/sections")
+async def get_filing_sections(
+    document_url: str = Query(..., description="SEC URL of the filing HTML"),
+):
+    """
+    Extract major sections (Items) from an SEC filing.
+    """
+    try:
+        html_content = await sec_filings_service.get_filing_html(document_url)
+        sections = parser.extract_sections(html_content)
+        
+        return {
+            "sections": list(sections.keys()),
+            "section_lengths": {k: len(v) for k, v in sections.items()},
+            "count": len(sections)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze-section")
+async def analyze_filing_section(
+    ticker: str = Query(..., description="Stock ticker symbol"),
+    document_url: str = Query(..., description="SEC URL of the filing HTML"),
+    section_name: str = Query(..., description="Name of the section to analyze (e.g., 'Item 7')"),
+    query: Optional[str] = Query(None, description="Optional custom query for this section"),
+):
+    """
+    Run analysis on a specific section of a filing.
+    """
+    analyzer = get_filing_analyzer()
+    
+    try:
+        html_content = await sec_filings_service.get_filing_html(document_url)
+        section_text = parser.get_section(html_content, section_name)
+        
+        if not section_text:
+            raise HTTPException(status_code=404, detail=f"Section '{section_name}' not found in filing")
+            
+        if query:
+            result = await analyzer.analyze(section_text, query)
+        else:
+            # Default analysis for the section
+            result = await analyzer.analyze(
+                section_text, 
+                f"Analyze this {section_name} for any material risks or accounting shifts."
+            )
+            
+        return {
+            "ticker": ticker.upper(),
+            "section": section_name,
+            "query": result.query,
+            "analysis": result.response,
+            "timestamp": result.timestamp.isoformat(),
+            "model": result.model
+        }
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/compare-sections")
+async def compare_filing_sections(
+    ticker: str = Query(..., description="Stock ticker symbol"),
+    current_url: str = Query(..., description="SEC URL of current filing"),
+    previous_url: str = Query(..., description="SEC URL of previous filing"),
+    section_name: str = Query(..., description="Name of section to compare"),
+):
+    """
+    Compare the same section across two filings (Year-over-Year).
+    """
+    analyzer = get_filing_analyzer()
+    
+    try:
+        current_html = await sec_filings_service.get_filing_html(current_url)
+        previous_html = await sec_filings_service.get_filing_html(previous_url)
+        
+        current_text = parser.get_section(current_html, section_name)
+        previous_text = parser.get_section(previous_html, section_name)
+        
+        if not current_text or not previous_text:
+            raise HTTPException(status_code=404, detail=f"Section '{section_name}' not found in one or both filings")
+            
+        result = await analyzer.compare_filings(current_text, previous_text, section_name)
+        
+        return {
+            "ticker": ticker.upper(),
+            "section": section_name,
+            "analysis": result.response,
+            "timestamp": result.timestamp.isoformat(),
+            "model": result.model
+        }
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{ticker}")
 async def get_filings(
     ticker: str,
@@ -208,103 +307,4 @@ async def analyze_filing(
         }
         
     except (SECFilingsError, AnalyzerError) as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/sections")
-async def get_filing_sections(
-    document_url: str = Query(..., description="SEC URL of the filing HTML"),
-):
-    """
-    Extract major sections (Items) from an SEC filing.
-    """
-    try:
-        html_content = await sec_filings_service.get_filing_html(document_url)
-        sections = parser.extract_sections(html_content)
-        
-        return {
-            "sections": list(sections.keys()),
-            "section_lengths": {k: len(v) for k, v in sections.items()},
-            "count": len(sections)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/analyze-section")
-async def analyze_filing_section(
-    ticker: str = Query(..., description="Stock ticker symbol"),
-    document_url: str = Query(..., description="SEC URL of the filing HTML"),
-    section_name: str = Query(..., description="Name of the section to analyze (e.g., 'Item 7')"),
-    query: Optional[str] = Query(None, description="Optional custom query for this section"),
-):
-    """
-    Run analysis on a specific section of a filing.
-    """
-    analyzer = get_filing_analyzer()
-    
-    try:
-        html_content = await sec_filings_service.get_filing_html(document_url)
-        section_text = parser.get_section(html_content, section_name)
-        
-        if not section_text:
-            raise HTTPException(status_code=404, detail=f"Section '{section_name}' not found in filing")
-            
-        if query:
-            result = await analyzer.analyze(section_text, query)
-        else:
-            # Default analysis for the section
-            result = await analyzer.analyze(
-                section_text, 
-                f"Analyze this {section_name} for any material risks or accounting shifts."
-            )
-            
-        return {
-            "ticker": ticker.upper(),
-            "section": section_name,
-            "query": result.query,
-            "analysis": result.response,
-            "timestamp": result.timestamp.isoformat(),
-            "model": result.model
-        }
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/compare-sections")
-async def compare_filing_sections(
-    ticker: str = Query(..., description="Stock ticker symbol"),
-    current_url: str = Query(..., description="SEC URL of current filing"),
-    previous_url: str = Query(..., description="SEC URL of previous filing"),
-    section_name: str = Query(..., description="Name of section to compare"),
-):
-    """
-    Compare the same section across two filings (Year-over-Year).
-    """
-    analyzer = get_filing_analyzer()
-    
-    try:
-        current_html = await sec_filings_service.get_filing_html(current_url)
-        previous_html = await sec_filings_service.get_filing_html(previous_url)
-        
-        current_text = parser.get_section(current_html, section_name)
-        previous_text = parser.get_section(previous_html, section_name)
-        
-        if not current_text or not previous_text:
-            raise HTTPException(status_code=404, detail=f"Section '{section_name}' not found in one or both filings")
-            
-        result = await analyzer.compare_filings(current_text, previous_text, section_name)
-        
-        return {
-            "ticker": ticker.upper(),
-            "section": section_name,
-            "analysis": result.response,
-            "timestamp": result.timestamp.isoformat(),
-            "model": result.model
-        }
-    except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
         raise HTTPException(status_code=500, detail=str(e))
