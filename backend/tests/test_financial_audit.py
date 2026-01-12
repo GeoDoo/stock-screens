@@ -54,6 +54,17 @@ def test_analyze_statements_summary(mock_extractor):
     mock_extractor.latest_working_capital.return_value = -100
     mock_extractor.retained_earnings.return_value = -200 # Altman will be low
     
+    # Mock remaining methods to return 0 or empty list to avoid MagicMock division errors
+    mock_extractor.revenue_history.return_value = []
+    mock_extractor.get_full_history.return_value = []
+    mock_extractor.goodwill.return_value = 0
+    mock_extractor.intangible_assets.return_value = 0
+    mock_extractor.capex_history.return_value = []
+    mock_extractor.da_history.return_value = []
+    mock_extractor.current_assets.return_value = 0
+    mock_extractor.ppe.return_value = 0
+    mock_extractor.cash_flow = []
+    
     auditor = FinancialAuditService(mock_extractor)
     results = auditor.analyze_statements()
     
