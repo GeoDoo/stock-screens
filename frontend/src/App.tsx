@@ -401,6 +401,14 @@ export default function App() {
     }
   };
 
+  // Re-run scenarios when toggles change (if scenarios were previously run)
+  useEffect(() => {
+    if (stockData && scenarioResult) {
+      runScenariosWithData(stockData);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useGrowthMarginCorrelation, useMaintenanceCapex]);
+
   // === Assumption Audit Trail Functions ===
   
   // Get current assumptions as an object for audit trail
