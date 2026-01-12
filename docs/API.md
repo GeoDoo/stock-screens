@@ -317,7 +317,19 @@ POST /api/filings/{ticker}/forensic-audit
   "ticker": "string",
   "report": {
     "accounting_consistency_score": 0,
-    "red_flags": {},
+    "red_flags": [
+      {
+        "category": "string",
+        "score": 0,
+        "severity": "string",
+        "findings": [
+          "string"
+        ],
+        "evidence_quotes": [
+          "string"
+        ]
+      }
+    ],
     "summary": "string",
     "reported_eps": 0.0,
     "forensic_eps_adjustment": 0.0,

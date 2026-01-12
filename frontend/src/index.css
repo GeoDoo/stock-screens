@@ -19,3 +19,21 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* Institutional Markdown Styling */
+.prose {
+  @apply text-gray-800 leading-relaxed;
+}
+
+.prose h1 { @apply text-xl font-black mt-8 mb-4 border-b pb-2 uppercase tracking-tighter; }
+.prose h2 { @apply text-lg font-bold mt-6 mb-3 text-indigo-900 uppercase tracking-tight; }
+.prose h3 { @apply text-base font-bold mt-4 mb-2 text-gray-900; }
+.prose p { @apply mb-4; }
+.prose ul { @apply list-disc pl-5 mb-4 space-y-1; }
+.prose ol { @apply list-decimal pl-5 mb-4 space-y-1; }
+.prose table { @apply w-full border-collapse my-6 text-xs; }
+.prose th { @apply bg-gray-50 border border-gray-200 px-3 py-2 text-left font-bold text-gray-600 uppercase tracking-wider; }
+.prose td { @apply border border-gray-100 px-3 py-2 text-gray-700; }
+.prose blockquote { @apply border-l-4 border-amber-400 bg-amber-50 p-4 my-4 italic rounded-r-lg; }
+.prose strong { @apply font-bold text-gray-950; }
+.prose code { @apply bg-gray-100 px-1 py-0.5 rounded text-indigo-600 font-mono; }

@@ -6,7 +6,6 @@ import type {
   ScenarioAnalysisResult, 
   CreateMemoRequest, 
   GrowthStage, 
-  TechnicalAnalysisResult 
 } from './types';
 import { GlossaryRef } from './components/GlossaryRef';
 import { FinancialRatiosTable } from './components/FinancialRatiosTable';
@@ -772,10 +771,10 @@ export default function App() {
             {stockData && (
               <div className="flex gap-2">
                 <a
-                  href={`/analysis/${stockData.symbol}`}
+                  href={`/forensic/${stockData.symbol}`}
                   onClick={(e) => {
                     e.preventDefault();
-                    window.history.pushState({}, '', `/analysis/${stockData.symbol}`);
+                    window.history.pushState({}, '', `/forensic/${stockData.symbol}`);
                     window.dispatchEvent(new PopStateEvent('popstate'));
                   }}
                   className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-700 rounded-lg font-bold hover:bg-indigo-100 transition-all border border-indigo-100 shadow-sm whitespace-nowrap text-sm"

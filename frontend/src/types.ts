@@ -908,6 +908,7 @@ export interface FilingAnalysisResponse {
 }
 
 export interface RedFlagCategory {
+  category: string;
   score: number;
   severity: string;
   findings: string[];
@@ -922,7 +923,7 @@ export interface EPSAdjustment {
 
 export interface ForensicReport {
   accounting_consistency_score: number;
-  red_flags: Record<string, RedFlagCategory>;
+  red_flags: RedFlagCategory[];
   summary: string;
   reported_eps?: number | null;
   forensic_eps_adjustment: number;
