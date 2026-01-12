@@ -866,6 +866,11 @@ class ValuationService:
         cash = extractor.cash() or 0
         revenue = extractor.latest_revenue() or 0
         
+        # Get components for Sloan Ratio
+        net_income = extractor._get_ttm(extractor.income_statement, "netIncome")
+        fcf = extractor.free_cash_flow()
+        total_assets = extractor.total_assets()
+        
         # Excess cash = Total Cash - Operating Cash (estimated at 2% of revenue)
         operating_cash = revenue * 0.02 if revenue > 0 else 0
         excess_cash = max(0, cash - operating_cash)
@@ -894,6 +899,11 @@ class ValuationService:
         # Calculate ROIC and ROTIC even if WACC is unavailable
         roic = nopat / invested_capital
         
+        # Calculate Sloan Ratio even if WACC is unavailable
+        sloan = None
+        if net_income is not None and fcf is not None and total_assets and total_assets > 0:
+            sloan = (net_income - fcf) / total_assets
+        
         # Tangible Invested Capital for ROTIC
         tangible_capital = invested_capital - goodwill - intangibles
         rotic = nopat / tangible_capital if tangible_capital > 0 else None
@@ -904,10 +914,17 @@ class ValuationService:
             assessment = f"ROIC: {roic:.1%} (value spread unavailable - WACC could not be calculated)"
             if rotic and rotic > roic * 1.2:
                 assessment += f" | NOTE: High ROTIC ({rotic:.1%}) reveals an exceptionally efficient core business masked by goodwill/intangibles."
+            
+            if sloan is not None:
+                if sloan > 0.10:
+                    assessment += f" | ⚠️ FORENSIC WARNING: High Sloan Ratio ({sloan:.1%}) suggests low earnings quality."
+                elif sloan < -0.10:
+                    assessment += f" | NOTE: Conservative accounting (Sloan: {sloan:.1%})."
                 
             return {
                 "roic": roic,
                 "rotic": rotic,
+                "sloan_ratio": sloan,
                 "value_spread": None,
                 "economic_profit": None,
                 "is_value_creating": None,
@@ -925,6 +942,9 @@ class ValuationService:
             wacc=wacc,
             goodwill=goodwill,
             intangibles=intangibles,
+            net_income=net_income,
+            fcf=fcf,
+            total_assets=total_assets,
         )
         
         # Add invested_capital and nopat for consistent schema with error case

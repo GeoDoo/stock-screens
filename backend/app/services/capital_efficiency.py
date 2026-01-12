@@ -34,6 +34,10 @@ class CapitalEfficiencyCalculator:
     # For ROTIC (Return on Tangible Invested Capital)
     goodwill: float = 0.0
     intangibles: float = 0.0
+    # For Sloan Ratio (Accrual Quality)
+    net_income: Optional[float] = None
+    fcf: Optional[float] = None
+    total_assets: Optional[float] = None
     
     def roic(self) -> Optional[float]:
         """
@@ -149,6 +153,24 @@ class CapitalEfficiencyCalculator:
             return None
         return spread * self.invested_capital
 
+    def sloan_ratio(self) -> Optional[float]:
+        """
+        Sloan Ratio = (Net Income - Free Cash Flow) / Total Assets.
+        
+        Institutional interpretation:
+        - -10% to 10%: Low accrual risk (safe)
+        - > 10%: High accrual risk (earnings may be "low quality")
+        - < -10%: Conservative accounting (bullish)
+        
+        Source: Richard Sloan (1996) - "Do Stock Prices Fully Reflect Information 
+        in Accruals and Cash Flows about Future Earnings?"
+        """
+        if self.net_income is None or self.fcf is None or self.total_assets is None:
+            return None
+        if self.total_assets <= 0:
+            return None
+        return (self.net_income - self.fcf) / self.total_assets
+
 
 def analyze_value_creation(
     nopat: float,
@@ -159,6 +181,9 @@ def analyze_value_creation(
     prior_invested_capital: Optional[float] = None,
     goodwill: float = 0.0,
     intangibles: float = 0.0,
+    net_income: Optional[float] = None,
+    fcf: Optional[float] = None,
+    total_assets: Optional[float] = None,
 ) -> dict:
     """
     Comprehensive value creation analysis.
@@ -174,6 +199,7 @@ def analyze_value_creation(
         - is_value_creating: Boolean
         - assessment: Human-readable analysis
         - incremental_assessment: Assessment of reinvestment quality
+        - sloan_ratio: Accrual quality indicator
     """
     calc = CapitalEfficiencyCalculator(
         nopat=nopat,
@@ -183,6 +209,9 @@ def analyze_value_creation(
         prior_invested_capital=prior_invested_capital,
         goodwill=goodwill,
         intangibles=intangibles,
+        net_income=net_income,
+        fcf=fcf,
+        total_assets=total_assets,
     )
     
     roic = calc.roic()
@@ -192,6 +221,7 @@ def analyze_value_creation(
     spread = calc.value_spread(wacc)
     eva = calc.economic_profit(wacc)
     is_creating = calc.is_value_creating(wacc)
+    sloan = calc.sloan_ratio()
     
     # Generate main assessment
     assessment = ""
@@ -213,6 +243,13 @@ def analyze_value_creation(
     if rotic and roic and rotic > roic * 1.2:
         assessment += f" | NOTE: High ROTIC ({rotic:.1%}) reveals an exceptionally efficient core business masked by goodwill/intangibles."
     
+    # Add Sloan Ratio assessment
+    if sloan is not None:
+        if sloan > 0.10:
+            assessment += f" | ⚠️ FORENSIC WARNING: High Sloan Ratio ({sloan:.1%}) suggests low earnings quality (high accruals)."
+        elif sloan < -0.10:
+            assessment += f" | NOTE: Conservative accounting (Sloan: {sloan:.1%}). Cash flow exceeds earnings."
+
     # Generate incremental ROIC assessment
     incremental_assessment = None
     if inc_roic is not None and roic is not None and roic > 0:
@@ -229,6 +266,7 @@ def analyze_value_creation(
     return {
         "roic": roic,
         "rotic": rotic,
+        "sloan_ratio": sloan,
         "incremental_roic": inc_roic,
         "reinvestment_rate": rr,
         "value_spread": spread,

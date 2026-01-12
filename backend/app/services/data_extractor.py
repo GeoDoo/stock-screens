@@ -197,6 +197,10 @@ class DataExtractor:
         """Cash and equivalents from balance sheet."""
         return self._get_latest(self.balance_sheet, "cashAndCashEquivalents")
     
+    def total_assets(self) -> Optional[float]:
+        """Total assets from balance sheet."""
+        return self._get_latest(self.balance_sheet, "totalAssets")
+    
     def goodwill(self) -> Optional[float]:
         """Goodwill from balance sheet."""
         return self._get_latest(self.balance_sheet, "goodwill")
