@@ -96,6 +96,9 @@ All bugfixes must add a regression test for the exact failure mode:
 - **Branch from `main`** for every change: `feat/...`, `fix/...`, `chore/...`, `refactor/...`.
 - **ONLY ONE PR AT A TIME**: Never open multiple PRs simultaneously. Wait for the current PR to be merged before starting the next one.
 - Keep branches **small and short-lived** (aim: merge within 1–2 days).
+- **Automated PR Creation**: Open a PR on GitHub using the `gh` CLI tool immediately after finishing work.
+  - One PR per topic, task, or fix (iterative development).
+  - Use informative, structured descriptions (see below).
 - Open a PR early (draft is fine) and keep it focused (one behavior change per PR).
 
 - **Rebase-only integration**
