@@ -352,6 +352,7 @@ POST /api/filings/{ticker}/forensic-audit
       "accounting_corrections": [
         {}
       ],
+      "input_provenance": {},
       "margin_growth_sensitivity": {},
       "findings": [
         "string"
