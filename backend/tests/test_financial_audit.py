@@ -15,6 +15,7 @@ def mock_extractor():
     extractor.market_cap.return_value = 1500
     extractor.latest_revenue.return_value = 1000
     extractor.latest_operating_income.return_value = 150
+    extractor.working_capital.return_value = 200
     extractor.latest_working_capital.return_value = 200
     extractor.retained_earnings.return_value = 300
     extractor.accounts_receivable.return_value = 150
@@ -118,6 +119,7 @@ def test_analyze_statements_summary(mock_extractor):
     mock_extractor.market_cap.return_value = 100
     mock_extractor.latest_revenue.return_value = 500
     mock_extractor.latest_operating_income.return_value = -50
+    mock_extractor.working_capital.return_value = -100
     mock_extractor.latest_working_capital.return_value = -100
     mock_extractor.retained_earnings.return_value = -200 # Altman will be low
     
