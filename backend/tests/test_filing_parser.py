@@ -54,10 +54,11 @@ def test_extract_ixbrl_facts_basic():
     </html>
     """
     parser = FilingParser()
-    facts_by_date = parser.extract_ixbrl_facts(html)
+    facts_list = parser.extract_ixbrl_facts(html)
     
-    assert "2023-12-31" in facts_by_date
-    facts = facts_by_date["2023-12-31"]
+    assert len(facts_list) == 1
+    facts = facts_list[0]
+    assert facts["date"] == "2023-12-31"
     
     assert facts["net_income"] == 1234500000.0
     assert facts["revenue"] == 10000000000.0
@@ -79,8 +80,9 @@ def test_extract_ixbrl_facts_negative_and_sign():
     </html>
     """
     parser = FilingParser()
-    facts_by_date = parser.extract_ixbrl_facts(html)
+    facts_list = parser.extract_ixbrl_facts(html)
     
-    assert "2023-12-31" in facts_by_date
-    facts = facts_by_date["2023-12-31"]
+    assert len(facts_list) == 1
+    facts = facts_list[0]
+    assert facts["date"] == "2023-12-31"
     assert facts["net_income"] == -500000.0

@@ -91,13 +91,13 @@ class FilingParser:
         text = re.sub(r'\s+', ' ', text).strip()
         return text
 
-    def extract_ixbrl_facts(self, html: str) -> Dict[str, Dict[str, Any]]:
+    def extract_ixbrl_facts(self, html: str) -> List[Dict[str, Any]]:
         """
         Extracts numerical facts from iXBRL tags, grouped by period.
         Handles both namespaced (ix:nonFraction) and plain (nonfraction) tags.
         """
         if not html:
-            return {}
+            return []
         
         # Use regex for tag names to be namespace-agnostic and case-insensitive
         soup = BeautifulSoup(html, "lxml")
@@ -110,7 +110,7 @@ class FilingParser:
 
         if not fact_tags:
             logger.warning("no_ixbrl_tags_found_in_filing")
-            return {}
+            return []
 
         # 1. Map contexts to dates and durations
         contexts = {}
