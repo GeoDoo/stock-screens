@@ -112,7 +112,7 @@ class FilingParser:
             logger.warning("no_ixbrl_tags_found_in_filing")
             return {}
 
-        # 1. Map contexts to dates
+        # 1. Map contexts to dates and durations
         contexts = {}
         context_tags = soup.find_all(re.compile(r'.*context', re.IGNORECASE))
         for context in context_tags:
@@ -125,21 +125,45 @@ class FilingParser:
                 continue
                 
             instant = period.find(re.compile(r'.*instant', re.IGNORECASE))
-            end_date = period.find(re.compile(r'.*endDate', re.IGNORECASE))
+            start_date_tag = period.find(re.compile(r'.*startDate', re.IGNORECASE))
+            end_date_tag = period.find(re.compile(r'.*endDate', re.IGNORECASE))
             
             date_val = None
+            duration_days = None
+            
             if instant:
                 date_val = instant.get_text().strip()
-            elif end_date:
-                date_val = end_date.get_text().strip()
+                duration_days = 0  # Point-in-time
+            elif end_date_tag:
+                date_val = end_date_tag.get_text().strip()
+                if start_date_tag:
+                    try:
+                        from datetime import datetime
+                        start_str = start_date_tag.get_text().strip()
+                        end_str = end_date_tag.get_text().strip()
+                        
+                        # Match YYYY-MM-DD
+                        start_match = re.search(r'(\d{4}-\d{2}-\d{2})', start_str)
+                        end_match = re.search(r'(\d{4}-\d{2}-\d{2})', end_str)
+                        
+                        if start_match and end_match:
+                            d1 = datetime.strptime(start_match.group(1), "%Y-%m-%d")
+                            d2 = datetime.strptime(end_match.group(1), "%Y-%m-%d")
+                            duration_days = (d2 - d1).days
+                    except Exception:
+                        pass
                 
             if date_val:
                 match = re.search(r'(\d{4}-\d{2}-\d{2})', date_val)
                 if match:
-                    contexts[context_id] = match.group(1)
+                    contexts[context_id] = {
+                        "date": match.group(1),
+                        "duration": duration_days
+                    }
 
-        # 2. Extract facts grouped by date
-        facts_by_date = {}
+        # 2. Extract facts grouped by date and duration
+        # Key: (date, duration)
+        facts_by_period = {}
         
         for tag in fact_tags:
             concept = tag.get("name")
@@ -149,6 +173,7 @@ class FilingParser:
             if not concept or not context_ref or not value_str or value_str == '-':
                 continue
                 
+            # ... lookup mapping ...
             clean_concept = concept.split(':')[-1] if ':' in concept else concept
             
             simplified_concept = None
@@ -166,9 +191,13 @@ class FilingParser:
             if not simplified_concept:
                 continue
                 
-            date_val = contexts.get(context_ref)
-            if not date_val:
+            context_meta = contexts.get(context_ref)
+            if not context_meta:
                 continue
+            
+            date_val = context_meta["date"]
+            duration = context_meta["duration"]
+            period_key = (date_val, duration)
                 
             try:
                 is_negative = False
@@ -188,18 +217,21 @@ class FilingParser:
                 scale = int(tag.get('scale', 0))
                 value = value * (10 ** scale)
                 
-                if date_val not in facts_by_date:
-                    facts_by_date[date_val] = {}
+                if period_key not in facts_by_period:
+                    facts_by_period[period_key] = {"date": date_val, "duration": duration}
                 
-                if simplified_concept not in facts_by_date[date_val] or \
-                   abs(value) > abs(facts_by_date[date_val][simplified_concept]):
-                    facts_by_date[date_val][simplified_concept] = value
+                # Prefer larger values for same concept in same period (often means consolidated vs segment)
+                if simplified_concept not in facts_by_period[period_key] or \
+                   abs(value) > abs(facts_by_period[period_key][simplified_concept]):
+                    facts_by_period[period_key][simplified_concept] = value
                     
             except ValueError:
                 continue
                 
-        logger.info("ixbrl_extraction_complete", periods_found=len(facts_by_date))
-        return facts_by_date
+        logger.info("ixbrl_extraction_complete", periods_found=len(facts_by_period))
+        
+        # Convert tuple keys to a list of dicts for easier handling
+        return list(facts_by_period.values())
 
     def extract_sections(self, html: str) -> Dict[str, str]:
         """
