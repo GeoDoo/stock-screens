@@ -119,6 +119,10 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
     # Sort dates latest first
     sorted_dates = sorted(facts_by_date.keys(), reverse=True)
     
+    latest_shares = None
+    if sorted_dates:
+        latest_shares = facts_by_date[sorted_dates[0]].get("shares")
+
     for date_str in sorted_dates:
         facts = facts_by_date[date_str]
         
@@ -143,7 +147,7 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
             "date": date_str,
             "period": "FY",
             "totalAssets": facts.get("total_assets"),
-            "totalLiabilities": facts.get("total_liabilities"),
+            "totalLiabilities": facts.get("total_liabilities") or ((facts.get("current_liabilities") or 0) + (facts.get("noncurrent_liabilities") or 0)) or None,
             "totalStockholdersEquity": facts.get("equity"),
             "totalDebt": facts.get("total_debt") or ((facts.get("short_term_debt") or 0) + (facts.get("long_term_debt") or 0)),
             "totalCurrentAssets": facts.get("current_assets"),
@@ -171,7 +175,11 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
         })
     
     return {
-        "profile": {"marketCap": 0, "symbol": "Filing"},
+        "profile": {
+            "marketCap": 0, 
+            "symbol": "Filing",
+            "sharesOutstanding": latest_shares
+        },
         "income_statement": income_statements,
         "balance_sheet": balance_sheets,
         "cash_flow": cash_flows,

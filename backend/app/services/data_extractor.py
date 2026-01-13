@@ -307,6 +307,17 @@ class DataExtractor:
         
         return non_cash_current_assets - operating_current_liabilities
 
+    def working_capital(self) -> Optional[float]:
+        """
+        Standard Working Capital = Current Assets - Current Liabilities.
+        Used for Altman Z-Score and other liquidity ratios.
+        """
+        current_assets = self._get_latest(self.balance_sheet, "totalCurrentAssets")
+        current_liabilities = self._get_latest(self.balance_sheet, "totalCurrentLiabilities")
+        if current_assets is None or current_liabilities is None:
+            return None
+        return current_assets - current_liabilities
+
     def tax_rate(self) -> Optional[float]:
         """
         Effective tax rate, preferring TTM data when available.
