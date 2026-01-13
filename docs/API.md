@@ -264,6 +264,7 @@ POST /api/filings/analyze-section
 |------|------|----------|-------------|
 | `ticker` | string | Yes | Stock ticker symbol |
 | `document_url` | string | Yes | SEC URL of the filing HTML |
+| `accession_number` | string | null | No | SEC accession number for persistence |
 | `section_name` | string | Yes | Name of the section to analyze (e.g., 'Item 7') |
 | `query` | string | null | No | Optional custom query for this section |
 
@@ -500,6 +501,7 @@ POST /api/filings/{ticker}/analyze
 |------|------|----------|-------------|
 | `ticker` | string | Yes |  |
 | `document_url` | string | Yes | SEC URL of the filing HTML |
+| `accession_number` | string | null | No | SEC accession number for persistence |
 | `query` | string | null | No | Optional custom query for analysis |
 | `provider` | string | No | Provider for numerical analysis (default: `fmp`) |
 

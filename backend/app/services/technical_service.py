@@ -60,7 +60,9 @@ class TechnicalService:
         ema_12_values = TechnicalIndicators.ema(closes, 12)
         ema_26_values = TechnicalIndicators.ema(closes, 26)
         rsi_14_values = TechnicalIndicators.rsi(closes, 14)
+        v_rsi_14_values = TechnicalIndicators.v_rsi(closes, volumes, 14)
         macd_line, signal_line, histogram = TechnicalIndicators.macd(closes)
+        vw_macd_line, vw_signal_line, vw_histogram = TechnicalIndicators.vw_macd(closes, volumes)
         
         # Format for response
         def to_indicator_values(values: List, bars: List[PriceBar]) -> List[IndicatorValue]:
@@ -78,6 +80,17 @@ class TechnicalService:
         for i, (m, s, h) in enumerate(zip(macd_line, signal_line, histogram)):
             if m is not None and s is not None and h is not None:
                 macd_values.append(MACDValue(
+                    timestamp=bars[i].timestamp,
+                    macd=round(m, 4),
+                    signal=round(s, 4),
+                    histogram=round(h, 4),
+                ))
+        
+        # Format VW-MACD
+        vw_macd_values = []
+        for i, (m, s, h) in enumerate(zip(vw_macd_line, vw_signal_line, vw_histogram)):
+            if m is not None and s is not None and h is not None:
+                vw_macd_values.append(MACDValue(
                     timestamp=bars[i].timestamp,
                     macd=round(m, 4),
                     signal=round(s, 4),
@@ -158,6 +171,8 @@ class TechnicalService:
             vwma_20=to_indicator_values(vwma_20_values, bars),
             obv=to_indicator_values(obv_values, bars),
             mfi_14=to_indicator_values(mfi_14_values, bars),
+            v_rsi_14=to_indicator_values(v_rsi_14_values, bars),
+            vw_macd=vw_macd_values,
             mfi_signal=mfi_signal,
             obv_trend=obv_trend_signal,
             # NEW: Momentum Bridge (Value + Momentum convergence)

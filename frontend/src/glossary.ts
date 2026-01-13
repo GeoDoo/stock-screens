@@ -562,6 +562,20 @@ export const glossaryTerms: GlossaryTerm[] = [
     investopediaUrl: "https://www.investopedia.com/terms/v/vwap.asp",
   },
   {
+    id: "v-rsi",
+    term: "V-RSI",
+    fullName: "Volume-Weighted Relative Strength Index",
+    definition: "An institutional version of RSI that weights price changes by the trading volume of each period. While standard RSI only considers price direction and magnitude, V-RSI incorporates 'volume conviction'. A price jump on high volume moves V-RSI more than the same jump on low volume, helping filter out 'fake-outs' and identifying higher-confidence momentum signals.",
+    investopediaUrl: "https://www.investopedia.com/terms/r/rsi.asp",
+  },
+  {
+    id: "vw-macd",
+    term: "VW-MACD",
+    fullName: "Volume-Weighted MACD",
+    definition: "An institutional variation of the MACD indicator that uses Volume-Weighted Moving Averages (VWMA) instead of standard Exponential Moving Averages (EMA). By weighting price by volume, VW-MACD better reflects the average price paid by active market participants. Crossovers in VW-MACD often precede or confirm moves with greater authority than standard price-only MACD.",
+    investopediaUrl: "https://www.investopedia.com/terms/m/macd.asp",
+  },
+  {
     id: "momentum-bridge",
     term: "Momentum Bridge",
     fullName: "Value + Momentum Convergence",

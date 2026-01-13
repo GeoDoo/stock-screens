@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-13 18:34
+> Last updated: 2026-01-13 18:50
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -128,6 +128,7 @@ Weighted Average Cost of Capital calculator.
 | `ForensicTimeline.tsx` | ForensicTimeline |
 | `GlossaryPage.tsx` | GlossaryPage |
 | `GlossaryRef.tsx` | GlossaryRef |
+| `InstitutionalTechnicals.tsx` | InstitutionalTechnicals |
 | `Layout.tsx` | Layout |
 | `MemoCreateModal.tsx` | MemoCreateModal |
 | `MemoDetailPage.tsx` | MemoDetailPage |
@@ -188,7 +189,7 @@ The application uses a single SQLite database (`stock_screens.db`) with the foll
 
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
-| Backend | 50 test files | pytest |
+| Backend | 51 test files | pytest |
 | Frontend | 24 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)

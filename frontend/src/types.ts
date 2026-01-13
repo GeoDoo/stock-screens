@@ -434,6 +434,8 @@ export interface TechnicalAnalysisResult {
     vwma_20?: IndicatorValue[];  // Volume Weighted Moving Average
     obv?: IndicatorValue[];  // On-Balance Volume
     mfi_14?: IndicatorValue[];  // Money Flow Index (volume-weighted RSI)
+    v_rsi_14?: IndicatorValue[];  // Volume Weighted RSI
+    vw_macd?: MACDValue[];  // Volume Weighted MACD
   };
   // Volume metrics (institutional-grade)
   volume?: {

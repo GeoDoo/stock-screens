@@ -104,6 +104,20 @@ class FilingsRepository:
                     ON sec_filings(ticker);
                 CREATE INDEX IF NOT EXISTS idx_sec_filings_date 
                     ON sec_filings(filing_date DESC);
+
+                CREATE TABLE IF NOT EXISTS filing_sections (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    accession_number TEXT NOT NULL,
+                    section_name TEXT NOT NULL,
+                    content_text TEXT NOT NULL,
+                    content_hash TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(accession_number) REFERENCES sec_filings(accession_number),
+                    UNIQUE(accession_number, section_name)
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_filing_sections_accession 
+                    ON filing_sections(accession_number);
             """)
             
             # Migration: add original_size_kb if it doesn't exist
@@ -429,6 +443,48 @@ class FilingsRepository:
                 (consistency_score, report_json, accession_number)
             )
             await db.commit()
+
+    async def save_section(
+        self,
+        accession_number: str,
+        section_name: str,
+        content_text: str,
+    ):
+        """Save a granular section of a filing (Async)."""
+        import hashlib
+        content_hash = hashlib.sha256(content_text.encode()).hexdigest()
+        created_at = datetime.now(timezone.utc).isoformat()
+        
+        async with get_async_connection(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO filing_sections (
+                    accession_number, section_name, content_text, content_hash, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (accession_number, section_name, content_text, content_hash, created_at)
+            )
+            await db.commit()
+
+    async def get_sections(self, accession_number: str) -> list[dict]:
+        """Get all sections for a specific filing (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM filing_sections WHERE accession_number = ?",
+                (accession_number,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
+
+    async def get_section(self, accession_number: str, section_name: str) -> Optional[dict]:
+        """Get a specific section by name (Async)."""
+        async with get_async_connection(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM filing_sections WHERE accession_number = ? AND section_name = ?",
+                (accession_number, section_name)
+            ) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
 
 
 # Singleton instance

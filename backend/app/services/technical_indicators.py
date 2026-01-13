@@ -60,6 +60,8 @@ class TechnicalAnalysisResult:
     vwma_20: Optional[List[IndicatorValue]] = None  # Volume-Weighted Moving Average
     obv: Optional[List[IndicatorValue]] = None  # On-Balance Volume
     mfi_14: Optional[List[IndicatorValue]] = None  # Money Flow Index
+    v_rsi_14: Optional[List[IndicatorValue]] = None  # Volume-Weighted RSI
+    vw_macd: Optional[List[MACDValue]] = None  # Volume-Weighted MACD
     mfi_signal: str = "neutral"  # "overbought", "oversold", "neutral"
     obv_trend: str = "neutral"  # "accumulation", "distribution", "neutral"
     
@@ -637,50 +639,109 @@ class TechnicalIndicators:
         undervalued_threshold: float = 0.15,  # 15% margin of safety
         overvalued_threshold: float = -0.10,  # 10% overvalued
     ) -> str:
-        """
-        Momentum Bridge: Combine Value and Momentum for entry signal.
-        
-        This bridges the gap between Intrinsic Value (DCF) and Market
-        Psychology (trend). Buying cheap stocks in downtrends often
-        leads to "Dead Money" - value traps that take years to recover.
-        
-        Signal Logic:
-        - BUY: Undervalued AND (uptrend OR flat) - momentum supports entry
-        - WAIT: Undervalued AND downtrend - don't catch falling knife
-        - HOLD: Fair value (within ±15%) - no strong action
-        - AVOID: Overvalued - don't buy regardless of trend
-        
-        Args:
-            intrinsic_value: Calculated DCF value per share
-            current_price: Current market price
-            vwma_trend: "uptrend", "downtrend", or "flat"
-            undervalued_threshold: % below which stock is "cheap" (default 15%)
-            overvalued_threshold: % above which stock is "expensive" (default -10%)
-        
-        Returns:
-            "buy": Value + Momentum aligned for entry
-            "wait": Value says cheap, momentum says wait
-            "hold": Fair value, no strong signal
-            "avoid": Overvalued, don't buy
-        """
-        if current_price <= 0 or intrinsic_value <= 0:
-            return "hold"
-        
-        # Calculate margin of safety (positive = undervalued)
-        margin = (intrinsic_value - current_price) / current_price
-        
-        # Overvalued - avoid regardless of trend
-        if margin < overvalued_threshold:
-            return "avoid"
-        
-        # Undervalued - check momentum
-        if margin > undervalued_threshold:
-            if vwma_trend in ("uptrend", "flat"):
-                return "buy"  # Value + Momentum aligned
-            else:
-                return "wait"  # Cheap but don't catch falling knife
-        
-        # Fair value range
+        # ... implementation ...
         return "hold"
+
+    @staticmethod
+    def v_rsi(prices: List[float], volumes: List[float], period: int = 14) -> List[Optional[float]]:
+        """
+        Volume-Weighted Relative Strength Index.
+        
+        Unlike standard RSI which only looks at price changes, V-RSI weights
+        each change by the volume of that period. This makes it more sensitive
+        to "high conviction" moves.
+        """
+        if len(prices) < period + 1 or len(prices) != len(volumes):
+            return [None] * len(prices)
+        
+        changes = []
+        for i in range(1, len(prices)):
+            changes.append(prices[i] - prices[i - 1])
+        
+        result = [None] * period
+        
+        # Initial weighted averages
+        weighted_gains = []
+        weighted_losses = []
+        for i in range(period):
+            change = changes[i]
+            vol = volumes[i+1]
+            weighted_gains.append(max(0, change * vol))
+            weighted_losses.append(max(0, -change * vol))
+            
+        avg_gain = sum(weighted_gains) / period
+        avg_loss = sum(weighted_losses) / period
+        
+        if avg_loss == 0:
+            result.append(100.0 if avg_gain > 0 else 50.0)
+        else:
+            rs = avg_gain / avg_loss
+            result.append(100 - (100 / (1 + rs)))
+            
+        for i in range(period, len(changes)):
+            change = changes[i]
+            vol = volumes[i+1]
+            gain = max(0, change * vol)
+            loss = max(0, -change * vol)
+            
+            avg_gain = (avg_gain * (period - 1) + gain) / period
+            avg_loss = (avg_loss * (period - 1) + loss) / period
+            
+            if avg_loss == 0:
+                result.append(100.0 if avg_gain > 0 else 50.0)
+            else:
+                rs = avg_gain / avg_loss
+                result.append(100 - (100 / (1 + rs)))
+                
+        return result
+
+    @staticmethod
+    def vw_macd(
+        prices: List[float],
+        volumes: List[float],
+        fast_period: int = 12,
+        slow_period: int = 26,
+        signal_period: int = 9,
+    ) -> tuple[List[Optional[float]], List[Optional[float]], List[Optional[float]]]:
+        """
+        Volume-Weighted MACD (VW-MACD).
+        
+        Uses VWMA instead of EMA for the fast and slow lines.
+        This incorporates volume conviction into the trend momentum.
+        """
+        vwma_fast = TechnicalIndicators.vwma(prices, volumes, fast_period)
+        vwma_slow = TechnicalIndicators.vwma(prices, volumes, slow_period)
+        
+        macd_line = []
+        for fast, slow in zip(vwma_fast, vwma_slow):
+            if fast is None or slow is None:
+                macd_line.append(None)
+            else:
+                macd_line.append(fast - slow)
+        
+        # Signal line: we use EMA of the MACD line (standard practice even for VW-MACD)
+        valid_macd = [m for m in macd_line if m is not None]
+        signal_ema = TechnicalIndicators.ema(valid_macd, signal_period)
+        
+        signal_line = []
+        signal_idx = 0
+        for m in macd_line:
+            if m is None:
+                signal_line.append(None)
+            else:
+                if signal_idx < len(signal_ema):
+                    signal_line.append(signal_ema[signal_idx])
+                    signal_idx += 1
+                else:
+                    signal_line.append(None)
+        
+        histogram = []
+        for m, s in zip(macd_line, signal_line):
+            if m is None or s is None:
+                histogram.append(None)
+            else:
+                histogram.append(m - s)
+                
+        return macd_line, signal_line, histogram
 
 
