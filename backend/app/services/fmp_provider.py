@@ -101,7 +101,7 @@ class FMPProvider(StockDataProvider):
                 raise ProviderError("FMP access denied")
             elif response.status_code == 404:
                 raise TickerNotFoundError("Ticker not found")
-            if response.status_code == 429:
+            elif response.status_code == 429:
                 # Note: We don't await rate_limiter here as this is a sync helper.
                 # The RateLimitError will be caught by the caller who can then format it.
                 raise RateLimitError(f"Rate limit exceeded for {self.name}.")
