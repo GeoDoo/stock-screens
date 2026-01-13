@@ -126,6 +126,22 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
     for date_str in sorted_dates:
         facts = facts_by_date[date_str]
         
+        # Robust reconstruction of Total Liabilities and Total Debt
+        # We must avoid overwriting explicit 0 values with fallback sums
+        total_liabilities = facts.get("total_liabilities")
+        if total_liabilities is None:
+            cl = facts.get("current_liabilities")
+            ncl = facts.get("noncurrent_liabilities")
+            if cl is not None or ncl is not None:
+                total_liabilities = (cl or 0) + (ncl or 0)
+        
+        total_debt = facts.get("total_debt")
+        if total_debt is None:
+            std = facts.get("short_term_debt")
+            ltd = facts.get("long_term_debt")
+            if std is not None or ltd is not None:
+                total_debt = (std or 0) + (ltd or 0)
+
         income_statements.append({
             "date": date_str,
             "period": "FY",
@@ -147,9 +163,9 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
             "date": date_str,
             "period": "FY",
             "totalAssets": facts.get("total_assets"),
-            "totalLiabilities": facts.get("total_liabilities") or ((facts.get("current_liabilities") or 0) + (facts.get("noncurrent_liabilities") or 0)) or None,
+            "totalLiabilities": total_liabilities,
             "totalStockholdersEquity": facts.get("equity"),
-            "totalDebt": facts.get("total_debt") or ((facts.get("short_term_debt") or 0) + (facts.get("long_term_debt") or 0)),
+            "totalDebt": total_debt,
             "totalCurrentAssets": facts.get("current_assets"),
             "totalCurrentLiabilities": facts.get("current_liabilities"),
             "shortTermDebt": facts.get("short_term_debt"),
