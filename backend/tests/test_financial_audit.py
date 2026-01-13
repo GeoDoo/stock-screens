@@ -92,6 +92,7 @@ def test_altman_z_score_calculation(mock_extractor):
     mock_extractor.market_cap.return_value = 2000
     mock_extractor.latest_revenue.return_value = 1500
     mock_extractor.latest_operating_income.return_value = 200
+    mock_extractor.working_capital.return_value = 300
     mock_extractor.latest_working_capital.return_value = 300
     mock_extractor.retained_earnings.return_value = 400
     
