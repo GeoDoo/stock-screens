@@ -104,6 +104,7 @@ class ScenarioCalculator:
         preferred_stock: float = 0.0,
         deferred_tax_assets: float = 0.0,
         pension_deficit: float = 0.0,
+        investments: float = 0.0,
         # P1 Fix: Dilution support (match main valuation)
         annual_dilution_rate: float = 0.0,
         # NOTES2.md III.3: Growth-Margin Correlation
@@ -148,6 +149,7 @@ class ScenarioCalculator:
         self.preferred_stock = preferred_stock
         self.deferred_tax_assets = deferred_tax_assets
         self.pension_deficit = pension_deficit
+        self.investments = investments
         # P1 Fix: Dilution with validation
         if annual_dilution_rate < -0.5 or annual_dilution_rate > 0.5:
             raise ValueError(
@@ -316,6 +318,7 @@ class ScenarioCalculator:
             - self.preferred_stock
             + self.deferred_tax_assets
             - self.pension_deficit
+            + self.investments
         )
         
         # P1 Fix: Apply dilution to per-share value (match main valuation service)

@@ -21,6 +21,12 @@ class CompanyData(BaseModel):
     # Derived metrics
     revenue: Optional[float] = None  # Latest revenue for WC calculations
     working_capital: Optional[float] = None  # Current assets - current liabilities
+    # Equity bridge components
+    minority_interest: Optional[float] = None
+    preferred_stock: Optional[float] = None
+    deferred_tax_assets: Optional[float] = None
+    pension_liability: Optional[float] = None
+    investments: Optional[float] = None
 
 
 class HistoricalHints(BaseModel):

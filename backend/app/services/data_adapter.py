@@ -186,6 +186,12 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
             "goodwill": facts.get("goodwill"),
             "intangibleAssets": facts.get("intangibles"),
             "accountPayables": facts.get("accounts_payable"),
+            # Equity Bridge components
+            "minorityInterest": facts.get("minority_interest"),
+            "preferredStock": facts.get("preferred_stock"),
+            "deferredTaxAssets": facts.get("deferred_tax_assets"),
+            "pensionLiability": facts.get("pension_liability"),
+            "investments": facts.get("investments"),
         })
         
         cash_flows.append({

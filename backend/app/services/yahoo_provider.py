@@ -153,6 +153,7 @@ class YahooProvider(StockDataProvider):
                     preferred_stock=get_val(balance_df, "Preferred Stock", "Preferred Securities Outside Stock Equity"),
                     deferred_tax_assets=get_val(balance_df, "Deferred Tax Assets", "Non Current Deferred Tax Assets"),
                     pension_liability=get_val(balance_df, "Defined Benefit Plans", "Pension And Other Post Retirement Benefit Plans Current"),
+                    investments=get_val(balance_df, "Total Investments", "Investments And Advances"),
                     # Cash Flow
                     operating_cash_flow=get_val(cash_df, "Operating Cash Flow", "Cash Flow From Continuing Operating Activities"),
                     capital_expenditure=get_val(cash_df, "Capital Expenditure"),

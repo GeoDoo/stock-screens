@@ -863,7 +863,12 @@ GET /api/stock/{symbol}
     "risk_free_rate": 0.0,
     "wacc": 0.0,
     "revenue": 0.0,
-    "working_capital": 0.0
+    "working_capital": 0.0,
+    "minority_interest": 0.0,
+    "preferred_stock": 0.0,
+    "deferred_tax_assets": 0.0,
+    "pension_liability": 0.0,
+    "investments": 0.0
   },
   "hints_annual": {
     "revenue_growth": 0.0,

@@ -386,6 +386,7 @@ def run_full_monte_carlo(
     preferred_stock: float = 0.0,
     deferred_tax_assets: float = 0.0,  # NOLs - adds to equity
     pension_deficit: float = 0.0,
+    investments: float = 0.0,  # Non-operating investments/securities (add to EV)
     
     # NEW: Fat tails (Student's t-distribution)
     # Markets don't follow Normal distribution - extreme events happen more often
@@ -533,6 +534,7 @@ def run_full_monte_carlo(
         - preferred_stock
         + deferred_tax_assets
         - pension_deficit
+        + investments
     )
     
     # Mid-year discounting offset

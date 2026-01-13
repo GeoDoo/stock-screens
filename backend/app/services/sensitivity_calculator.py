@@ -36,6 +36,7 @@ class SensitivityCalculator:
     preferred_stock: float = 0.0
     deferred_tax_assets: float = 0.0
     pension_deficit: float = 0.0
+    investments: float = 0.0
     # FCF component ratios (for margin/growth matrix - matches FCFProjector)
     da_ratio: float = 0.05       # D&A as % of revenue
     capex_ratio: float = 0.08    # CapEx as % of revenue
@@ -149,6 +150,7 @@ class SensitivityCalculator:
             - self.preferred_stock
             + self.deferred_tax_assets
             - self.pension_deficit
+            + self.investments
         )
         
         # Per share
@@ -420,6 +422,7 @@ class SensitivityCalculator:
             - self.preferred_stock
             + self.deferred_tax_assets
             - self.pension_deficit
+            + self.investments
         )
         
         if self.shares_outstanding <= 0:

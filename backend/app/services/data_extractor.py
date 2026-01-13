@@ -246,6 +246,10 @@ class DataExtractor:
         """Underfunded pension obligations - debt-like, subtract from equity."""
         return self._get_latest(self.balance_sheet, "pensionLiability")
     
+    def investments(self) -> Optional[float]:
+        """Non-operating investments and securities - add to EV."""
+        return self._get_latest(self.balance_sheet, "investments")
+    
     def tangible_assets(self) -> Optional[float]:
         """
         Tangible Assets = Total Assets - Goodwill - Intangible Assets.

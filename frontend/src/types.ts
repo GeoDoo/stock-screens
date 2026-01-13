@@ -37,6 +37,12 @@ export interface CompanyData {
   wacc: number | null;
   revenue: number | null;
   working_capital: number | null;
+  // Equity bridge components
+  minority_interest?: number | null;
+  preferred_stock?: number | null;
+  deferred_tax_assets?: number | null;
+  pension_liability?: number | null;
+  investments?: number | null;
 }
 
 export interface HistoricalHints {
@@ -166,6 +172,7 @@ export interface EquityBridge {
   preferred_stock: number;
   deferred_tax_assets: number;  // NOLs/tax shields (adds value)
   pension_deficit: number;
+  investments: number;  // Non-operating investments (adds value)
 }
 
 // Terminal Value cross-check (Exit Multiple vs Gordon Growth)
