@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-13 17:17
+> Last updated: 2026-01-13 17:26
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -39,6 +39,7 @@ Stock Screens is a full-stack stock analysis application with:
 | `fmp_provider.py` | Financial Modeling Prep data provider. |
 | `historical_valuation.py` | Valuation metrics for a single year. |
 | `logging_config.py` | — |
+| `ltm_calculator.py` | Calculates LTM (Trailing Twelve Months) values by merging fa |
 | `massive_provider.py` | Massive (Polygon.io) data provider. |
 | `memo_repository.py` | Asynchronous SQLite-based repository for investment memos. |
 | `monte_carlo.py` | Configuration for a single Monte Carlo input variable. |

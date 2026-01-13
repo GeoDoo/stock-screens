@@ -18,6 +18,7 @@ from app.services.base_provider import RateLimitError as ProviderRateLimitError
 from app.services.data_extractor import DataExtractor
 from app.services.financial_audit import FinancialAuditService
 from app.services.data_adapter import stock_data_to_legacy
+from app.services.ltm_calculator import LTMCalculator
 from app.schemas.forensic import FilingForensicResponse, ForensicReport, QuantitativeAudit
 
 router = APIRouter(prefix="/api/filings", tags=["filings"])
@@ -175,12 +176,80 @@ async def run_forensic_audit(
         try:
             # Extract numerical facts directly from the iXBRL in the HTML (Source of Truth)
             from app.services.data_adapter import ixbrl_facts_to_legacy
-            ixbrl_facts_by_date = parser.extract_ixbrl_facts(html_content)
+            ixbrl_facts_by_period = parser.extract_ixbrl_facts(html_content)
             
+            # LTM Data Merging (NOTES2.md Item #8)
+            # If we have 10-Q data, we need to merge with previous 10-K to get full year periods
+            if ixbrl_facts_by_period:
+                latest_flow = next((f for f in sorted(ixbrl_facts_by_period, key=lambda x: (x["date"], x.get("duration", 0)), reverse=True) 
+                                  if f.get("duration", 0) > 0), None)
+                
+                if latest_flow and latest_flow.get("duration", 0) < 350:
+                    logger.info("ltm_merging_started", ticker=ticker, latest_duration=latest_flow.get("duration"))
+                    try:
+                        # 1. Get filing history
+                        filings = await sec_filings_service.get_filings(ticker, form_types=["10-K", "10-Q"], limit=20)
+                        
+                        # 2. Find previous 10-K and previous matching 10-Q
+                        # We need the 10-K from the PREVIOUS fiscal year
+                        # And the 10-Q from that SAME fiscal year matching our current duration
+                        prev_10k = None
+                        prev_10q = None
+                        
+                        # Find previous 10-K (first 10-K older than current filing)
+                        current_filing_date = date.today() # Fallback
+                        for f in filings:
+                            if f.document_url == document_url:
+                                current_filing_date = f.filing_date
+                                break
+                        
+                        for f in filings:
+                            if f.form_type == "10-K" and f.filing_date < current_filing_date:
+                                prev_10k = f
+                                break
+                        
+                        # Find previous matching 10-Q (same period last year)
+                        if prev_10k:
+                            # Target date is ~1 year before current period end date
+                            current_period_end = date.fromisoformat(latest_flow["date"])
+                            target_date_prev_year = current_period_end.replace(year=current_period_end.year - 1)
+                            
+                            for f in filings:
+                                # Look for a 10-Q filed around 1 year before current filing
+                                if f.form_type == "10-Q" and abs((f.filing_date - (current_filing_date.replace(year=current_filing_date.year - 1))).days) < 60:
+                                    prev_10q = f
+                                    break
+                        
+                        if prev_10k and prev_10q:
+                            logger.info("ltm_merging_fetching_historical", 
+                                      prev_10k=prev_10k.accession_number, 
+                                      prev_10q=prev_10q.accession_number)
+                            
+                            # 3. Fetch and parse
+                            h1 = await sec_filings_service.get_filing_html(prev_10k.document_url)
+                            h2 = await sec_filings_service.get_filing_html(prev_10q.document_url)
+                            
+                            facts_10k = parser.extract_ixbrl_facts(h1)
+                            facts_10q = parser.extract_ixbrl_facts(h2)
+                            
+                            # 4. Calculate LTM
+                            ltm_calc = LTMCalculator()
+                            ltm_fact_set = ltm_calc.calculate_ltm_facts(
+                                current_facts=ixbrl_facts_by_period,
+                                previous_fy_facts=facts_10k,
+                                previous_ytd_facts=facts_10q
+                            )
+                            
+                            if ltm_fact_set:
+                                ixbrl_facts_by_period.append(ltm_fact_set)
+                                logger.info("ltm_merging_success", date=ltm_fact_set["date"])
+                    except Exception as e:
+                        logger.warning("ltm_merging_failed", ticker=ticker, error=str(e))
+
             # ... logic to fetch from API or file ...
-            if ixbrl_facts_by_date:
+            if ixbrl_facts_by_period:
                 logger.info("file_sourced_quantitative_audit_started", ticker=ticker)
-                legacy_data = ixbrl_facts_to_legacy(ixbrl_facts_by_date)
+                legacy_data = ixbrl_facts_to_legacy(ixbrl_facts_by_period)
                 
                 # Market Cap isn't in XBRL usually, try a quick API hit just for the denominator of Z-Score
                 try:

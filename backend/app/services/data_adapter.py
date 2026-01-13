@@ -2,7 +2,7 @@
 Adapter to convert standardized StockData to the legacy dict format
 expected by DataExtractor and other services.
 """
-from typing import Dict, Any
+from typing import Dict, Any, List
 from app.services.base_provider import StockData
 
 
@@ -107,7 +107,7 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
     }
 
 
-def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
+def ixbrl_facts_to_legacy(facts_list: List[Dict[str, Any]]) -> dict:
     """
     Convert extracted multi-period iXBRL facts into the legacy dict format.
     Sorted by date (latest first).
@@ -116,16 +116,41 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
     balance_sheets = []
     cash_flows = []
     
-    # Sort dates latest first
-    sorted_dates = sorted(facts_by_date.keys(), reverse=True)
+    # Sort by date (latest first), then by duration (longer first for same date)
+    sorted_facts = sorted(
+        facts_list, 
+        key=lambda x: (x.get("date", ""), x.get("duration", 0) or 0), 
+        reverse=True
+    )
     
     latest_shares = None
-    if sorted_dates:
-        latest_shares = facts_by_date[sorted_dates[0]].get("shares")
+    if sorted_facts:
+        # Find latest shares (usually point-in-time duration=0)
+        share_facts = [f for f in sorted_facts if f.get("shares") is not None]
+        if share_facts:
+            latest_shares = share_facts[0].get("shares")
 
-    for date_str in sorted_dates:
-        facts = facts_by_date[date_str]
+    for facts in sorted_facts:
+        date_str = facts.get("date")
+        duration = facts.get("duration")
+        is_ltm = facts.get("is_ltm", False)
         
+        # Determine period label
+        if is_ltm:
+            period = "TTM"
+        elif duration == 0 or duration is None:
+            period = "BS" # Balance Sheet / Instant
+        elif 350 <= duration <= 375:
+            period = "FY" # Full Year
+        elif 80 <= duration <= 100:
+            period = "Q"  # Quarter
+        elif 170 <= duration <= 195:
+            period = "6M"
+        elif 260 <= duration <= 280:
+            period = "9M"
+        else:
+            period = f"{duration}D" # Custom duration in days
+            
         # Robust reconstruction of Total Liabilities and Total Debt
         # We must avoid overwriting explicit 0 values with fallback sums
         total_liabilities = facts.get("total_liabilities")
@@ -150,59 +175,62 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
         if operating_income is None:
             operating_income = facts.get("operating_income")
 
-        income_statements.append({
-            "date": date_str,
-            "period": "FY",
-            "revenue": revenue,
-            "netIncome": facts.get("net_income"),
-            "grossProfit": gross_profit,
-            "grossProfitRatio": gross_profit_ratio,
-            "operatingIncome": operating_income,
-            "costOfRevenue": facts.get("cost_of_revenue"),
-            "interestExpense": facts.get("interest_expense"),
-            "incomeTaxExpense": facts.get("tax_expense"),
-            "incomeBeforeTax": facts.get("ebt"),
-            "researchAndDevelopment": facts.get("research_and_development"), # Added mapping for R&D
-            "weightedAverageShsOut": facts.get("shares"),
-            "weightedAverageShsOutDil": facts.get("shares_diluted"),
-        })
-        
-        balance_sheets.append({
-            "date": date_str,
-            "period": "FY",
-            "totalAssets": facts.get("total_assets"),
-            "totalLiabilities": total_liabilities,
-            "totalStockholdersEquity": facts.get("equity"),
-            "totalDebt": total_debt,
-            "totalCurrentAssets": facts.get("current_assets"),
-            "totalCurrentLiabilities": facts.get("current_liabilities"),
-            "shortTermDebt": facts.get("short_term_debt"),
-            "longTermDebt": facts.get("long_term_debt"),
-            "inventory": facts.get("inventory"),
-            "netReceivables": facts.get("accounts_receivable"),
-            "retainedEarnings": facts.get("retained_earnings"),
-            "propertyPlantEquipmentNet": facts.get("ppe_net"),
-            "cashAndCashEquivalents": facts.get("cash"),
-            "goodwill": facts.get("goodwill"),
-            "intangibleAssets": facts.get("intangibles"),
-            "accountPayables": facts.get("accounts_payable"),
-            # Equity Bridge components
-            "minorityInterest": facts.get("minority_interest"),
-            "preferredStock": facts.get("preferred_stock"),
-            "deferredTaxAssets": facts.get("deferred_tax_assets"),
-            "pensionLiability": facts.get("pension_liability"),
-            "investments": facts.get("investments"),
-        })
-        
-        cash_flows.append({
-            "date": date_str,
-            "period": "FY",
-            "operatingCashFlow": facts.get("operating_cash_flow"),
-            "capitalExpenditure": facts.get("capex"),
-            "depreciationAndAmortization": facts.get("da"),
-            "stockBasedCompensation": facts.get("sbc"),
-            "dividendsPaid": facts.get("dividends"),
-        })
+        # Point-in-time facts go to Balance Sheet
+        if duration == 0 or duration is None:
+            balance_sheets.append({
+                "date": date_str,
+                "period": period,
+                "totalAssets": facts.get("total_assets"),
+                "totalLiabilities": total_liabilities,
+                "totalStockholdersEquity": facts.get("equity"),
+                "totalDebt": total_debt,
+                "totalCurrentAssets": facts.get("current_assets"),
+                "totalCurrentLiabilities": facts.get("current_liabilities"),
+                "shortTermDebt": facts.get("short_term_debt"),
+                "longTermDebt": facts.get("long_term_debt"),
+                "inventory": facts.get("inventory"),
+                "netReceivables": facts.get("accounts_receivable"),
+                "retainedEarnings": facts.get("retained_earnings"),
+                "propertyPlantEquipmentNet": facts.get("ppe_net"),
+                "cashAndCashEquivalents": facts.get("cash"),
+                "goodwill": facts.get("goodwill"),
+                "intangibleAssets": facts.get("intangibles"),
+                "accountPayables": facts.get("accounts_payable"),
+                # Equity Bridge components
+                "minorityInterest": facts.get("minority_interest"),
+                "preferredStock": facts.get("preferred_stock"),
+                "deferredTaxAssets": facts.get("deferred_tax_assets"),
+                "pensionLiability": facts.get("pension_liability"),
+                "investments": facts.get("investments"),
+            })
+        else:
+            # Flow facts go to Income Statement and Cash Flow
+            income_statements.append({
+                "date": date_str,
+                "period": period,
+                "revenue": revenue,
+                "netIncome": facts.get("net_income"),
+                "grossProfit": gross_profit,
+                "grossProfitRatio": gross_profit_ratio,
+                "operatingIncome": operating_income,
+                "costOfRevenue": facts.get("cost_of_revenue"),
+                "interestExpense": facts.get("interest_expense"),
+                "incomeTaxExpense": facts.get("tax_expense"),
+                "incomeBeforeTax": facts.get("ebt"),
+                "researchAndDevelopment": facts.get("research_and_development"),
+                "weightedAverageShsOut": facts.get("shares"),
+                "weightedAverageShsOutDil": facts.get("shares_diluted"),
+            })
+            
+            cash_flows.append({
+                "date": date_str,
+                "period": period,
+                "operatingCashFlow": facts.get("operating_cash_flow"),
+                "capitalExpenditure": facts.get("capex"),
+                "depreciationAndAmortization": facts.get("da"),
+                "stockBasedCompensation": facts.get("sbc"),
+                "dividendsPaid": facts.get("dividends"),
+            })
     
     return {
         "profile": {
