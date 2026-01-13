@@ -623,10 +623,10 @@ async def analyze_filing(
     quant_audit = QuantitativeAudit(sloan_ratio=None, altman_z_score=None, beneish_m_score=None, findings=[])
     try:
         from app.services.data_adapter import ixbrl_facts_to_legacy
-        ixbrl_facts_by_date = parser.extract_ixbrl_facts(html_content)
+        ixbrl_facts = parser.extract_ixbrl_facts(html_content)
         
         # If file has no iXBRL or extraction failed, try a quick API hit
-        if not ixbrl_facts_by_date and not await rate_limiter.is_api_limited(provider):
+        if not ixbrl_facts and not await rate_limiter.is_api_limited(provider):
             try:
                 client = get_stock_client(provider)
                 api_data = await client.get_stock_data(ticker)
@@ -649,8 +649,8 @@ async def analyze_filing(
                 )
             except Exception as e:
                 logger.warning("api_fallback_failed_for_scan", ticker=ticker, error=str(e))
-        elif ixbrl_facts_by_date:
-            legacy_data = ixbrl_facts_to_legacy(ixbrl_facts_by_date)
+        elif ixbrl_facts:
+            legacy_data = ixbrl_facts_to_legacy(ixbrl_facts)
             
             # Try quick metadata hit for Altman Z-Score even in SCAN mode
             try:
