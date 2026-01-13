@@ -61,6 +61,7 @@ class FinancialStatement:
     preferred_stock: Optional[float] = None  # Preferred equity
     deferred_tax_assets: Optional[float] = None  # NOLs/tax shields
     pension_liability: Optional[float] = None  # Underfunded pension obligations
+    investments: Optional[float] = None  # Non-operating investments/securities
     
     # Cash Flow
     operating_cash_flow: Optional[float] = None

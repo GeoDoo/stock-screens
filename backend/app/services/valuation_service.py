@@ -276,9 +276,10 @@ class ValuationService:
             preferred_stock = extractor.preferred_stock() or 0
             deferred_tax_assets = extractor.deferred_tax_assets() or 0
             pension_deficit = extractor.pension_liability() or 0
+            investments = extractor.investments() or 0
             
             # Full Equity Bridge:
-            # Equity = EV - Net Debt - Minority Interest - Preferred + NOLs - Pension
+            # Equity = EV - Net Debt - Minority Interest - Preferred + NOLs - Pension + Investments
             equity_value = (
                 enterprise_value
                 - net_debt
@@ -286,6 +287,7 @@ class ValuationService:
                 - preferred_stock
                 + deferred_tax_assets
                 - pension_deficit
+                + investments
             )
             
             # Store equity bridge for transparency
@@ -295,6 +297,7 @@ class ValuationService:
                 "preferred_stock": preferred_stock,
                 "deferred_tax_assets": deferred_tax_assets,
                 "pension_deficit": pension_deficit,
+                "investments": investments,
             }
 
             # Intrinsic value per share (prefer diluted shares for DCF)

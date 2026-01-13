@@ -232,6 +232,7 @@ class FMPProvider(StockDataProvider):
                 preferred_stock=bal.get("preferredStock"),
                 deferred_tax_assets=bal.get("deferredTaxAssetsNonCurrent"),
                 pension_liability=bal.get("pensionLiabilities"),
+                investments=bal.get("totalInvestments"),
                 # Cash Flow
                 operating_cash_flow=cf.get("operatingCashFlow"),
                 capital_expenditure=cf.get("capitalExpenditure"),

@@ -77,6 +77,7 @@ export function normalizeValuationResult(data: ValuationResult | null): Valuatio
       preferred_stock: anyData.equity_bridge.preferred_stock ?? 0,
       deferred_tax_assets: anyData.equity_bridge.deferred_tax_assets ?? 0,
       pension_deficit: anyData.equity_bridge.pension_deficit ?? 0,
+      investments: anyData.equity_bridge.investments ?? 0,
     } : undefined,
     sensitivity: data.sensitivity ? {
       ...data.sensitivity,

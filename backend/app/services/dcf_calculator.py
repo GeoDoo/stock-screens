@@ -33,6 +33,7 @@ class DCFCalculator:
     preferred_stock: float = 0.0  # Preferred equity (subtract from common equity)
     deferred_tax_assets: float = 0.0  # NOLs/tax shields (add to equity)
     pension_deficit: float = 0.0  # Underfunded pension obligations (subtract from equity)
+    investments: float = 0.0  # Non-operating investments/securities (add to EV)
 
     def calculate(self) -> dict:
         """
@@ -110,6 +111,7 @@ class DCFCalculator:
             "preferred_stock": self.preferred_stock,
             "deferred_tax_assets": self.deferred_tax_assets,
             "pension_deficit": self.pension_deficit,
+            "investments": self.investments,
         }
         result["equity_bridge"] = equity_bridge
         
@@ -120,6 +122,7 @@ class DCFCalculator:
             - self.preferred_stock
             + self.deferred_tax_assets
             - self.pension_deficit
+            + self.investments
         )
         result["equity_value"] = equity_value
 

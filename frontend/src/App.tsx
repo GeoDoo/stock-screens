@@ -1687,7 +1687,8 @@ export default function App() {
                   {result.equity_bridge && (result.equity_bridge.minority_interest !== 0 || 
                     result.equity_bridge.preferred_stock !== 0 || 
                     result.equity_bridge.deferred_tax_assets !== 0 || 
-                    result.equity_bridge.pension_deficit !== 0) && (
+                    result.equity_bridge.pension_deficit !== 0 ||
+                    result.equity_bridge.investments !== 0) && (
                     <>
                       {result.equity_bridge.minority_interest !== 0 && (
                         <tr className="border-b border-gray-50">
@@ -1711,6 +1712,12 @@ export default function App() {
                         <tr className="border-b border-gray-50">
                           <td className="py-2 text-xs text-gray-400 pl-4">− Pension Deficit</td>
                           <td className="py-2 text-xs font-mono text-gray-500 text-right">{formatCurrency(result.equity_bridge.pension_deficit)}</td>
+                        </tr>
+                      )}
+                      {result.equity_bridge.investments !== 0 && (
+                        <tr className="border-b border-gray-50">
+                          <td className="py-2 text-xs text-green-600 pl-4">+ Non-Operating Inv.</td>
+                          <td className="py-2 text-xs font-mono text-green-600 text-right">{formatCurrency(result.equity_bridge.investments)}</td>
                         </tr>
                       )}
                     </>

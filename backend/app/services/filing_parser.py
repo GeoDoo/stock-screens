@@ -65,6 +65,12 @@ class FilingParser:
         "shares_diluted": ["us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding", "us-gaap:WeightedAverageNumberOfSharesOutstandingDiluted"],
         "accounts_payable": ["us-gaap:AccountsPayableCurrent", "us-gaap:AccountsPayableNetCurrent", "us-gaap:AccountsPayable"],
         "research_and_development": ["us-gaap:ResearchAndDevelopmentExpense", "us-gaap:ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost"],
+        # Equity Bridge components
+        "minority_interest": ["us-gaap:MinorityInterest", "us-gaap:NoncontrollingInterestInSubsidiaries"],
+        "preferred_stock": ["us-gaap:PreferredStockValue", "us-gaap:PreferredStockValueOutstanding", "us-gaap:PreferredStockIncludingAdditionalPaidInCapital"],
+        "deferred_tax_assets": ["us-gaap:DeferredTaxAssetsNet", "us-gaap:DeferredTaxAssetsOperatingLossCarryforwards", "us-gaap:DeferredTaxAssetsNoncurrent"],
+        "pension_liability": ["us-gaap:PensionAndOtherPostretirementDefinedBenefitPlansLiabilitiesCurrent", "us-gaap:PensionAndOtherPostretirementDefinedBenefitPlansLiabilitiesNoncurrent"],
+        "investments": ["us-gaap:Investments", "us-gaap:AvailableForSaleSecurities", "us-gaap:EquityMethodInvestments", "us-gaap:InvestmentsInAndAdvancesToAffiliates"],
     }
 
     def clean_html(self, html: str) -> str:

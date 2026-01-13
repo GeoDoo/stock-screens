@@ -382,6 +382,11 @@ async def get_stock(symbol: str, provider: str):
             wacc=wacc,
             revenue=extractor.latest_revenue(),
             working_capital=extractor.latest_working_capital(),
+            minority_interest=extractor.minority_interest(),
+            preferred_stock=extractor.preferred_stock(),
+            deferred_tax_assets=extractor.deferred_tax_assets(),
+            pension_liability=extractor.pension_liability(),
+            investments=extractor.investments(),
         ),
         # P0 Fix: Use hints_annual + hints_ttm for consistency with /analyze
         hints_annual=_build_historical_hints(fcf_projector, extractor),
@@ -557,6 +562,7 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
     preferred_stock = extractor.preferred_stock() or 0
     deferred_tax_assets = extractor.deferred_tax_assets() or 0
     pension_deficit = extractor.pension_liability() or 0
+    investments = extractor.investments() or 0
     
     calculator = ScenarioCalculator(
         historical_revenue=extractor.revenue_history() or [0],
@@ -579,6 +585,7 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
         preferred_stock=preferred_stock,
         deferred_tax_assets=deferred_tax_assets,
         pension_deficit=pension_deficit,
+        investments=investments,
         # P1 Fix: Dilution support
         annual_dilution_rate=request.annual_dilution_rate,
         # NOTES2.md III.3: Growth-Margin Correlation
@@ -617,6 +624,7 @@ async def run_scenarios(symbol: str, provider: str, request: ScenarioRequest):
             "preferred_stock": preferred_stock,
             "deferred_tax_assets": deferred_tax_assets,
             "pension_deficit": pension_deficit,
+            "investments": investments,
         },
         "annual_dilution_rate": request.annual_dilution_rate,
         "scenarios": [
@@ -1117,7 +1125,12 @@ async def batch_analyze(symbol: str, provider: str):
             "risk_free_rate": risk_free_rate,
             "wacc": wacc,
             "revenue": extractor.latest_revenue(),
-            "working_capital": extractor.latest_working_capital(),
+            "working_capital": extractor.working_capital(),
+            "minority_interest": extractor.minority_interest(),
+            "preferred_stock": extractor.preferred_stock(),
+            "deferred_tax_assets": extractor.deferred_tax_assets(),
+            "pension_liability": extractor.pension_liability(),
+            "investments": extractor.investments(),
         },
         "hints_annual": _build_historical_hints_dict(fcf_projector, extractor),
         "hints_ttm": None,
@@ -1635,6 +1648,7 @@ async def run_full_monte_carlo_endpoint(
     preferred_stock = extractor.preferred_stock() or 0
     deferred_tax_assets = extractor.deferred_tax_assets() or 0
     pension_deficit = extractor.pension_liability() or 0
+    investments = extractor.investments() or 0
     
     current_price = stock_data.profile.price if stock_data.profile and stock_data.profile.price else 0
     if not current_price:
@@ -1708,6 +1722,7 @@ async def run_full_monte_carlo_endpoint(
         preferred_stock=preferred_stock,
         deferred_tax_assets=deferred_tax_assets,
         pension_deficit=pension_deficit,
+        investments=investments,
         # Fat tails (Student's t-distribution for modeling market crashes)
         fat_tails_df=request.fat_tails_df,
     )
@@ -1847,6 +1862,7 @@ async def get_sensitivity_matrix(
     preferred_stock = extractor.preferred_stock() or 0
     deferred_tax_assets = extractor.deferred_tax_assets() or 0
     pension_liability = extractor.pension_liability() or 0
+    investments = extractor.investments() or 0
     
     # Tax rate for FCF calculation
     tax_rate = extractor.tax_rate() or 0.25
@@ -1872,6 +1888,7 @@ async def get_sensitivity_matrix(
         preferred_stock=preferred_stock,
         deferred_tax_assets=deferred_tax_assets,
         pension_deficit=pension_liability,
+        investments=investments,
         # P0 Fix: Pass FCF component ratios for margin/growth matrix consistency
         da_ratio=da_ratio,
         capex_ratio=capex_ratio,
