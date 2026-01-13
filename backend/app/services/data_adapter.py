@@ -142,14 +142,22 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
             if std is not None or ltd is not None:
                 total_debt = (std or 0) + (ltd or 0)
 
+        gross_profit = facts.get("gross_profit")
+        revenue = facts.get("revenue")
+        gross_profit_ratio = (gross_profit / revenue) if gross_profit is not None and revenue else None
+        
+        operating_income = facts.get("ebit")
+        if operating_income is None:
+            operating_income = facts.get("operating_income")
+
         income_statements.append({
             "date": date_str,
             "period": "FY",
-            "revenue": facts.get("revenue"),
+            "revenue": revenue,
             "netIncome": facts.get("net_income"),
-            "grossProfit": facts.get("gross_profit"),
-            "grossProfitRatio": (facts.get("gross_profit") / facts.get("revenue")) if facts.get("gross_profit") is not None and facts.get("revenue") else None,
-            "operatingIncome": facts.get("ebit") or facts.get("operating_income"),
+            "grossProfit": gross_profit,
+            "grossProfitRatio": gross_profit_ratio,
+            "operatingIncome": operating_income,
             "costOfRevenue": facts.get("cost_of_revenue"),
             "interestExpense": facts.get("interest_expense"),
             "incomeTaxExpense": facts.get("tax_expense"),
