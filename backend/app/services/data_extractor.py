@@ -246,6 +246,57 @@ class DataExtractor:
         """Underfunded pension obligations - debt-like, subtract from equity."""
         return self._get_latest(self.balance_sheet, "pensionLiability")
     
+    def tangible_assets(self) -> Optional[float]:
+        """
+        Tangible Assets = Total Assets - Goodwill - Intangible Assets.
+        Used for ROTIC (Return on Tangible Invested Capital).
+        """
+        total = self.total_assets()
+        if total is None:
+            return None
+        
+        goodwill = self.goodwill() or 0
+        intangibles = self.intangible_assets() or 0
+        
+        return total - goodwill - intangibles
+
+    def net_operating_assets(self) -> Optional[float]:
+        """
+        Net Operating Assets (NOA) = (Total Assets - Cash) - (Total Liabilities - Total Debt).
+        Also known as Invested Capital.
+        
+        This represents the actual capital invested in the core operations of the business.
+        """
+        total_assets = self.total_assets()
+        total_liabilities = self.total_liabilities()
+        
+        if total_assets is None or total_liabilities is None:
+            return None
+            
+        cash = self.cash() or 0
+        debt = self.total_debt() or 0
+        
+        operating_assets = total_assets - cash
+        operating_liabilities = total_liabilities - debt
+        
+        return operating_assets - operating_liabilities
+
+    def tangible_invested_capital(self) -> Optional[float]:
+        """
+        Tangible Invested Capital = Net Operating Assets - Goodwill - Intangible Assets.
+        
+        This is the most conservative measure of the capital required to run 
+        the business, excluding 'accounting' assets from acquisitions.
+        """
+        noa = self.net_operating_assets()
+        if noa is None:
+            return None
+            
+        goodwill = self.goodwill() or 0
+        intangibles = self.intangible_assets() or 0
+        
+        return noa - goodwill - intangibles
+
     def latest_revenue(self) -> Optional[float]:
         """
         Latest revenue, preferring TTM over annual data.
