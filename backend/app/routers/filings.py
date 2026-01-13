@@ -10,10 +10,11 @@ from fastapi import APIRouter, HTTPException, Query, Body, BackgroundTasks
 from fastapi.responses import Response
 
 from app.services.sec_filings import sec_filings_service, SECFilingsError
-from app.services.filing_analyzer import get_filing_analyzer, AnalyzerError, RateLimitError
+from app.services.filing_analyzer import get_filing_analyzer, AnalyzerError, RateLimitError as LLMRateLimitError
 from app.services.filing_parser import FilingParser
 from app.services.filings_repository import get_filings_repository
 from app.services.stock_data_client import StockDataClient
+from app.services.base_provider import RateLimitError as ProviderRateLimitError
 from app.services.data_extractor import DataExtractor
 from app.services.financial_audit import FinancialAuditService
 from app.services.data_adapter import stock_data_to_legacy
@@ -91,7 +92,7 @@ async def analyze_filing_section(
             "model": result.model
         }
     except Exception as e:
-        if isinstance(e, RateLimitError):
+        if isinstance(e, (LLMRateLimitError, ProviderRateLimitError)):
             raise HTTPException(status_code=429, detail=str(e))
         if isinstance(e, HTTPException):
             raise e
@@ -139,7 +140,7 @@ async def compare_filing_sections(
             "model": result.model
         }
     except Exception as e:
-        if isinstance(e, RateLimitError):
+        if isinstance(e, (LLMRateLimitError, ProviderRateLimitError)):
             raise HTTPException(status_code=429, detail=str(e))
         if isinstance(e, HTTPException):
             raise e
@@ -188,7 +189,8 @@ async def run_forensic_audit(
                         stock_data = await client.get_stock_data(ticker)
                         legacy_data["profile"]["marketCap"] = stock_data.profile.market_cap
                         legacy_data["profile"]["symbol"] = ticker.upper()
-                except RateLimitError:
+                        legacy_data["profile"]["price"] = stock_data.profile.price
+                except ProviderRateLimitError:
                     logger.warning("api_metadata_fetch_rate_limited", ticker=ticker)
                     await rate_limiter.mark_api_limited(provider)
                 except Exception as e:
@@ -267,7 +269,7 @@ async def run_forensic_audit(
                 except Exception as e:
                     logger.warning("matrix_generation_failed", ticker=ticker, error=str(e))
             
-        except RateLimitError as e:
+        except (LLMRateLimitError, ProviderRateLimitError) as e:
             logger.warning("quantitative_audit_rate_limited", ticker=ticker, provider=provider)
             # Graceful degradation: include a finding that quantitative data was rate-limited
             error_msg = str(e)
@@ -305,7 +307,7 @@ async def run_forensic_audit(
         return FilingForensicResponse(ticker=ticker.upper(), report=report)
         
     except (SECFilingsError, AnalyzerError) as e:
-        if isinstance(e, RateLimitError):
+        if isinstance(e, (LLMRateLimitError, ProviderRateLimitError)):
             raise HTTPException(status_code=429, detail=str(e))
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
@@ -577,6 +579,17 @@ async def analyze_filing(
                 logger.warning("api_fallback_failed_for_scan", ticker=ticker, error=str(e))
         elif ixbrl_facts_by_date:
             legacy_data = ixbrl_facts_to_legacy(ixbrl_facts_by_date)
+            
+            # Try quick metadata hit for Altman Z-Score even in SCAN mode
+            try:
+                if not await rate_limiter.is_api_limited(provider):
+                    client = get_stock_client(provider)
+                    stock_data = await client.get_stock_data(ticker)
+                    legacy_data["profile"]["marketCap"] = stock_data.profile.market_cap
+                    legacy_data["profile"]["price"] = stock_data.profile.price
+            except Exception:
+                pass
+
             extractor = DataExtractor(legacy_data)
             auditor = FinancialAuditService(extractor)
             quant_results = auditor.analyze_statements()
@@ -611,7 +624,7 @@ async def analyze_filing(
             "quantitative_audit": quant_audit.model_dump() if quant_audit else None
         }
         
-    except RateLimitError as e:
+    except (LLMRateLimitError, ProviderRateLimitError) as e:
         # Graceful degradation
         logger.warning("scan_textual_analysis_rate_limited", ticker=ticker)
         

@@ -50,8 +50,16 @@ class FinancialAuditService:
         market_cap = self.extractor.market_cap()
         revenue = self.extractor.latest_revenue()
         ebit = self.extractor.latest_operating_income()
-        working_capital = self.extractor.latest_working_capital()
+        working_capital = self.extractor.working_capital()
         retained_earnings = self.extractor.retained_earnings()
+
+        # GROUND TRUTH FIX: If Market Cap is 0 (API failed), try calculating from File-sourced shares + Profile price
+        if not market_cap:
+            shares = self.extractor.shares_outstanding()
+            price = self.extractor.profile.get("price")
+            if shares and price:
+                market_cap = shares * price
+                logger.info("altman_z_score_market_cap_reconstructed", ticker=self.extractor.profile.get("symbol"), market_cap=market_cap)
 
         if not all([total_assets, total_liabilities, market_cap, revenue, ebit, working_capital]) or total_assets == 0:
             return None
