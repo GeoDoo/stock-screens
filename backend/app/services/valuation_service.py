@@ -95,6 +95,7 @@ class ValuationService:
             preferred_stock=extractor.preferred_stock() or 0,
             deferred_tax_assets=extractor.deferred_tax_assets() or 0,
             pension_deficit=extractor.pension_liability() or 0,
+            investments=extractor.investments() or 0,
             # Pass ratios for margin/growth matrix
             da_ratio=fcf_projector.da_to_revenue_ratio(),
             capex_ratio=fcf_projector.capex_to_revenue_ratio(),
@@ -313,7 +314,7 @@ class ValuationService:
             intrinsic_value_per_share = equity_value / terminal_shares
 
             # 6. Sensitivity Analysis
-            # Calculate base ratios for sensitivity matrices and value drivers
+            # Define effective base ratios for consistency across sensitivity calculations
             effective_revenue_growth = revenue_growth or fcf_projector.revenue_cagr()
             effective_operating_margin = operating_margin or fcf_projector.operating_margin()
             effective_da_ratio = da_ratio or fcf_projector.da_to_revenue_ratio()
@@ -331,6 +332,13 @@ class ValuationService:
                 preferred_stock=preferred_stock,
                 deferred_tax_assets=deferred_tax_assets,
                 pension_deficit=pension_deficit,
+                investments=investments,
+                # P0 Fix: Pass actual component ratios to avoid fallback to defaults
+                da_ratio=effective_da_ratio,
+                capex_ratio=effective_capex_ratio,
+                wc_ratio=effective_wc_ratio,
+                tax_rate=extractor.tax_rate() or 0.25,
+                wc_mode=wc_mode,
             )
             
             # Generate matrix with discount rate vs terminal growth
