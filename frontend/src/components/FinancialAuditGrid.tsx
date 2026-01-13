@@ -1,4 +1,4 @@
-import { Shield, AlertTriangle, CheckCircle2, Info, Calculator, TrendingUp, Activity, BarChart3 } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle2, Info, Calculator, Activity, BarChart3 } from 'lucide-react';
 import type { QuantitativeAudit } from '../types';
 
 interface FinancialAuditGridProps {

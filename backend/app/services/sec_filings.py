@@ -407,6 +407,21 @@ class SECFilingsService:
                 return response.text
         except Exception as e:
             raise SECFilingsError(f"Failed to fetch filing HTML: {e}")
+
+    async def save_filing_sections(self, accession_number: str, html_content: str):
+        """Extract and save granular sections of a filing."""
+        repo = get_filings_repository()
+        sections = self.parser.extract_sections(html_content)
+        
+        for name, content in sections.items():
+            if content:
+                await repo.save_section(
+                    accession_number=accession_number,
+                    section_name=name,
+                    content_text=content
+                )
+        
+        logger.info("sections_saved", accession_number=accession_number, count=len(sections))
     
     async def get_filing_pdf(
         self,

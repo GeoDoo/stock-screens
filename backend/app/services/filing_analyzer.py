@@ -54,6 +54,34 @@ FORENSIC_PROMPT_SUITE = {
     """
 }
 
+# Granular Footnote Extraction Prompts
+FOOTNOTE_PROMPTS = {
+    "revenue": """
+    Analyze the 'Revenue Recognition' footnote:
+    1. Contract Assets/Liabilities: Are contract assets growing faster than revenue? (Signal of aggressive recognition).
+    2. Performance Obligations: Identify any shifts in how obligations are satisfied (e.g., from point-in-time to over-time).
+    3. Variable Consideration: Are there significant estimates for rebates, returns, or refunds that management could be manipulating?
+    """,
+    "inventory": """
+    Analyze the 'Inventory' footnote:
+    1. Components: Is finished goods inventory growing while raw materials are falling? (Signal of slowing demand).
+    2. Reserves: Identify any significant changes in inventory obsolescence reserves.
+    3. LIFO/FIFO: Did the company change its valuation method?
+    """,
+    "debt": """
+    Analyze the 'Debt' and 'Liquidity' footnotes:
+    1. Covenants: Identify any mention of 'compliance' or 'risk of breach' regarding debt covenants.
+    2. Maturity Profile: Are there large 'walls' of debt maturing in the next 12-24 months?
+    3. Off-Balance Sheet: Look for mentions of 'variable interest entities' (VIEs) or significant guarantees.
+    """,
+    "contingencies": """
+    Analyze the 'Commitments and Contingencies' footnote:
+    1. Legal Risks: Identify any new material litigation or significant increases in loss accruals.
+    2. Unasserted Claims: Is management warning about potential future claims?
+    3. Warranty Reserves: Are warranty reserves falling while sales are rising? (Signal of under-reserving to boost earnings).
+    """
+}
+
 
 class AnalyzerError(Exception):
     """Error during filing analysis."""
@@ -285,6 +313,17 @@ Highlight specific wording changes that indicate a shift in economic reality."""
 {combined_query}
 
 For each red flag found, quote the relevant text and explain the economic risk to a long-term investor."""
+        )
+
+    async def analyze_footnote(self, footnote_text: str, category: str) -> AnalysisResult:
+        """Deep dive analysis of a specific footnote category (Async)."""
+        if category not in FOOTNOTE_PROMPTS:
+            return await self.analyze(footnote_text, f"Analyze this footnote for material risks: {category}")
+            
+        return await self.analyze(
+            filing_text=footnote_text,
+            query=FOOTNOTE_PROMPTS[category],
+            system_prompt=f"You are a forensic specialist focusing on {category.upper()} accounting. Identify specific shenanigan risks."
         )
 
     async def analyze_forensic(self, filing_text: str) -> ForensicReport:

@@ -60,6 +60,7 @@ async def get_filing_sections(
 async def analyze_filing_section(
     ticker: str = Query(..., description="Stock ticker symbol"),
     document_url: str = Query(..., description="SEC URL of the filing HTML"),
+    accession_number: Optional[str] = Query(None, description="SEC accession number for persistence"),
     section_name: str = Query(..., description="Name of the section to analyze (e.g., 'Item 7')"),
     query: Optional[str] = Query(None, description="Optional custom query for this section"),
 ):
@@ -67,10 +68,25 @@ async def analyze_filing_section(
     Run analysis on a specific section of a filing.
     """
     analyzer = get_filing_analyzer()
+    repo = get_filings_repository()
     
     try:
-        html_content = await sec_filings_service.get_filing_html(document_url)
-        section_text = parser.get_section(html_content, section_name)
+        section_text = None
+        
+        # 1. Try to get from database first if accession_number provided
+        if accession_number:
+            cached_section = await repo.get_section(accession_number, section_name)
+            if cached_section:
+                section_text = cached_section["content_text"]
+        
+        # 2. Fallback to fetching and parsing if not in DB
+        if not section_text:
+            html_content = await sec_filings_service.get_filing_html(document_url)
+            section_text = parser.get_section(html_content, section_name)
+            
+            # Save all sections if we had to fetch the full HTML anyway
+            if accession_number and section_text:
+                asyncio.create_task(sec_filings_service.save_filing_sections(accession_number, html_content))
         
         if not section_text:
             raise HTTPException(status_code=404, detail=f"Section '{section_name}' not found in filing")
@@ -166,6 +182,11 @@ async def run_forensic_audit(
     try:
         # 1. TEXTUAL AUDIT (LLM)
         html_content = await sec_filings_service.get_filing_html(document_url)
+        
+        # Save granular sections for forensic persistence
+        if accession_number:
+            asyncio.create_task(sec_filings_service.save_filing_sections(accession_number, html_content))
+            
         text_content = parser.clean_html(html_content)
         report = await analyzer.analyze_forensic(text_content)
         
@@ -600,6 +621,7 @@ async def download_filing_pdf(
 async def analyze_filing(
     ticker: str,
     document_url: str = Query(..., description="SEC URL of the filing HTML"),
+    accession_number: Optional[str] = Query(None, description="SEC accession number for persistence"),
     query: Optional[str] = Query(None, description="Optional custom query for analysis"),
     provider: str = Query("fmp", description="Provider for numerical analysis"),
 ):
@@ -616,6 +638,11 @@ async def analyze_filing(
     # 1. Fetch the HTML
     try:
         html_content = await sec_filings_service.get_filing_html(document_url)
+        
+        # Save granular sections for forensic persistence
+        if accession_number:
+            asyncio.create_task(sec_filings_service.save_filing_sections(accession_number, html_content))
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch filing: {str(e)}")
 

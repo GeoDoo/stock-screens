@@ -33,6 +33,7 @@ import { CEOEfficiencyWarning } from './components/CEOEfficiencyWarning';
 import { SensitivityMatrixPanel } from './components/SensitivityMatrixPanel';
 import { ValueDrivers } from './components/ValueDrivers';
 import { VolumeSignals } from './components/VolumeSignals';
+import { InstitutionalTechnicals } from './components/InstitutionalTechnicals';
 import { Brain } from 'lucide-react';
 
 import { API_BASE } from './config';
@@ -2588,6 +2589,12 @@ export default function App() {
                   <div className="mt-6">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">Volume-Weighted Signals</h3>
                     <VolumeSignals technicalResult={technicalResult} />
+                    
+                    {technicalResult.indicators.vw_macd && technicalResult.indicators.v_rsi_14 && (
+                      <div className="mt-6 border-t border-gray-100 pt-6">
+                        <InstitutionalTechnicals technicalResult={technicalResult} />
+                      </div>
+                    )}
                   </div>
                 )}
                 
