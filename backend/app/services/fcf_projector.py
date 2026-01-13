@@ -291,8 +291,8 @@ class FCFProjector:
             return schedule[-1] if schedule else constant
         
         projections = []
-        prior_revenue = self.historical_revenue[-1]
-        prior_wc = self.historical_working_capital[-1]
+        prior_revenue = self.historical_revenue[-1] if self.historical_revenue else 0.0
+        prior_wc = self.historical_working_capital[-1] if self.historical_working_capital else 0.0
         
         for year_idx in range(num_years):
             year_growth = growth_schedule[year_idx]
