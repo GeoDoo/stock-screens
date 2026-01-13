@@ -260,6 +260,10 @@ class DataExtractor:
         """Gross profit, preferring TTM."""
         return self._get_ttm(self.income_statement, "grossProfit")
     
+    def gross_profit_ratio(self) -> Optional[float]:
+        """Gross profit margin ratio, preferring TTM."""
+        return self._get_ttm(self.income_statement, "grossProfitRatio")
+    
     def sga_expense(self) -> Optional[float]:
         """Selling, General and Administrative expense, preferring TTM."""
         return self._get_ttm(self.income_statement, "sellingGeneralAndAdministrative")
