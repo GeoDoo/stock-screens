@@ -136,6 +136,41 @@ class FinancialAuditService:
             "sgi": sgi
         }
 
+    def roic(self) -> Optional[float]:
+        """
+        Return on Invested Capital (ROIC) = NOPAT / Net Operating Assets.
+        
+        NOPAT = Operating Income * (1 - Tax Rate)
+        Invested Capital = (Total Assets - Cash) - (Total Liabilities - Debt)
+        """
+        ebit = self.extractor.latest_operating_income()
+        tax_rate = self.extractor.tax_rate() or 0.25 # Fallback to 25% if unknown
+        invested_capital = self.extractor.net_operating_assets()
+        
+        if ebit is None or invested_capital is None or invested_capital <= 0:
+            return None
+            
+        nopat = ebit * (1 - tax_rate)
+        return nopat / invested_capital
+
+    def rotic(self) -> Optional[float]:
+        """
+        Return on Tangible Invested Capital (ROTIC) = NOPAT / Tangible Invested Capital.
+        
+        Excludes Goodwill and Intangibles from the denominator. This measures 
+        the efficiency of the core tangible business, ignoring historical 
+        acquisition premiums.
+        """
+        ebit = self.extractor.latest_operating_income()
+        tax_rate = self.extractor.tax_rate() or 0.25
+        tangible_ic = self.extractor.tangible_invested_capital()
+        
+        if ebit is None or tangible_ic is None or tangible_ic <= 0:
+            return None
+            
+        nopat = ebit * (1 - tax_rate)
+        return nopat / tangible_ic
+
     def calculate_ratios(self) -> Dict[str, Dict[str, Optional[float]]]:
         """Calculate comprehensive financial ratios."""
         
@@ -195,6 +230,8 @@ class FinancialAuditService:
             "net_margin": ni / revenue if ni and revenue else None,
             "roe": ni / total_equity if ni and total_equity else None,
             "roa": ni / total_assets if ni and total_assets else None,
+            "roic": self.roic(),
+            "rotic": self.rotic(),
             "fcf_conversion": self.extractor.free_cash_flow() / ni if ni and ni != 0 and self.extractor.free_cash_flow() else None,
         }
         
@@ -231,7 +268,17 @@ class FinancialAuditService:
                 "description": f"Treating R&D as a 5-year asset. Current R&D expense of ${rd_hist[-1]/1e6:.1f}M replaced by amortization of ${amortization/1e6:.1f}M."
             })
             
-        # 2. Operating Lease Capitalization (if not already on balance sheet)
+        # 2. SBC Adjustment (Treating SBC as a cash expense)
+        sbc = self.extractor._get_ttm(self.extractor.cash_flow, "stockBasedCompensation")
+        if sbc and sbc > 0:
+            corrections.append({
+                "name": "SBC Economic Reality",
+                "impact_on_ebit": -sbc,
+                "impact_on_assets": 0,
+                "description": f"Treating Stock-Based Compensation (${sbc/1e6:.1f}M) as a real cash-equivalent expense. While non-cash, it is a real cost of dilution to shareholders."
+            })
+
+        # 3. Operating Lease Capitalization (if not already on balance sheet)
         # Note: ASC 842 already puts them on balance sheet, but we check if they are missing
         oper_leases = self.extractor._get_latest(self.extractor.balance_sheet, "operatingLeaseObligations")
         if not oper_leases:
@@ -314,6 +361,14 @@ class FinancialAuditService:
             sbc_ratio = sbc_val / ocf
             if sbc_ratio > 0.15: # 15% of OCF is SBC
                 findings.append(f"Dilution Risk: Stock-Based Comp represents {sbc_ratio:.1%} of Operating Cash Flow. High economic cost masked as 'non-cash'.")
+        
+        # 9. Capital Efficiency (ROTIC)
+        rotic_val = self.rotic()
+        if rotic_val:
+            if rotic_val < 0.10: # 10% threshold
+                findings.append(f"Capital Efficiency: ROTIC of {rotic_val:.1%} is below the 10% hurdle. The core tangible business may not be earning its cost of capital.")
+            elif rotic_val > 0.40: # High efficiency
+                findings.append(f"Capital Efficiency: Exceptional ROTIC of {rotic_val:.1%}. The core business has very high returns on tangible capital.")
 
         return {
             "sloan_ratio": sloan,
