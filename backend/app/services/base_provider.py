@@ -28,11 +28,13 @@ class FinancialStatement:
     revenue: Optional[float] = None
     cost_of_revenue: Optional[float] = None
     gross_profit: Optional[float] = None
+    gross_profit_ratio: Optional[float] = None
     operating_income: Optional[float] = None  # EBIT
     net_income: Optional[float] = None
     interest_expense: Optional[float] = None
     income_tax_expense: Optional[float] = None
     selling_general_admin: Optional[float] = None  # SG&A for Beneish M-Score
+    research_development: Optional[float] = None  # R&D for accounting corrections
     
     # Share counts (from income statement)
     weighted_avg_shares: Optional[float] = None  # Basic shares

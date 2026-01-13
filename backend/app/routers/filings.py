@@ -169,6 +169,8 @@ async def run_forensic_audit(
         
         # 2. QUANTITATIVE AUDIT (NUMBERS FROM THE FILE)
         report.quantitative_audit = QuantitativeAudit(sloan_ratio=None, altman_z_score=None, beneish_m_score=None, findings=[])
+        client = None
+        extractor = None
         try:
             # Extract numerical facts directly from the iXBRL in the HTML (Source of Truth)
             from app.services.data_adapter import ixbrl_facts_to_legacy
@@ -186,8 +188,11 @@ async def run_forensic_audit(
                         stock_data = await client.get_stock_data(ticker)
                         legacy_data["profile"]["marketCap"] = stock_data.profile.market_cap
                         legacy_data["profile"]["symbol"] = ticker.upper()
-                except:
-                    pass
+                except RateLimitError:
+                    logger.warning("api_metadata_fetch_rate_limited", ticker=ticker)
+                    await rate_limiter.mark_api_limited(provider)
+                except Exception as e:
+                    logger.warning("api_metadata_fetch_failed", ticker=ticker, error=str(e))
                 
                 extractor = DataExtractor(legacy_data)
                 auditor = FinancialAuditService(extractor)
@@ -232,34 +237,35 @@ async def run_forensic_audit(
                     )
 
             # Generate Execution Risk Matrix if enough data
-            try:
-                from app.services.valuation_service import ValuationService
-                valuation_service = ValuationService(client)
-                # We need a WACC for the matrix. Try to calculate or use fallback.
-                wacc = 0.10 # Default fallback
+            if client and extractor:
                 try:
-                    # Attempt a quick WACC calculation
-                    risk_free = await client.get_treasury_rate()
-                    beta = extractor.beta() or 1.0
-                    cost_of_debt = extractor.cost_of_debt(risk_free) or (risk_free + 0.02)
-                    from app.services.wacc_calculator import WACCCalculator
-                    wacc_calc = WACCCalculator(
-                        risk_free_rate=risk_free,
-                        beta=beta,
-                        market_risk_premium=extractor.market_risk_premium(),
-                        cost_of_debt=cost_of_debt,
-                        tax_rate=extractor.tax_rate() or 0.25,
-                        market_cap=extractor.market_cap() or 1e9,
-                        total_debt=extractor.total_debt() or 0
-                    )
-                    wacc = wacc_calc.calculate()
-                except:
-                    pass
-                
-                matrix = await valuation_service.calculate_sensitivity_from_extractor(extractor, wacc)
-                report.quantitative_audit.margin_growth_sensitivity = matrix
-            except Exception as e:
-                logger.warning("matrix_generation_failed", ticker=ticker, error=str(e))
+                    from app.services.valuation_service import ValuationService
+                    valuation_service = ValuationService(client)
+                    # We need a WACC for the matrix. Try to calculate or use fallback.
+                    wacc = 0.10 # Default fallback
+                    try:
+                        # Attempt a quick WACC calculation
+                        risk_free = await client.get_treasury_rate()
+                        beta = extractor.beta() or 1.0
+                        cost_of_debt = extractor.cost_of_debt(risk_free) or (risk_free + 0.02)
+                        from app.services.wacc_calculator import WACCCalculator
+                        wacc_calc = WACCCalculator(
+                            risk_free_rate=risk_free,
+                            beta=beta,
+                            market_risk_premium=extractor.market_risk_premium(),
+                            cost_of_debt=cost_of_debt,
+                            tax_rate=extractor.tax_rate() or 0.25,
+                            market_cap=extractor.market_cap() or 1e9,
+                            total_debt=extractor.total_debt() or 0
+                        )
+                        wacc = wacc_calc.calculate()
+                    except Exception as e:
+                        logger.debug("wacc_calculation_failed_for_matrix", error=str(e))
+                    
+                    matrix = await valuation_service.calculate_sensitivity_from_extractor(extractor, wacc)
+                    report.quantitative_audit.margin_growth_sensitivity = matrix
+                except Exception as e:
+                    logger.warning("matrix_generation_failed", ticker=ticker, error=str(e))
             
         except RateLimitError as e:
             logger.warning("quantitative_audit_rate_limited", ticker=ticker, provider=provider)
@@ -272,7 +278,7 @@ async def run_forensic_audit(
                     if len(parts) > 1:
                         seconds = float(parts[1].split("s")[0])
                         error_msg = f"Rate limit reached. Retry after {int(seconds)}s."
-                except:
+                except Exception:
                     pass
             
             report.quantitative_audit = QuantitativeAudit(
@@ -567,8 +573,8 @@ async def analyze_filing(
                     accounting_corrections=quant_results.get("accounting_corrections", []),
                     findings=[f"[API FALLBACK] {f}" for f in quant_results.get("quantitative_findings", [])]
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.warning("api_fallback_failed_for_scan", ticker=ticker, error=str(e))
         elif ixbrl_facts_by_date:
             legacy_data = ixbrl_facts_to_legacy(ixbrl_facts_by_date)
             extractor = DataExtractor(legacy_data)

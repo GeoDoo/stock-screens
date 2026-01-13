@@ -44,11 +44,13 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
             "revenue": fin.revenue,
             "costOfRevenue": fin.cost_of_revenue,
             "grossProfit": fin.gross_profit,
+            "grossProfitRatio": fin.gross_profit_ratio or ((fin.gross_profit / fin.revenue) if fin.gross_profit is not None and fin.revenue and fin.revenue != 0 else None),
             "operatingIncome": fin.operating_income,
             "netIncome": fin.net_income,
             "interestExpense": fin.interest_expense,
             "incomeTaxExpense": fin.income_tax_expense,
             "sellingGeneralAndAdministrative": fin.selling_general_admin,
+            "researchAndDevelopment": fin.research_development,
             # Calculate incomeBeforeTax for tax rate calculation
             "incomeBeforeTax": (fin.net_income + fin.income_tax_expense) 
                 if fin.net_income is not None and fin.income_tax_expense is not None 
@@ -126,11 +128,13 @@ def ixbrl_facts_to_legacy(facts_by_date: Dict[str, Dict[str, Any]]) -> dict:
             "revenue": facts.get("revenue"),
             "netIncome": facts.get("net_income"),
             "grossProfit": facts.get("gross_profit"),
+            "grossProfitRatio": (facts.get("gross_profit") / facts.get("revenue")) if facts.get("gross_profit") is not None and facts.get("revenue") else None,
             "operatingIncome": facts.get("ebit") or facts.get("operating_income"),
             "costOfRevenue": facts.get("cost_of_revenue"),
             "interestExpense": facts.get("interest_expense"),
             "incomeTaxExpense": facts.get("tax_expense"),
             "incomeBeforeTax": facts.get("ebt"),
+            "researchAndDevelopment": facts.get("research_and_development"), # Added mapping for R&D
             "weightedAverageShsOut": facts.get("shares"),
             "weightedAverageShsOutDil": facts.get("shares_diluted"),
         })

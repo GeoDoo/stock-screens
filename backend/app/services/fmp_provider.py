@@ -201,11 +201,13 @@ class FMPProvider(StockDataProvider):
                 revenue=inc.get("revenue"),
                 cost_of_revenue=inc.get("costOfRevenue"),
                 gross_profit=inc.get("grossProfit"),
+                gross_profit_ratio=inc.get("grossProfitRatio"),
                 operating_income=inc.get("operatingIncome"),
                 net_income=inc.get("netIncome"),
                 interest_expense=inc.get("interestExpense"),
                 income_tax_expense=inc.get("incomeTaxExpense"),
                 selling_general_admin=inc.get("sellingGeneralAndAdministrativeExpenses"),
+                research_development=inc.get("researchAndDevelopmentExpenses"),
                 # Share counts
                 weighted_avg_shares=inc.get("weightedAverageShsOut"),
                 weighted_avg_shares_diluted=inc.get("weightedAverageShsOutDil"),
@@ -294,19 +296,24 @@ class FMPProvider(StockDataProvider):
         def latest_field(field_name: str) -> Optional[float]:
             return getattr(latest_quarter, field_name, None)
         
+        rev = sum_field("revenue")
+        gp = sum_field("gross_profit")
+
         # Construct TTM statement
         return FinancialStatement(
             date="TTM",
             period="ttm",
             # Income Statement - SUM 4 quarters
-            revenue=sum_field("revenue"),
+            revenue=rev,
             cost_of_revenue=sum_field("cost_of_revenue"),
-            gross_profit=sum_field("gross_profit"),
+            gross_profit=gp,
+            gross_profit_ratio=(gp / rev) if gp is not None and rev else None,
             operating_income=sum_field("operating_income"),
             net_income=sum_field("net_income"),
             interest_expense=sum_field("interest_expense"),
             income_tax_expense=sum_field("income_tax_expense"),
             selling_general_admin=sum_field("selling_general_admin"),
+            research_development=sum_field("research_development"),
             # Share counts - use latest (not summed)
             weighted_avg_shares=latest_field("weighted_avg_shares"),
             weighted_avg_shares_diluted=latest_field("weighted_avg_shares_diluted"),

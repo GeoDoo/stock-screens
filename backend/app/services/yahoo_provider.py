@@ -122,11 +122,13 @@ class YahooProvider(StockDataProvider):
                     revenue=get_val(income_df, "Total Revenue", "Operating Revenue"),
                     cost_of_revenue=get_val(income_df, "Cost Of Revenue"),
                     gross_profit=get_val(income_df, "Gross Profit"),
+                    gross_profit_ratio=None, # Will be calculated by adapter if missing
                     operating_income=get_val(income_df, "Operating Income", "EBIT"),
                     net_income=get_val(income_df, "Net Income", "Net Income Common Stockholders"),
                     interest_expense=get_val(income_df, "Interest Expense"),
                     income_tax_expense=get_val(income_df, "Tax Provision", "Income Tax Expense"),
                     selling_general_admin=get_val(income_df, "Selling General And Administration", "Selling And Marketing Expense"),
+                    research_development=get_val(income_df, "Research And Development", "Research And Development Expenses"),
                     # Share counts
                     weighted_avg_shares=get_val(income_df, "Basic Average Shares", "Ordinary Shares Number"),
                     weighted_avg_shares_diluted=get_val(income_df, "Diluted Average Shares"),
@@ -266,6 +268,8 @@ class YahooProvider(StockDataProvider):
                 net_income=sum_quarters(q_income, "Net Income", "Net Income Common Stockholders"),
                 interest_expense=sum_quarters(q_income, "Interest Expense"),
                 income_tax_expense=sum_quarters(q_income, "Tax Provision", "Income Tax Expense"),
+                selling_general_admin=sum_quarters(q_income, "Selling General And Administration"),
+                research_development=sum_quarters(q_income, "Research And Development", "Research And Development Expenses"),
                 # Balance Sheet (latest quarter)
                 total_assets=latest_quarter(q_balance, "Total Assets"),
                 total_liabilities=latest_quarter(q_balance, "Total Liabilities Net Minority Interest", "Total Liabilities"),

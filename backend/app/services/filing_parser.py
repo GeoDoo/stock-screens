@@ -61,6 +61,7 @@ class FilingParser:
         "shares": ["us-gaap:WeightedAverageNumberOfSharesOutstandingBasic", "us-gaap:CommonStockSharesOutstanding"],
         "shares_diluted": ["us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding", "us-gaap:WeightedAverageNumberOfSharesOutstandingDiluted"],
         "accounts_payable": ["us-gaap:AccountsPayableCurrent", "us-gaap:AccountsPayableNetCurrent"],
+        "research_and_development": ["us-gaap:ResearchAndDevelopmentExpense", "us-gaap:ResearchAndDevelopmentExpenseExcludingAcquiredInProcessCost"],
     }
 
     def clean_html(self, html: str) -> str:
