@@ -308,8 +308,43 @@ class TestStockEndpoint:
         assert result["latest_statement_date"] == "2024-01-01"
         assert result["data_freshness_days"] is not None
         assert isinstance(result["data_freshness_days"], int)
-        # Since 2024-01-01 is well over 120 days ago in 2026, it should be stale
+            # Since 2024-01-01 is well over 120 days ago in 2026, it should be stale
         assert result["data_is_stale"] is True
+
+    def test_working_capital_consistency_across_endpoints(self):
+        """
+        Regression Test: Ensure working_capital is consistent between /stock and /analyze.
+        
+        The 'working_capital' field in CompanyData schema is defined as 
+        'Current Assets - Current Liabilities'.
+        Previously, /stock was using latest_working_capital() (non-cash variant)
+        while /analyze was using working_capital() (standard variant).
+        """
+        mock_stock_data = create_mock_stock_data()
+        mock_client = MagicMock()
+        mock_client.get_stock_data = AsyncMock(return_value=mock_stock_data)
+        mock_client.get_treasury_rate = AsyncMock(return_value=0.045)
+
+        # Expected Standard Working Capital = Current Assets - Current Liabilities
+        # From create_mock_stock_data: 143,566,000,000 - 145,308,000,000 = -1,742,000,000
+        expected_wc = 143566000000 - 145308000000
+
+        with patch("app.routers.stock.get_client_for_provider", return_value=mock_client):
+            # 1. Check /stock endpoint
+            response_stock = client.get("/api/stock/AAPL?provider=fmp")
+            assert response_stock.status_code == 200
+            data_stock = response_stock.json()["data"]
+            assert data_stock["working_capital"] == expected_wc, (
+                f"Expected standard WC {expected_wc} on /stock endpoint, got {data_stock['working_capital']}"
+            )
+
+            # 2. Check /analyze endpoint
+            response_analyze = client.get("/api/stock/AAPL/analyze?provider=fmp")
+            assert response_analyze.status_code == 200
+            data_analyze = response_analyze.json()["stock"]["data"]
+            assert data_analyze["working_capital"] == expected_wc, (
+                f"Expected standard WC {expected_wc} on /analyze endpoint, got {data_analyze['working_capital']}"
+            )
 
     def test_data_freshness_excludes_ttm_by_period_not_just_date(self):
         """
