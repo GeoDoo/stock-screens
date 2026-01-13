@@ -12,6 +12,7 @@ class FinancialAuditService:
 
     def __init__(self, extractor: DataExtractor):
         self.extractor = extractor
+        self.input_provenance = {}
 
     def sloan_ratio(self) -> Optional[float]:
         """
@@ -59,6 +60,11 @@ class FinancialAuditService:
             price = self.extractor.profile.get("price")
             if shares and price:
                 market_cap = shares * price
+                self.input_provenance["market_cap"] = {
+                    "source": "calculated",
+                    "description": "Reconstructed from filing-sourced shares and current price",
+                    "confidence": "high"
+                }
                 logger.info("altman_z_score_market_cap_reconstructed", ticker=self.extractor.profile.get("symbol"), market_cap=market_cap)
 
         if not all([total_assets, total_liabilities, market_cap, revenue, ebit, working_capital]) or total_assets == 0:
@@ -136,6 +142,24 @@ class FinancialAuditService:
             "sgi": sgi
         }
 
+    def _get_tax_rate_with_fallback(self) -> float:
+        """Get tax rate with explicit fallback and provenance tracking."""
+        rate, prov = self.extractor.tax_rate_with_provenance()
+        if rate is None:
+            rate = 0.25
+            self.input_provenance["tax_rate"] = {
+                "source": "fallback",
+                "description": "Standard 25% corporate tax rate fallback (used when historical data is missing or invalid)",
+                "confidence": "low"
+            }
+        else:
+            self.input_provenance["tax_rate"] = {
+                "source": prov.source,
+                "description": prov.description,
+                "confidence": prov.confidence
+            }
+        return rate
+
     def roic(self) -> Optional[float]:
         """
         Return on Invested Capital (ROIC) = NOPAT / Net Operating Assets.
@@ -144,7 +168,7 @@ class FinancialAuditService:
         Invested Capital = (Total Assets - Cash) - (Total Liabilities - Debt)
         """
         ebit = self.extractor.latest_operating_income()
-        tax_rate = self.extractor.tax_rate() or 0.25 # Fallback to 25% if unknown
+        tax_rate = self._get_tax_rate_with_fallback()
         invested_capital = self.extractor.net_operating_assets()
         
         if ebit is None or invested_capital is None or invested_capital <= 0:
@@ -162,7 +186,7 @@ class FinancialAuditService:
         acquisition premiums.
         """
         ebit = self.extractor.latest_operating_income()
-        tax_rate = self.extractor.tax_rate() or 0.25
+        tax_rate = self._get_tax_rate_with_fallback()
         tangible_ic = self.extractor.tangible_invested_capital()
         
         if ebit is None or tangible_ic is None or tangible_ic <= 0:
@@ -379,5 +403,6 @@ class FinancialAuditService:
             "efficiency_ratios": ratios["efficiency"],
             "profitability_ratios": ratios["profitability"],
             "accounting_corrections": corrections,
-            "quantitative_findings": findings
+            "quantitative_findings": findings,
+            "input_provenance": self.input_provenance
         }

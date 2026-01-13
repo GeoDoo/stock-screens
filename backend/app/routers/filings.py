@@ -209,6 +209,7 @@ async def run_forensic_audit(
                     efficiency_ratios=quant_results.get("efficiency_ratios", {}),
                     profitability_ratios=quant_results.get("profitability_ratios", {}),
                     accounting_corrections=quant_results.get("accounting_corrections", []),
+                    input_provenance=quant_results.get("input_provenance", {}),
                     findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
                 )
             else:
@@ -235,6 +236,7 @@ async def run_forensic_audit(
                         efficiency_ratios=quant_results.get("efficiency_ratios", {}),
                         profitability_ratios=quant_results.get("profitability_ratios", {}),
                         accounting_corrections=quant_results.get("accounting_corrections", []),
+                        input_provenance=quant_results.get("input_provenance", {}),
                         findings=[f"[API FALLBACK] {f}" for f in quant_results.get("quantitative_findings", [])]
                     )
 
@@ -573,6 +575,7 @@ async def analyze_filing(
                     efficiency_ratios=quant_results.get("efficiency_ratios", {}),
                     profitability_ratios=quant_results.get("profitability_ratios", {}),
                     accounting_corrections=quant_results.get("accounting_corrections", []),
+                    input_provenance=quant_results.get("input_provenance", {}),
                     findings=[f"[API FALLBACK] {f}" for f in quant_results.get("quantitative_findings", [])]
                 )
             except Exception as e:
@@ -603,6 +606,7 @@ async def analyze_filing(
                 efficiency_ratios=quant_results.get("efficiency_ratios", {}),
                 profitability_ratios=quant_results.get("profitability_ratios", {}),
                 accounting_corrections=quant_results.get("accounting_corrections", []),
+                input_provenance=quant_results.get("input_provenance", {}),
                 findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
             )
     except Exception as e:

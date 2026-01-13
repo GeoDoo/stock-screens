@@ -28,6 +28,16 @@ def mock_extractor():
     extractor.cash.return_value = 50
     extractor.total_debt.return_value = 300
     extractor.free_cash_flow.return_value = 80
+    extractor.net_operating_assets.return_value = 800
+    extractor.tangible_invested_capital.return_value = 730
+    
+    # Tax rate with provenance mock
+    from app.services.data_extractor import ProvenanceInfo
+    extractor.tax_rate_with_provenance.return_value = (0.25, ProvenanceInfo(
+        source="fy_average",
+        description="3-year average effective tax rate",
+        confidence="medium"
+    ))
     
     # History mocks (return lists, oldest first)
     extractor.revenue_history.return_value = [900, 1000]
@@ -131,3 +141,30 @@ def test_analyze_statements_summary(mock_extractor):
     assert "accounting_corrections" in results
     assert len(results["quantitative_findings"]) > 0
     assert any("Sloan" in f for f in results["quantitative_findings"])
+
+def test_analyze_statements_provenance(mock_extractor):
+    # Setup mock for tax_rate_with_provenance
+    from app.services.data_extractor import ProvenanceInfo
+    mock_extractor.tax_rate_with_provenance.return_value = (0.21, ProvenanceInfo(
+        source="ttm", 
+        description="Trailing 12-month effective tax rate", 
+        confidence="high"
+    ))
+    
+    auditor = FinancialAuditService(mock_extractor)
+    results = auditor.analyze_statements()
+    
+    assert "input_provenance" in results
+    assert "tax_rate" in results["input_provenance"]
+    assert results["input_provenance"]["tax_rate"]["source"] == "ttm"
+
+def test_analyze_statements_fallback_provenance(mock_extractor):
+    # Setup mock for tax_rate_with_provenance to return None
+    mock_extractor.tax_rate_with_provenance.return_value = (None, None)
+    
+    auditor = FinancialAuditService(mock_extractor)
+    results = auditor.analyze_statements()
+    
+    assert "input_provenance" in results
+    assert "tax_rate" in results["input_provenance"]
+    assert results["input_provenance"]["tax_rate"]["source"] == "fallback"

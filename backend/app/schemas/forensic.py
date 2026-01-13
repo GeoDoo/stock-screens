@@ -43,6 +43,9 @@ class QuantitativeAudit(BaseModel):
     # Corrections / Adjustments
     accounting_corrections: List[Dict[str, Any]] = Field(default_factory=list)
     
+    # Input Provenance (NOTES2.md / Finance Guardrails)
+    input_provenance: Dict[str, Dict[str, Any]] = Field(default_factory=dict, description="Source info for critical inputs like tax_rate")
+    
     margin_growth_sensitivity: Optional[Dict[str, Any]] = Field(None, description="Sensitivity matrix for execution risk")
     findings: List[str] = Field(default_factory=list, description="Automated numerical findings")
 
