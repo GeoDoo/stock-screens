@@ -381,7 +381,7 @@ async def get_stock(symbol: str, provider: str):
             risk_free_rate=risk_free_rate,
             wacc=wacc,
             revenue=extractor.latest_revenue(),
-            working_capital=extractor.latest_working_capital(),
+            working_capital=extractor.working_capital(),
             minority_interest=extractor.minority_interest(),
             preferred_stock=extractor.preferred_stock(),
             deferred_tax_assets=extractor.deferred_tax_assets(),

@@ -313,6 +313,13 @@ class ValuationService:
             intrinsic_value_per_share = equity_value / terminal_shares
 
             # 6. Sensitivity Analysis
+            # Calculate base ratios for sensitivity matrices and value drivers
+            effective_revenue_growth = revenue_growth or fcf_projector.revenue_cagr()
+            effective_operating_margin = operating_margin or fcf_projector.operating_margin()
+            effective_da_ratio = da_ratio or fcf_projector.da_to_revenue_ratio()
+            effective_capex_ratio = capex_ratio or fcf_projector.capex_to_revenue_ratio()
+            effective_wc_ratio = wc_ratio or fcf_projector.wc_to_revenue_ratio()
+
             sensitivity_calc = SensitivityCalculator(
                 projected_fcfs=projected_fcf,
                 projection_years=projection_years,
@@ -347,12 +354,6 @@ class ValuationService:
 
             # 7. Calculate value drivers (what moves intrinsic value most)
             # Pass FCF projector and base ratios so we can perturb-and-revalue
-            effective_revenue_growth = revenue_growth or fcf_projector.revenue_cagr()
-            effective_operating_margin = operating_margin or fcf_projector.operating_margin()
-            effective_da_ratio = da_ratio or fcf_projector.da_to_revenue_ratio()
-            effective_capex_ratio = capex_ratio or fcf_projector.capex_to_revenue_ratio()
-            effective_wc_ratio = wc_ratio or fcf_projector.wc_to_revenue_ratio()
-            
             value_drivers = self._calculate_value_drivers(
                 base_value=intrinsic_value_per_share,
                 fcf_projector=fcf_projector,
