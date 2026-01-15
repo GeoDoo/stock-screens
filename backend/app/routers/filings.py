@@ -3,8 +3,9 @@
 Phase 1: Filings Viewer with PDF generation.
 """
 import os
+import asyncio
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, HTTPException, Query, Body, BackgroundTasks
 from fastapi.responses import Response
@@ -34,6 +35,77 @@ def get_stock_client(provider: str = "fmp"):
         return StockDataClient(providers=[FMPProvider(FMP_API_KEY)])
     from app.services.yahoo_provider import YahooProvider
     return StockDataClient(providers=[YahooProvider()])
+
+
+async def _get_ltm_facts_if_needed(ticker: str, current_facts: List[Dict[str, Any]], document_url: str) -> List[Dict[str, Any]]:
+    """Helper to reconstruct LTM facts if the current filing is a 10-Q."""
+    from app.services.logging_config import logger
+    
+    latest_flow = next((f for f in sorted(current_facts, key=lambda x: (x["date"], x.get("duration", 0)), reverse=True) 
+                      if f.get("duration", 0) > 0), None)
+    
+    if not latest_flow or latest_flow.get("duration", 0) >= 350:
+        return current_facts
+
+    logger.info("ltm_merging_started", ticker=ticker, latest_duration=latest_flow.get("duration"))
+    try:
+        # 1. Get filing history
+        filings = await sec_filings_service.get_filings(ticker, form_types=["10-K", "10-Q"], limit=20)
+        
+        # 2. Find previous 10-K and previous matching 10-Q
+        prev_10k = None
+        prev_10q = None
+        
+        # Find current filing date to use as reference
+        current_filing_date = date.today()
+        for f in filings:
+            if f.document_url == document_url:
+                current_filing_date = f.filing_date
+                break
+        
+        # Find previous 10-K
+        for f in filings:
+            if f.form_type == "10-K" and f.filing_date < current_filing_date:
+                prev_10k = f
+                break
+        
+        # Find previous matching 10-Q (same period last year)
+        if prev_10k:
+            current_period_end = date.fromisoformat(latest_flow["date"])
+            
+            for f in filings:
+                # Look for a 10-Q filed around 1 year before current filing
+                if f.form_type == "10-Q" and abs((f.filing_date - (current_filing_date.replace(year=current_filing_date.year - 1))).days) < 60:
+                    prev_10q = f
+                    break
+        
+        if prev_10k and prev_10q:
+            logger.info("ltm_merging_fetching_historical", 
+                      prev_10k=prev_10k.accession_number, 
+                      prev_10q=prev_10q.accession_number)
+            
+            # 3. Fetch and parse
+            h1 = await sec_filings_service.get_filing_html(prev_10k.document_url)
+            h2 = await sec_filings_service.get_filing_html(prev_10q.document_url)
+            
+            facts_10k = parser.extract_ixbrl_facts(h1)
+            facts_10q = parser.extract_ixbrl_facts(h2)
+            
+            # 4. Calculate LTM
+            ltm_calc = LTMCalculator()
+            ltm_fact_set = ltm_calc.calculate_ltm_facts(
+                current_facts=current_facts,
+                previous_fy_facts=facts_10k,
+                previous_ytd_facts=facts_10q
+            )
+            
+            if ltm_fact_set:
+                current_facts.append(ltm_fact_set)
+                logger.info("ltm_merging_success", date=ltm_fact_set["date"])
+    except Exception as e:
+        logger.warning("ltm_merging_failed", ticker=ticker, error=str(e))
+    
+    return current_facts
 
 
 @router.get("/sections")
@@ -200,72 +272,11 @@ async def run_forensic_audit(
             ixbrl_facts_by_period = parser.extract_ixbrl_facts(html_content)
             
             # LTM Data Merging (NOTES2.md Item #8)
-            # If we have 10-Q data, we need to merge with previous 10-K to get full year periods
+            # Reconstruct TTM facts if we have 10-Q data
             if ixbrl_facts_by_period:
-                latest_flow = next((f for f in sorted(ixbrl_facts_by_period, key=lambda x: (x["date"], x.get("duration", 0)), reverse=True) 
-                                  if f.get("duration", 0) > 0), None)
-                
-                if latest_flow and latest_flow.get("duration", 0) < 350:
-                    logger.info("ltm_merging_started", ticker=ticker, latest_duration=latest_flow.get("duration"))
-                    try:
-                        # 1. Get filing history
-                        filings = await sec_filings_service.get_filings(ticker, form_types=["10-K", "10-Q"], limit=20)
-                        
-                        # 2. Find previous 10-K and previous matching 10-Q
-                        # We need the 10-K from the PREVIOUS fiscal year
-                        # And the 10-Q from that SAME fiscal year matching our current duration
-                        prev_10k = None
-                        prev_10q = None
-                        
-                        # Find previous 10-K (first 10-K older than current filing)
-                        current_filing_date = date.today() # Fallback
-                        for f in filings:
-                            if f.document_url == document_url:
-                                current_filing_date = f.filing_date
-                                break
-                        
-                        for f in filings:
-                            if f.form_type == "10-K" and f.filing_date < current_filing_date:
-                                prev_10k = f
-                                break
-                        
-                        # Find previous matching 10-Q (same period last year)
-                        if prev_10k:
-                            # Target date is ~1 year before current period end date
-                            current_period_end = date.fromisoformat(latest_flow["date"])
-                            target_date_prev_year = current_period_end.replace(year=current_period_end.year - 1)
-                            
-                            for f in filings:
-                                # Look for a 10-Q filed around 1 year before current filing
-                                if f.form_type == "10-Q" and abs((f.filing_date - (current_filing_date.replace(year=current_filing_date.year - 1))).days) < 60:
-                                    prev_10q = f
-                                    break
-                        
-                        if prev_10k and prev_10q:
-                            logger.info("ltm_merging_fetching_historical", 
-                                      prev_10k=prev_10k.accession_number, 
-                                      prev_10q=prev_10q.accession_number)
-                            
-                            # 3. Fetch and parse
-                            h1 = await sec_filings_service.get_filing_html(prev_10k.document_url)
-                            h2 = await sec_filings_service.get_filing_html(prev_10q.document_url)
-                            
-                            facts_10k = parser.extract_ixbrl_facts(h1)
-                            facts_10q = parser.extract_ixbrl_facts(h2)
-                            
-                            # 4. Calculate LTM
-                            ltm_calc = LTMCalculator()
-                            ltm_fact_set = ltm_calc.calculate_ltm_facts(
-                                current_facts=ixbrl_facts_by_period,
-                                previous_fy_facts=facts_10k,
-                                previous_ytd_facts=facts_10q
-                            )
-                            
-                            if ltm_fact_set:
-                                ixbrl_facts_by_period.append(ltm_fact_set)
-                                logger.info("ltm_merging_success", date=ltm_fact_set["date"])
-                    except Exception as e:
-                        logger.warning("ltm_merging_failed", ticker=ticker, error=str(e))
+                ixbrl_facts_by_period = await _get_ltm_facts_if_needed(ticker, ixbrl_facts_by_period, document_url)
+
+            # ... logic to fetch from API or file ...
 
             # ... logic to fetch from API or file ...
             if ixbrl_facts_by_period:
@@ -298,6 +309,7 @@ async def run_forensic_audit(
                     solvency_ratios=quant_results.get("solvency_ratios", {}),
                     efficiency_ratios=quant_results.get("efficiency_ratios", {}),
                     profitability_ratios=quant_results.get("profitability_ratios", {}),
+                    valuation_ratios=quant_results.get("valuation_ratios", {}),
                     accounting_corrections=quant_results.get("accounting_corrections", []),
                     input_provenance=quant_results.get("input_provenance", {}),
                     findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
@@ -325,6 +337,7 @@ async def run_forensic_audit(
                         solvency_ratios=quant_results.get("solvency_ratios", {}),
                         efficiency_ratios=quant_results.get("efficiency_ratios", {}),
                         profitability_ratios=quant_results.get("profitability_ratios", {}),
+                        valuation_ratios=quant_results.get("valuation_ratios", {}),
                         accounting_corrections=quant_results.get("accounting_corrections", []),
                         input_provenance=quant_results.get("input_provenance", {}),
                         findings=[f"[API FALLBACK] {f}" for f in quant_results.get("quantitative_findings", [])]
@@ -652,6 +665,11 @@ async def analyze_filing(
         from app.services.data_adapter import ixbrl_facts_to_legacy
         ixbrl_facts = parser.extract_ixbrl_facts(html_content)
         
+        # LTM Data Merging (NOTES2.md Item #8)
+        # Reconstruct TTM facts if we have 10-Q data
+        if ixbrl_facts:
+            ixbrl_facts = await _get_ltm_facts_if_needed(ticker, ixbrl_facts, document_url)
+        
         # If file has no iXBRL or extraction failed, try a quick API hit
         if not ixbrl_facts and not await rate_limiter.is_api_limited(provider):
             try:
@@ -670,6 +688,7 @@ async def analyze_filing(
                     solvency_ratios=quant_results.get("solvency_ratios", {}),
                     efficiency_ratios=quant_results.get("efficiency_ratios", {}),
                     profitability_ratios=quant_results.get("profitability_ratios", {}),
+                    valuation_ratios=quant_results.get("valuation_ratios", {}),
                     accounting_corrections=quant_results.get("accounting_corrections", []),
                     input_provenance=quant_results.get("input_provenance", {}),
                     findings=[f"[API FALLBACK] {f}" for f in quant_results.get("quantitative_findings", [])]
@@ -701,6 +720,7 @@ async def analyze_filing(
                 solvency_ratios=quant_results.get("solvency_ratios", {}),
                 efficiency_ratios=quant_results.get("efficiency_ratios", {}),
                 profitability_ratios=quant_results.get("profitability_ratios", {}),
+                valuation_ratios=quant_results.get("valuation_ratios", {}),
                 accounting_corrections=quant_results.get("accounting_corrections", []),
                 input_provenance=quant_results.get("input_provenance", {}),
                 findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
@@ -708,12 +728,13 @@ async def analyze_filing(
     except Exception as e:
         logger.warning("scan_quantitative_audit_failed", ticker=ticker, error=str(e))
 
-        # 3. Textual Forensic Scan (LLM)
+    # 3. Textual Forensic Scan (LLM) - Clean HTML to save tokens/prevent TPM limit
     try:
+        clean_text = parser.clean_html(html_content)
         if query:
-            result = await analyzer.analyze(html_content, query)
+            result = await analyzer.analyze(clean_text, query)
         else:
-            result = await analyzer.extract_red_flags(html_content)
+            result = await analyzer.extract_red_flags(clean_text)
             
         return {
             "ticker": ticker.upper(),

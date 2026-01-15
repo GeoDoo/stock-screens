@@ -35,6 +35,7 @@ class ScenarioResult:
     discount_rate: float
     description: str
     projections: List[dict]
+    currency: str = "USD"
 
 
 @dataclass
@@ -46,6 +47,7 @@ class ScenarioAnalysisResult:
     probability_weighted_value: Optional[float]  # Computed from (normalized) probabilities
     upside_range: tuple  # (min%, max%) vs current price
     probabilities_normalized: bool = False  # True if probabilities were auto-normalized to sum to 1.0
+    currency: str = "USD"
     
 
 class ScenarioCalculator:

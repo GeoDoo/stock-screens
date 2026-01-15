@@ -240,13 +240,14 @@ async def _fetch_year_end_prices(
 
 
 @router.get("/{symbol}", response_model=StockDataResponse)
-async def get_stock(symbol: str, provider: str):
+async def get_stock(symbol: str, provider: str, target_currency: str = "USD"):
     """
     Get stock data and historical hints.
     
     Args:
         symbol: Stock ticker symbol
         provider: Data provider to use (fmp or yahoo) - REQUIRED
+        target_currency: Currency to normalize data to (default USD)
     
     Returns:
     - data: Read-only values (beta, debt, cash, etc.)
@@ -271,6 +272,19 @@ async def get_stock(symbol: str, provider: str):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch stock data: {str(e)}")
+
+    # CURRENCY NORMALIZATION
+    from app.services.fx_service import FXService
+    original_currency = stock_data.profile.currency
+    if original_currency != target_currency:
+        fx = FXService()
+        rates = await fx.get_rates([original_currency, target_currency])
+        # ValuationService already has _normalize_stock_data, but we need it here too.
+        # DRY: maybe move it to a helper or FXService.
+        # For now, I'll just use a temporary instance of ValuationService or move the logic.
+        from app.services.valuation_service import ValuationService as VS
+        service = ValuationService(client)
+        stock_data = await service._normalize_stock_data(stock_data, target_currency, rates)
 
     # Convert to legacy format for DataExtractor
     data = stock_data_to_legacy(stock_data)
@@ -478,6 +492,7 @@ async def run_valuation(symbol: str, provider: str, request: ValuationRequest):
             annual_dilution_rate=request.annual_dilution_rate,
             sector_ev_ebitda_multiple=request.sector_ev_ebitda_multiple,
             sbc_ratio=request.sbc_ratio,
+            target_currency=request.target_currency,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Valuation error: {str(e)}")
@@ -1029,7 +1044,7 @@ async def get_technical_analysis(symbol: str, provider: str = "massive", days: i
 
 
 @router.get("/{symbol}/analyze")
-async def batch_analyze(symbol: str, provider: str):
+async def batch_analyze(symbol: str, provider: str, target_currency: str = "USD"):
     """
     Batch analyze endpoint - returns all fundamental data in a single call.
     
@@ -1057,6 +1072,16 @@ async def batch_analyze(symbol: str, provider: str):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch stock data: {str(e)}")
+
+    # CURRENCY NORMALIZATION
+    from app.services.fx_service import FXService
+    original_currency = stock_data.profile.currency
+    if original_currency != target_currency:
+        fx = FXService()
+        rates = await fx.get_rates([original_currency, target_currency])
+        from app.services.valuation_service import ValuationService
+        service = ValuationService(client)
+        stock_data = await service._normalize_stock_data(stock_data, target_currency, rates)
 
     data = stock_data_to_legacy(stock_data)
     extractor = DataExtractor(data)

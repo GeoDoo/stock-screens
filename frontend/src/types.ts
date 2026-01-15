@@ -102,6 +102,8 @@ export interface StockDataResponse {
   latest_statement_date?: string;  // Date of most recent financial statement (YYYY-MM-DD)
   data_freshness_days?: number;  // Days since latest statement
   data_is_stale?: boolean;  // True if >120 days old (post-earnings update required)
+  currency?: string;
+  original_currency?: string;
 }
 
 // Fade mode for economics schedules
@@ -154,6 +156,8 @@ export interface ValuationRequest {
   // Conservative FCF: SBC as % of revenue to subtract from FCF (NOTES2.md)
   // When provided, treats SBC as a real expense: FCF = NOPAT + D&A - CapEx - ΔWC - SBC
   sbc_ratio?: number | null;
+  // Target currency for the valuation (default USD)
+  target_currency?: string;
 }
 
 export interface SensitivityMatrix {
@@ -252,8 +256,16 @@ export interface ValuationResult {
     capex_ratio?: number;
     wc_ratio?: number;
     sbc_ratio?: number | null;  // Conservative FCF: SBC as % of revenue
+    price?: number; // Normalized price used
     [key: string]: unknown;  // Allow other properties
   };
+  currency?: string;
+  original_currency?: string;
+  fx_conversion?: {
+    from: string;
+    to: string;
+    rate: number;
+  } | null;
   sensitivity: SensitivityMatrix;
   terminal_value_check?: TerminalValueCheck;  // Exit Multiple cross-check and dominance warnings
   value_drivers?: ValueDriver[];  // Ranked list of inputs by impact on valuation
@@ -941,6 +953,7 @@ export interface QuantitativeAudit {
   solvency_ratios: Record<string, number | null>;
   efficiency_ratios: Record<string, number | null>;
   profitability_ratios: Record<string, number | null>;
+  valuation_ratios?: Record<string, number | null>;
   
   // Corrections
   accounting_corrections: {

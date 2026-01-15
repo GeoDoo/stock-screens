@@ -96,11 +96,11 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
 
       {/* Ratios Table Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Profitability & Efficiency */}
+        {/* Profitability */}
         <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
           <div className="bg-slate-50 px-5 py-3 border-b border-gray-100 flex items-center gap-2">
             <BarChart3 className="w-3 h-3 text-indigo-600" />
-            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Profitability & Efficiency</h4>
+            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Profitability</h4>
           </div>
           <div className="p-0">
             <table className="w-full text-left border-collapse">
@@ -109,8 +109,50 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
                 <RatioRow label="Operating Margin" value={audit.profitability_ratios?.operating_margin} type="percent" />
                 <RatioRow label="Net Margin" value={audit.profitability_ratios?.net_margin} type="percent" />
                 <RatioRow label="ROE" value={audit.profitability_ratios?.roe} type="percent" />
+                <RatioRow label="ROA" value={audit.profitability_ratios?.roa} type="percent" />
+                <RatioRow label="ROIC" value={audit.profitability_ratios?.roic} type="percent" />
+                <RatioRow label="ROTIC" value={audit.profitability_ratios?.rotic} type="percent" />
+                <RatioRow label="FCF Conversion" value={audit.profitability_ratios?.fcf_conversion} type="percent" />
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Valuation (New) */}
+        <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+          <div className="bg-slate-50 px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+            <Calculator className="w-3 h-3 text-indigo-600" />
+            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valuation</h4>
+          </div>
+          <div className="p-0">
+            <table className="w-full text-left border-collapse">
+              <tbody className="divide-y divide-gray-50">
+                <RatioRow label="P/E Ratio" value={audit.valuation_ratios?.pe_ratio} type="decimal" />
+                <RatioRow label="P/S Ratio" value={audit.valuation_ratios?.ps_ratio} type="decimal" />
+                <RatioRow label="P/B Ratio" value={audit.valuation_ratios?.pb_ratio} type="decimal" />
+                <RatioRow label="EV / Revenue" value={audit.valuation_ratios?.ev_to_revenue} type="decimal" />
+                <RatioRow label="EV / EBITDA" value={audit.valuation_ratios?.ev_to_ebitda} type="decimal" />
+                <RatioRow label="FCF Yield" value={audit.valuation_ratios?.fcf_yield} type="percent" />
+                <RatioRow label="Dividend Yield" value={audit.valuation_ratios?.dividend_yield} type="percent" />
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Efficiency */}
+        <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+          <div className="bg-slate-50 px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+            <Activity className="w-3 h-3 text-indigo-600" />
+            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Efficiency</h4>
+          </div>
+          <div className="p-0">
+            <table className="w-full text-left border-collapse">
+              <tbody className="divide-y divide-gray-50">
                 <RatioRow label="Asset Turnover" value={audit.efficiency_ratios?.asset_turnover} type="decimal" />
                 <RatioRow label="Inventory Turnover" value={audit.efficiency_ratios?.inventory_turnover} type="decimal" />
+                <RatioRow label="DSO (Days Sales Out.)" value={audit.efficiency_ratios?.days_sales_outstanding} type="days" />
+                <RatioRow label="DIO (Days Inv. Out.)" value={audit.efficiency_ratios?.days_inventory_outstanding} type="days" />
+                <RatioRow label="DPO (Days Pay. Out.)" value={audit.efficiency_ratios?.days_payable_outstanding} type="days" />
                 <RatioRow label="Cash Conversion Cycle" value={audit.efficiency_ratios?.cash_conversion_cycle} type="days" />
               </tbody>
             </table>
@@ -120,7 +162,7 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
         {/* Liquidity & Solvency */}
         <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
           <div className="bg-slate-50 px-5 py-3 border-b border-gray-100 flex items-center gap-2">
-            <Activity className="w-3 h-3 text-indigo-600" />
+            <Shield className="w-3 h-3 text-indigo-600" />
             <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Liquidity & Solvency</h4>
           </div>
           <div className="p-0">
@@ -128,11 +170,11 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
               <tbody className="divide-y divide-gray-50">
                 <RatioRow label="Current Ratio" value={audit.liquidity_ratios?.current_ratio} type="decimal" />
                 <RatioRow label="Quick Ratio" value={audit.liquidity_ratios?.quick_ratio} type="decimal" />
+                <RatioRow label="Cash Ratio" value={audit.liquidity_ratios?.cash_ratio} type="decimal" />
                 <RatioRow label="Debt to Equity" value={audit.solvency_ratios?.debt_to_equity} type="decimal" />
+                <RatioRow label="Debt to Assets" value={audit.solvency_ratios?.debt_to_assets} type="decimal" />
                 <RatioRow label="Interest Coverage" value={audit.solvency_ratios?.interest_coverage} type="multiple" />
-                <RatioRow label="DSO (Days Sales Out.)" value={audit.efficiency_ratios?.days_sales_outstanding} type="days" />
-                <RatioRow label="DIO (Days Inv. Out.)" value={audit.efficiency_ratios?.days_inventory_outstanding} type="days" />
-                <RatioRow label="DPO (Days Pay. Out.)" value={audit.efficiency_ratios?.days_payable_outstanding} type="days" />
+                <RatioRow label="Equity Multiplier" value={audit.solvency_ratios?.equity_multiplier} type="decimal" />
               </tbody>
             </table>
           </div>

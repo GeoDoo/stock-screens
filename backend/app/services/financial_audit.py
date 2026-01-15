@@ -258,12 +258,38 @@ class FinancialAuditService:
             "rotic": self.rotic(),
             "fcf_conversion": self.extractor.free_cash_flow() / ni if ni and ni != 0 and self.extractor.free_cash_flow() else None,
         }
+
+        # 5. Valuation (New)
+        market_cap = self.extractor.market_cap()
+        # Fallback for Scan mode if market_cap not injected
+        if not market_cap:
+            shares = self.extractor.shares_outstanding()
+            price = self.extractor.profile.get("price")
+            if shares and price:
+                market_cap = shares * price
+
+        da = self.extractor._get_ttm(self.extractor.cash_flow, "depreciationAndAmortization") or 0
+        ebitda = (ebit or 0) + da
+        ev = (market_cap + (total_debt or 0) - (cash or 0)) if market_cap else None
+        fcf = self.extractor.free_cash_flow()
+        dividends = self.extractor._get_ttm(self.extractor.cash_flow, "dividendsPaid")
+        
+        valuation = {
+            "pe_ratio": market_cap / ni if market_cap and ni and ni > 0 else None,
+            "ps_ratio": market_cap / revenue if market_cap and revenue else None,
+            "pb_ratio": market_cap / total_equity if market_cap and total_equity else None,
+            "ev_to_revenue": ev / revenue if ev and revenue else None,
+            "ev_to_ebitda": ev / ebitda if ev and ebitda and ebitda > 0 else None,
+            "fcf_yield": fcf / market_cap if fcf and market_cap else None,
+            "dividend_yield": abs(dividends) / market_cap if dividends and market_cap else None,
+        }
         
         return {
             "liquidity": liquidity,
             "solvency": solvency,
             "efficiency": efficiency,
-            "profitability": profitability
+            "profitability": profitability,
+            "valuation": valuation
         }
 
     def get_accounting_corrections(self) -> List[Dict[str, Any]]:
@@ -402,6 +428,7 @@ class FinancialAuditService:
             "solvency_ratios": ratios["solvency"],
             "efficiency_ratios": ratios["efficiency"],
             "profitability_ratios": ratios["profitability"],
+            "valuation_ratios": ratios["valuation"],
             "accounting_corrections": corrections,
             "quantitative_findings": findings,
             "input_provenance": self.input_provenance

@@ -39,6 +39,7 @@ class QuantitativeAudit(BaseModel):
     solvency_ratios: Dict[str, Optional[float]] = Field(default_factory=dict)
     efficiency_ratios: Dict[str, Optional[float]] = Field(default_factory=dict)
     profitability_ratios: Dict[str, Optional[float]] = Field(default_factory=dict)
+    valuation_ratios: Dict[str, Optional[float]] = Field(default_factory=dict)
     
     # Corrections / Adjustments
     accounting_corrections: List[Dict[str, Any]] = Field(default_factory=list)
