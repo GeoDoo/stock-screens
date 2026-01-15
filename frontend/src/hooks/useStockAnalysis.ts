@@ -55,6 +55,7 @@ export interface UseStockAnalysisResult {
     ticker: string,
     provider: string,
     providers: Provider[],
+    targetCurrency?: string,
     onSuccess?: (data: StockDataResponse, actualProvider: string) => void | Promise<void>,
   ) => Promise<void>;
   fetchComparables: (symbol: string, provider: string) => Promise<void>;
@@ -128,6 +129,7 @@ export function useStockAnalysis(
     ticker: string,
     provider: string,
     providers: Provider[],
+    targetCurrency: string = 'USD',
     onSuccess?: (data: StockDataResponse, actualProvider: string) => void | Promise<void>,
   ) => {
     if (!ticker.trim() || !provider) return;
@@ -145,7 +147,7 @@ export function useStockAnalysis(
     // Try provider with fallback
     const tryProvider = async (prov: string, isFallback = false): Promise<boolean> => {
       try {
-        const res = await fetch(`${API_BASE}/api/stock/${symbol}/analyze?provider=${prov}`);
+        const res = await fetch(`${API_BASE}/api/stock/${symbol}/analyze?provider=${prov}&target_currency=${targetCurrency}`);
         if (!res.ok) {
           const errData = await res.json();
           const errorMsg = errData.detail || 'Failed to fetch stock data';

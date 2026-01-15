@@ -13,6 +13,7 @@ from app.services.sensitivity_calculator import SensitivityCalculator
 from app.services.capital_efficiency import analyze_value_creation
 from app.services.telemetry_repository import get_telemetry_repository
 from app.services.logging_config import logger # Use structlog logger
+from app.services.fx_service import FXService
 
 
 class ValuationService:
@@ -71,11 +72,17 @@ class ValuationService:
 
         effective_revenue_growth = fcf_projector.revenue_cagr()
         effective_operating_margin = fcf_projector.operating_margin()
+        effective_da_ratio = fcf_projector.da_to_revenue_ratio()
+        effective_capex_ratio = fcf_projector.capex_to_revenue_ratio()
+        effective_wc_ratio = fcf_projector.wc_to_revenue_ratio()
         
         projections = fcf_projector.project(
             years=projection_years,
             revenue_growth=effective_revenue_growth,
             operating_margin=effective_operating_margin,
+            da_ratio=effective_da_ratio,
+            capex_ratio=effective_capex_ratio,
+            wc_ratio=effective_wc_ratio,
         )
 
         projected_fcf = [p["fcf"] for p in projections]
@@ -97,9 +104,9 @@ class ValuationService:
             pension_deficit=extractor.pension_liability() or 0,
             investments=extractor.investments() or 0,
             # Pass ratios for margin/growth matrix
-            da_ratio=fcf_projector.da_to_revenue_ratio(),
-            capex_ratio=fcf_projector.capex_to_revenue_ratio(),
-            wc_ratio=fcf_projector.wc_to_revenue_ratio(),
+            da_ratio=effective_da_ratio,
+            capex_ratio=effective_capex_ratio,
+            wc_ratio=effective_wc_ratio,
             tax_rate=extractor.tax_rate() or 0.25,
         )
         
@@ -145,6 +152,8 @@ class ValuationService:
         sector_ev_ebitda_multiple: Optional[float] = None,
         # Conservative FCF: SBC as % of revenue to subtract from FCF (NOTES2.md)
         sbc_ratio: Optional[float] = None,
+        # Target currency for the valuation (default USD)
+        target_currency: str = "USD",
     ) -> dict:
         """
         Perform full DCF valuation for a stock.
@@ -162,6 +171,25 @@ class ValuationService:
             # 1. Fetch data (with automatic provider fallback)
             stock_data = await self.client.get_stock_data(symbol)
             risk_free_rate = await self.client.get_treasury_rate()
+
+            # CURRENCY NORMALIZATION: 
+            # If stock reports in non-target currency, normalize all financial data.
+            original_currency = stock_data.profile.currency
+            fx_conversion_info = None
+            
+            if original_currency != target_currency:
+                fx = FXService()
+                rates = await fx.get_rates([original_currency, target_currency])
+                rate = rates.get(original_currency)
+                
+                if rate and rate != 1.0:
+                    logger.info("normalizing_currency", symbol=symbol, from_curr=original_currency, to_curr=target_currency, rate=rate)
+                    stock_data = await self._normalize_stock_data(stock_data, target_currency, rates)
+                    fx_conversion_info = {
+                        "from": original_currency,
+                        "to": target_currency,
+                        "rate": rate
+                    }
 
             # 2. Convert to legacy format and extract inputs
             data = stock_data_to_legacy(stock_data)
@@ -448,7 +476,11 @@ class ValuationService:
                     "shares_type": shares_type,  # "diluted" (preferred) or "basic" (fallback)
                     "annual_dilution_rate": annual_dilution_rate,
                     "terminal_shares": terminal_shares,  # Shares at end of projection period
+                    "price": stock_data.profile.price, # Normalized price
                 },
+                "currency": target_currency,
+                "original_currency": original_currency,
+                "fx_conversion": fx_conversion_info,
                 "sensitivity": sensitivity,
                 "margin_growth_sensitivity": margin_growth_sensitivity,
                 "value_drivers": value_drivers,
@@ -934,6 +966,7 @@ class ValuationService:
         Returns:
             Dictionary with:
             - roic: Return on Invested Capital
+            - rotic: Return on Tangible Invested Capital
             - value_spread: ROIC - WACC
             - economic_profit: Dollar value created/destroyed
             - is_value_creating: Boolean (ROIC > WACC)
@@ -1042,3 +1075,78 @@ class ValuationService:
         
         return result
 
+    async def _normalize_stock_data(
+        self, 
+        stock_data: Any, 
+        target_currency: str, 
+        exchange_rates: Dict[str, float]
+    ) -> Any:
+        """
+        Normalize all financial figures in a StockData object to the target currency.
+        """
+        source_currency = stock_data.profile.currency
+        if source_currency == target_currency:
+            return stock_data
+            
+        rate_from = exchange_rates.get(source_currency, 1.0)
+        rate_to = exchange_rates.get(target_currency, 1.0)
+        
+        # Conversion factor: amount_target = amount_source / rate_from * rate_to
+        factor = rate_to / rate_from
+        
+        # 1. Normalize Profile
+        if stock_data.profile.price:
+            stock_data.profile.price *= factor
+        if stock_data.profile.market_cap:
+            stock_data.profile.market_cap *= factor
+        stock_data.profile.currency = target_currency
+        
+        # 2. Normalize Financials
+        for stmt in stock_data.financials:
+            # Income Statement fields
+            if stmt.revenue: stmt.revenue *= factor
+            if stmt.cost_of_revenue: stmt.cost_of_revenue *= factor
+            if stmt.gross_profit: stmt.gross_profit *= factor
+            if stmt.operating_income: stmt.operating_income *= factor
+            if stmt.net_income: stmt.net_income *= factor
+            if stmt.interest_expense: stmt.interest_expense *= factor
+            if stmt.income_tax_expense: stmt.income_tax_expense *= factor
+            if stmt.selling_general_admin: stmt.selling_general_admin *= factor
+            if stmt.research_development: stmt.research_development *= factor
+            
+            # Balance Sheet fields
+            if stmt.total_assets: stmt.total_assets *= factor
+            if stmt.total_liabilities: stmt.total_liabilities *= factor
+            if stmt.total_equity: stmt.total_equity *= factor
+            if stmt.total_debt: stmt.total_debt *= factor
+            if stmt.cash_and_equivalents: stmt.cash_and_equivalents *= factor
+            if stmt.current_assets: stmt.current_assets *= factor
+            if stmt.current_liabilities: stmt.current_liabilities *= factor
+            if stmt.short_term_debt: stmt.short_term_debt *= factor
+            if stmt.inventory: stmt.inventory *= factor
+            if stmt.accounts_payable: stmt.accounts_payable *= factor
+            if stmt.retained_earnings: stmt.retained_earnings *= factor
+            if stmt.net_receivables: stmt.net_receivables *= factor
+            if stmt.property_plant_equipment: stmt.property_plant_equipment *= factor
+            
+            # Institutional Equity Bridge components
+            if stmt.minority_interest: stmt.minority_interest *= factor
+            if stmt.preferred_stock: stmt.preferred_stock *= factor
+            if stmt.deferred_tax_assets: stmt.deferred_tax_assets *= factor
+            if stmt.pension_liability: stmt.pension_liability *= factor
+            if stmt.investments: stmt.investments *= factor
+            if stmt.goodwill: stmt.goodwill *= factor
+            if stmt.intangible_assets: stmt.intangible_assets *= factor
+            
+            # Cash Flow fields
+            if stmt.operating_cash_flow: stmt.operating_cash_flow *= factor
+            if stmt.capital_expenditure: stmt.capital_expenditure *= factor
+            if stmt.free_cash_flow: stmt.free_cash_flow *= factor
+            if stmt.depreciation_amortization: stmt.depreciation_amortization *= factor
+            if stmt.stock_based_compensation: stmt.stock_based_compensation *= factor
+            if stmt.dividends_paid: stmt.dividends_paid *= factor
+            if stmt.share_repurchases: stmt.share_repurchases *= factor
+            
+        return stock_data
+
+        return stock_data

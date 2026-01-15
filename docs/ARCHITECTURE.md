@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-13 18:50
+> Last updated: 2026-01-15 15:32
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -37,6 +37,7 @@ Stock Screens is a full-stack stock analysis application with:
 | `financial_audit.py` | Performs quantitative forensic analysis on financial stateme |
 | `fmp_client.py` | Custom exception for FMP API errors. |
 | `fmp_provider.py` | Financial Modeling Prep data provider. |
+| `fx_service.py` | Service for fetching and managing exchange rates. |
 | `historical_valuation.py` | Valuation metrics for a single year. |
 | `logging_config.py` | — |
 | `ltm_calculator.py` | Calculates LTM (Trailing Twelve Months) values by merging fa |
@@ -189,7 +190,7 @@ The application uses a single SQLite database (`stock_screens.db`) with the foll
 
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
-| Backend | 51 test files | pytest |
+| Backend | 55 test files | pytest |
 | Frontend | 24 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)

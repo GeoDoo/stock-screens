@@ -168,13 +168,20 @@ export default function App() {
     const periodFromUrl = params.get('period');
     return periodFromUrl === 'annual' ? 'annual' : 'ttm'; // Default to TTM
   });
+
+  // Target currency for analysis
+  const [targetCurrency, setTargetCurrency] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('currency')?.toUpperCase() || 'USD';
+  });
   
-  // P2 Fix: Update URL when period changes (without page reload)
+  // P2 Fix: Update URL when period or currency changes (without page reload)
   useEffect(() => {
     const url = new URL(window.location.href);
     url.searchParams.set('period', fundamentalPeriod);
+    url.searchParams.set('currency', targetCurrency);
     window.history.replaceState({}, '', url.toString());
-  }, [fundamentalPeriod]);
+  }, [fundamentalPeriod, targetCurrency]);
   
   // Assumption Audit Trail hook
   const assumptionTracker = useAssumptionTracker(stockData?.symbol || '');
@@ -240,6 +247,7 @@ export default function App() {
       symbol,
       selectedFundamentalProvider,
       fundamentalProviders,
+      targetCurrency,
       async (stockResponse: StockDataResponse, actualProvider: string) => {
         // Update selected provider if fallback occurred
         if (actualProvider !== selectedFundamentalProvider) {
@@ -341,11 +349,12 @@ export default function App() {
       // SBC dilution - affects per-share value
       annual_dilution_rate: annualDilutionRate ? parseFloat(annualDilutionRate) / 100 : 0,
       // Exit Multiple cross-check (optional)
-      sector_ev_ebitda_multiple: sectorEvEbitdaMultiple ? parseFloat(sectorEvEbitdaMultiple) : null,
+      sector_ev_ebitda_multiple: sectorEvEbitdaMultiple ? parseFloat(sectorEvEbitdaMultiple) : null,                                                            
       // Conservative FCF: SBC as real expense (NOTES2.md)
       sbc_ratio: sbcRatio ? parseFloat(sbcRatio) / 100 : null,
+      target_currency: targetCurrency,
     };
-    
+
     try {
       const res = await fetch(`${API_BASE}/api/stock/${data.symbol}/valuation?provider=${provider}`, {
         method: 'POST',
@@ -566,7 +575,8 @@ export default function App() {
             stockData.symbol,
             selectedFundamentalProvider,
             fundamentalProviders,
-            async (stockResponse: StockDataResponse, actualProvider: string) => {
+            targetCurrency,
+            async (stockResponse: StockDataResponse, actualProvider: string) => {                                                                               
               // Update selected provider if fallback occurred
               if (actualProvider !== selectedFundamentalProvider) {
                 setSelectedFundamentalProvider(actualProvider);
@@ -740,6 +750,31 @@ export default function App() {
                     ) : null
                   )}
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Currency Normalization (Alpha enhancement) */}
+          {!providersLoading && (
+            <div className="mb-8 pt-8 border-t border-gray-100">
+              <label className="text-xs font-semibold uppercase tracking-wider text-gray-400 block mb-3">
+                Analysis Currency
+                <span className="font-normal text-gray-300 ml-2">(Normalizes all international financial data)</span>
+              </label>
+              <div className="flex gap-2 flex-wrap">
+                {['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD'].map((curr) => (
+                  <button
+                    key={curr}
+                    onClick={() => setTargetCurrency(curr)}
+                    className={`px-4 py-2 rounded-lg border-2 transition-all text-sm font-semibold ${
+                      targetCurrency === curr
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                    }`}
+                  >
+                    {curr}
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -968,7 +1003,7 @@ export default function App() {
                     <tbody>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 text-sm text-gray-500">Market Cap<GlossaryRef id="market-cap" /></td>
-                        <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(stockData.data.market_cap)}</td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(stockData.data.market_cap, stockData?.currency || "USD")}</td>
                       </tr>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 text-sm text-gray-500">Beta<GlossaryRef id="beta" /></td>
@@ -976,11 +1011,11 @@ export default function App() {
                       </tr>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 text-sm text-gray-500">Total Debt</td>
-                        <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(stockData.data.total_debt)}</td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(stockData.data.total_debt, stockData?.currency || "USD")}</td>
                       </tr>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 text-sm text-gray-500">Cash</td>
-                        <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(stockData.data.cash)}</td>
+                        <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(stockData.data.cash, stockData?.currency || "USD")}</td>
                       </tr>
                       <tr className="border-b border-gray-100">
                         <td className="py-3 text-sm text-gray-500">Tax Rate<GlossaryRef id="tax-rate" /></td>
@@ -1527,10 +1562,10 @@ export default function App() {
                             {isSignificant ? (
                               <div className="text-xs">
                                 <p className="font-medium text-amber-800 mb-1">
-                                  WC is {mismatch > 0 ? 'ABOVE' : 'BELOW'} target by {formatCurrency(Math.abs(mismatch))}
+                                  WC is {mismatch > 0 ? 'ABOVE' : 'BELOW'} target by {formatCurrency(Math.abs(mismatch, stockData?.currency || "USD"))}
                                 </p>
                                 <p className="text-amber-700">
-                                  <strong>Year 1 FCF difference:</strong> {formatCurrency(Math.abs(fcfDiff))}
+                                  <strong>Year 1 FCF difference:</strong> {formatCurrency(Math.abs(fcfDiff, stockData?.currency || "USD"))}
                                   {fcfDiff > 0 
                                     ? ' — Level mode releases cash (WC normalizes down)'
                                     : ' — Level mode invests cash (WC builds up)'}
@@ -1542,7 +1577,7 @@ export default function App() {
                             ) : (
                               <div className="text-xs text-emerald-700">
                                 <p className="font-medium mb-1">WC is close to target ratio</p>
-                                <p>Year 1 FCF difference: ~{formatCurrency(Math.abs(fcfDiff))} (minimal impact)</p>
+                                <p>Year 1 FCF difference: ~{formatCurrency(Math.abs(fcfDiff, stockData?.currency || "USD"))} (minimal impact)</p>
                                 <p className="text-emerald-600 mt-1">Both modes will produce similar results for this company.</p>
                               </div>
                             )}
@@ -1674,15 +1709,15 @@ export default function App() {
                 <tbody>
                   <tr className="border-b border-gray-100">
                     <td className="py-3 text-sm text-gray-500">Enterprise Value<GlossaryRef id="enterprise-value" /></td>
-                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.enterprise_value)}</td>
+                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.enterprise_value, stockData?.currency || "USD")}</td>
                   </tr>
                   <tr className="border-b border-gray-100">
                     <td className="py-3 text-sm text-gray-500">Equity Value<GlossaryRef id="equity-value" /></td>
-                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.equity_value)}</td>
+                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.equity_value, stockData?.currency || "USD")}</td>
                   </tr>
                   <tr className="border-b border-gray-100">
                     <td className="py-3 text-sm text-gray-500">Net Debt<GlossaryRef id="net-debt" /></td>
-                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.net_debt)}</td>
+                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.net_debt, stockData?.currency || "USD")}</td>
                   </tr>
                   {/* Equity Bridge - Institutional Grade */}
                   {result.equity_bridge && (result.equity_bridge.minority_interest !== 0 || 
@@ -1694,31 +1729,31 @@ export default function App() {
                       {result.equity_bridge.minority_interest !== 0 && (
                         <tr className="border-b border-gray-50">
                           <td className="py-2 text-xs text-gray-400 pl-4">− Minority Interest</td>
-                          <td className="py-2 text-xs font-mono text-gray-500 text-right">{formatCurrency(result.equity_bridge.minority_interest)}</td>
+                          <td className="py-2 text-xs font-mono text-gray-500 text-right">{formatCurrency(result.equity_bridge.minority_interest, stockData?.currency || "USD")}</td>
                         </tr>
                       )}
                       {result.equity_bridge.preferred_stock !== 0 && (
                         <tr className="border-b border-gray-50">
                           <td className="py-2 text-xs text-gray-400 pl-4">− Preferred Stock</td>
-                          <td className="py-2 text-xs font-mono text-gray-500 text-right">{formatCurrency(result.equity_bridge.preferred_stock)}</td>
+                          <td className="py-2 text-xs font-mono text-gray-500 text-right">{formatCurrency(result.equity_bridge.preferred_stock, stockData?.currency || "USD")}</td>
                         </tr>
                       )}
                       {result.equity_bridge.deferred_tax_assets !== 0 && (
                         <tr className="border-b border-gray-50">
                           <td className="py-2 text-xs text-green-600 pl-4">+ NOLs/Tax Assets</td>
-                          <td className="py-2 text-xs font-mono text-green-600 text-right">{formatCurrency(result.equity_bridge.deferred_tax_assets)}</td>
+                          <td className="py-2 text-xs font-mono text-green-600 text-right">{formatCurrency(result.equity_bridge.deferred_tax_assets, stockData?.currency || "USD")}</td>
                         </tr>
                       )}
                       {result.equity_bridge.pension_deficit !== 0 && (
                         <tr className="border-b border-gray-50">
                           <td className="py-2 text-xs text-gray-400 pl-4">− Pension Deficit</td>
-                          <td className="py-2 text-xs font-mono text-gray-500 text-right">{formatCurrency(result.equity_bridge.pension_deficit)}</td>
+                          <td className="py-2 text-xs font-mono text-gray-500 text-right">{formatCurrency(result.equity_bridge.pension_deficit, stockData?.currency || "USD")}</td>
                         </tr>
                       )}
                       {result.equity_bridge.investments !== 0 && (
                         <tr className="border-b border-gray-50">
                           <td className="py-2 text-xs text-green-600 pl-4">+ Non-Operating Inv.</td>
-                          <td className="py-2 text-xs font-mono text-green-600 text-right">{formatCurrency(result.equity_bridge.investments)}</td>
+                          <td className="py-2 text-xs font-mono text-green-600 text-right">{formatCurrency(result.equity_bridge.investments, stockData?.currency || "USD")}</td>
                         </tr>
                       )}
                     </>
@@ -1731,7 +1766,7 @@ export default function App() {
                   </tr>
                   <tr className="border-b border-gray-100">
                     <td className="py-3 text-sm text-gray-500">Terminal Value<GlossaryRef id="terminal-value" /></td>
-                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.terminal_value)}</td>
+                    <td className="py-3 text-sm font-mono font-medium text-right">{formatCurrency(result.terminal_value, stockData?.currency || "USD")}</td>
                   </tr>
                 </tbody>
               </table>
@@ -1770,23 +1805,23 @@ export default function App() {
                         return (
                           <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="py-3 font-mono font-medium">{year}</td>
-                            <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.revenue)}</td>
-                            <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.ebit)}</td>
-                            <td className="py-3 text-right font-mono text-gray-400">({formatCurrency(Math.abs(taxes))})</td>
-                            <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.nopat)}</td>
-                            <td className="py-3 text-right font-mono text-emerald-600">+{formatCurrency(p.da)}</td>
-                            <td className="py-3 text-right font-mono text-red-600">−{formatCurrency(Math.abs(p.capex))}</td>
+                            <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.revenue, stockData?.currency || "USD")}</td>
+                            <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.ebit, stockData?.currency || "USD")}</td>
+                            <td className="py-3 text-right font-mono text-gray-400">({formatCurrency(Math.abs(taxes, stockData?.currency || "USD"))})</td>
+                            <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.nopat, stockData?.currency || "USD")}</td>
+                            <td className="py-3 text-right font-mono text-emerald-600">+{formatCurrency(p.da, stockData?.currency || "USD")}</td>
+                            <td className="py-3 text-right font-mono text-red-600">−{formatCurrency(Math.abs(p.capex, stockData?.currency || "USD"))}</td>
                             <td className={`py-3 text-right font-mono ${p.delta_wc >= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                              {p.delta_wc >= 0 ? '−' : '+'}{formatCurrency(Math.abs(p.delta_wc))}
+                              {p.delta_wc >= 0 ? '−' : '+'}{formatCurrency(Math.abs(p.delta_wc, stockData?.currency || "USD"))}
                             </td>
                             <td className={`py-3 text-right font-mono font-medium border-l border-gray-200 pl-3 ${p.fcf >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                              {formatCurrency(p.fcf)}
+                              {formatCurrency(p.fcf, stockData?.currency || "USD")}
                             </td>
                             <td className="py-3 text-right font-mono text-gray-400 text-xs">
                               ÷{discountFactor.toFixed(3)}
                             </td>
                             <td className={`py-3 text-right font-mono font-medium ${pvFcf >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {formatCurrency(pvFcf)}
+                              {formatCurrency(pvFcf, stockData?.currency || "USD")}
                             </td>
                           </tr>
                         );
@@ -1819,7 +1854,7 @@ export default function App() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <span className="text-gray-500">Final Year FCF</span>
-                      <p className="font-mono font-medium">{formatCurrency(result.projections[result.projections.length - 1]?.fcf || 0)}</p>
+                      <p className="font-mono font-medium">{formatCurrency(result.projections[result.projections.length - 1]?.fcf || 0, stockData?.currency || "USD")}</p>
                     </div>
                     <div>
                       <span className="text-gray-500">Terminal Growth</span>
@@ -1827,7 +1862,7 @@ export default function App() {
                     </div>
                     <div>
                       <span className="text-gray-500">Terminal Value<GlossaryRef id="terminal-value" /></span>
-                      <p className="font-mono font-medium">{formatCurrency(result.terminal_value)}</p>
+                      <p className="font-mono font-medium">{formatCurrency(result.terminal_value, stockData?.currency || "USD")}</p>
                     </div>
                     <div>
                       <span className="text-gray-500">PV of Terminal Value</span>
@@ -1850,11 +1885,11 @@ export default function App() {
                           <div className="grid grid-cols-2 gap-4 text-gray-500">
                             <div>
                               <span className="block text-gray-400">Gordon Growth TV:</span>
-                              <span className="font-mono">{formatCurrency(result.terminal_value_check.gordon_growth_tv || 0)}</span>
+                              <span className="font-mono">{formatCurrency(result.terminal_value_check.gordon_growth_tv || 0, stockData?.currency || "USD")}</span>
                             </div>
                             <div>
                               <span className="block text-gray-400">Exit Multiple TV:</span>
-                              <span className="font-mono">{formatCurrency(result.terminal_value_check.exit_multiple_tv)}</span>
+                              <span className="font-mono">{formatCurrency(result.terminal_value_check.exit_multiple_tv, stockData?.currency || "USD")}</span>
                             </div>
                           </div>
                           {result.terminal_value_check.method_divergence_pct != null && (
@@ -1877,7 +1912,7 @@ export default function App() {
                         <div className="text-xs text-gray-500">
                           <span>Implied Exit Multiple: </span>
                           <span className="font-mono font-medium">{result.terminal_value_check.implied_exit_multiple.toFixed(2)}× EV/EBITDA</span>
-                          <span className="text-gray-400 ml-2">(Terminal EBITDA: {formatCurrency(result.terminal_value_check.terminal_ebitda)})</span>
+                          <span className="text-gray-400 ml-2">(Terminal EBITDA: {formatCurrency(result.terminal_value_check.terminal_ebitda, stockData?.currency || "USD")})</span>
                         </div>
                       )}
                       
@@ -2375,7 +2410,7 @@ export default function App() {
                             <span className="text-xs text-gray-400 ml-2">(target)</span>
                           </td>
                           <td className="py-3 text-right font-mono">
-                            {formatCurrency(stockData.data.market_cap)}
+                            {formatCurrency(stockData.data.market_cap, stockData?.currency || "USD")}
                           </td>
                           <td className="py-3 text-right font-mono">
                             {formatMetric(comparableResult.target_metrics.pe_ratio)}
@@ -2410,7 +2445,7 @@ export default function App() {
                               </span>
                             </td>
                             <td className="py-3 text-right font-mono text-gray-500">
-                              {formatCurrency(peer.market_cap)}
+                              {formatCurrency(peer.market_cap, stockData?.currency || "USD")}
                             </td>
                             <td className="py-3 text-right font-mono text-gray-500">
                               {formatMetric(peer.pe_ratio)}

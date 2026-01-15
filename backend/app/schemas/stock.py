@@ -143,6 +143,8 @@ class ValuationRequest(BaseModel):
     # When provided, treats SBC as a real expense: FCF = NOPAT + D&A - CapEx - ΔWC - SBC
     # E.g., 0.05 means 5% of revenue is deducted as SBC expense
     sbc_ratio: Optional[float] = Field(default=None, ge=0.0, le=0.30)
+    # Target currency for the valuation (default USD)
+    target_currency: str = Field(default="USD")
     
     @field_validator('terminal_growth_rate')
     @classmethod

@@ -350,6 +350,7 @@ POST /api/filings/{ticker}/forensic-audit
       "solvency_ratios": {},
       "efficiency_ratios": {},
       "profitability_ratios": {},
+      "valuation_ratios": {},
       "accounting_corrections": [
         {}
       ],
@@ -828,6 +829,7 @@ Get stock data and historical hints.
 Args:
     symbol: Stock ticker symbol
     provider: Data provider to use (fmp or yahoo) - REQUIRED
+    target_currency: Currency to normalize data to (default USD)
 
 Returns:
 - data: Read-only values (beta, debt, cash, etc.)
@@ -843,6 +845,7 @@ GET /api/stock/{symbol}
 |------|------|----------|-------------|
 | `symbol` | string | Yes |  |
 | `provider` | string | Yes |  |
+| `target_currency` | string | No |  (default: `USD`) |
 
 
 **Response**
@@ -993,7 +996,8 @@ POST /api/stock/{symbol}/valuation
   ],
   "annual_dilution_rate": 0.0,
   "sector_ev_ebitda_multiple": 0.0,
-  "sbc_ratio": 0.0
+  "sbc_ratio": 0.0,
+  "target_currency": "string"
 }
 ```
 
@@ -1014,6 +1018,7 @@ POST /api/stock/{symbol}/valuation
 | `annual_dilution_rate` | number | No |  |
 | `sector_ev_ebitda_multiple` | number | null | No |  |
 | `sbc_ratio` | number | null | No |  |
+| `target_currency` | string | No |  |
 
 
 ---
@@ -1226,6 +1231,7 @@ GET /api/stock/{symbol}/analyze
 |------|------|----------|-------------|
 | `symbol` | string | Yes |  |
 | `provider` | string | Yes |  |
+| `target_currency` | string | No |  (default: `USD`) |
 
 
 

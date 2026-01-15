@@ -84,6 +84,7 @@ def stock_data_to_legacy(stock_data: StockData) -> dict:
             "preferredStock": fin.preferred_stock,
             "deferredTaxAssets": fin.deferred_tax_assets,
             "pensionLiability": fin.pension_liability,
+            "investments": fin.investments,
         })
         
         # Cash flow

@@ -222,4 +222,31 @@ describe('normalizeStockData', () => {
     // Should default to false
     expect(normalized?.is_using_ltm).toBe(false);
   });
+
+  it('preserves currency and original_currency from backend', () => {
+    const backendData = {
+      symbol: 'TEST.DE',
+      currency: 'EUR',
+      original_currency: 'EUR',
+      hints_annual: { revenue_growth: 0.1, operating_margin: 0.2 },
+      validation: { has_errors: false, has_warnings: false, errors: [], warnings: [] },
+    } as unknown as StockDataResponse;
+
+    const normalized = normalizeStockData(backendData);
+
+    expect(normalized?.currency).toBe('EUR');
+    expect(normalized?.original_currency).toBe('EUR');
+  });
+
+  it('defaults currency to USD when not provided', () => {
+    const backendData = {
+      symbol: 'AAPL',
+      hints_annual: { revenue_growth: 0.1, operating_margin: 0.2 },
+      validation: { has_errors: false, has_warnings: false, errors: [], warnings: [] },
+    } as unknown as StockDataResponse;
+
+    const normalized = normalizeStockData(backendData);
+
+    expect(normalized?.currency).toBe('USD');
+  });
 });

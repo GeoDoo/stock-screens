@@ -57,6 +57,8 @@ export function normalizeStockData(data: StockDataResponse | null): StockDataRes
       errors: data.validation?.errors ?? [],
       warnings: data.validation?.warnings ?? [],
     },
+    currency: anyData.currency ?? 'USD',
+    original_currency: anyData.original_currency ?? anyData.currency ?? 'USD',
   };
 }
 
@@ -91,6 +93,9 @@ export function normalizeValuationResult(data: ValuationResult | null): Valuatio
       base_discount_rate: 0,
       base_terminal_growth: 0,
     },
+    currency: anyData.currency ?? 'USD',
+    original_currency: anyData.original_currency ?? anyData.currency ?? 'USD',
+    fx_conversion: anyData.fx_conversion ?? null,
   };
 }
 
