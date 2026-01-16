@@ -118,22 +118,31 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
           </div>
         </div>
 
-        {/* Valuation (New) */}
+        {/* Valuation - Requires Market Data */}
         <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
-          <div className="bg-slate-50 px-5 py-3 border-b border-gray-100 flex items-center gap-2">
-            <Calculator className="w-3 h-3 text-indigo-600" />
-            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Valuation</h4>
+          <div className="bg-amber-50 px-5 py-3 border-b border-amber-100 flex items-center gap-2">
+            <Calculator className="w-3 h-3 text-amber-600" />
+            <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Valuation</h4>
+            <span className="ml-auto text-[9px] font-medium text-amber-500 bg-amber-100 px-2 py-0.5 rounded">
+              Requires Live Market Data
+            </span>
           </div>
-          <div className="p-0">
+          <div className="p-4 bg-amber-50/30 border-b border-amber-100">
+            <p className="text-[10px] text-amber-700 leading-relaxed">
+              <strong>Single Source of Truth:</strong> Valuation ratios (P/E, P/S, EV multiples) require real-time market price & market cap, 
+              which are not available in SEC filings. Use the <strong>Analysis</strong> page for live valuation metrics.
+            </p>
+          </div>
+          <div className="p-0 opacity-50">
             <table className="w-full text-left border-collapse">
               <tbody className="divide-y divide-gray-50">
-                <RatioRow label="P/E Ratio" value={audit.valuation_ratios?.pe_ratio} type="decimal" />
-                <RatioRow label="P/S Ratio" value={audit.valuation_ratios?.ps_ratio} type="decimal" />
-                <RatioRow label="P/B Ratio" value={audit.valuation_ratios?.pb_ratio} type="decimal" />
-                <RatioRow label="EV / Revenue" value={audit.valuation_ratios?.ev_to_revenue} type="decimal" />
-                <RatioRow label="EV / EBITDA" value={audit.valuation_ratios?.ev_to_ebitda} type="decimal" />
-                <RatioRow label="FCF Yield" value={audit.valuation_ratios?.fcf_yield} type="percent" />
-                <RatioRow label="Dividend Yield" value={audit.valuation_ratios?.dividend_yield} type="percent" />
+                <RatioRow label="P/E Ratio" value={audit.valuation_ratios?.pe_ratio} type="decimal" hint="Needs price" />
+                <RatioRow label="P/S Ratio" value={audit.valuation_ratios?.ps_ratio} type="decimal" hint="Needs market cap" />
+                <RatioRow label="P/B Ratio" value={audit.valuation_ratios?.pb_ratio} type="decimal" hint="Needs market cap" />
+                <RatioRow label="EV / Revenue" value={audit.valuation_ratios?.ev_to_revenue} type="decimal" hint="Needs market cap" />
+                <RatioRow label="EV / EBITDA" value={audit.valuation_ratios?.ev_to_ebitda} type="decimal" hint="Needs market cap" />
+                <RatioRow label="FCF Yield" value={audit.valuation_ratios?.fcf_yield} type="percent" hint="Needs market cap" />
+                <RatioRow label="Dividend Yield" value={audit.valuation_ratios?.dividend_yield} type="percent" hint="Needs price" />
               </tbody>
             </table>
           </div>
@@ -149,11 +158,11 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
             <table className="w-full text-left border-collapse">
               <tbody className="divide-y divide-gray-50">
                 <RatioRow label="Asset Turnover" value={audit.efficiency_ratios?.asset_turnover} type="decimal" />
-                <RatioRow label="Inventory Turnover" value={audit.efficiency_ratios?.inventory_turnover} type="decimal" />
+                <RatioRow label="Inventory Turnover" value={audit.efficiency_ratios?.inventory_turnover} type="decimal" hint="No inventory" />
                 <RatioRow label="DSO (Days Sales Out.)" value={audit.efficiency_ratios?.days_sales_outstanding} type="days" />
-                <RatioRow label="DIO (Days Inv. Out.)" value={audit.efficiency_ratios?.days_inventory_outstanding} type="days" />
-                <RatioRow label="DPO (Days Pay. Out.)" value={audit.efficiency_ratios?.days_payable_outstanding} type="days" />
-                <RatioRow label="Cash Conversion Cycle" value={audit.efficiency_ratios?.cash_conversion_cycle} type="days" />
+                <RatioRow label="DIO (Days Inv. Out.)" value={audit.efficiency_ratios?.days_inventory_outstanding} type="days" hint="No inventory" />
+                <RatioRow label="DPO (Days Pay. Out.)" value={audit.efficiency_ratios?.days_payable_outstanding} type="days" hint="No payables" />
+                <RatioRow label="Cash Conversion Cycle" value={audit.efficiency_ratios?.cash_conversion_cycle} type="days" hint="Needs inventory" />
               </tbody>
             </table>
           </div>
@@ -170,7 +179,7 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
               <tbody className="divide-y divide-gray-50">
                 <RatioRow label="Current Ratio" value={audit.liquidity_ratios?.current_ratio} type="decimal" />
                 <RatioRow label="Quick Ratio" value={audit.liquidity_ratios?.quick_ratio} type="decimal" />
-                <RatioRow label="Cash Ratio" value={audit.liquidity_ratios?.cash_ratio} type="decimal" />
+                <RatioRow label="Cash Ratio" value={audit.liquidity_ratios?.cash_ratio} type="decimal" hint="Needs current liab." />
                 <RatioRow label="Debt to Equity" value={audit.solvency_ratios?.debt_to_equity} type="decimal" />
                 <RatioRow label="Debt to Assets" value={audit.solvency_ratios?.debt_to_assets} type="decimal" />
                 <RatioRow label="Interest Coverage" value={audit.solvency_ratios?.interest_coverage} type="multiple" />
@@ -234,7 +243,12 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
   );
 }
 
-function RatioRow({ label, value, type }: { label: string, value: number | null | undefined, type: 'percent' | 'decimal' | 'days' | 'multiple' }) {
+function RatioRow({ label, value, type, hint }: { 
+  label: string, 
+  value: number | null | undefined, 
+  type: 'percent' | 'decimal' | 'days' | 'multiple',
+  hint?: string 
+}) {
   const formatValue = (val: number | null | undefined) => {
     if (val === null || val === undefined) return 'N/A';
     if (type === 'percent') return (val * 100).toFixed(1) + '%';
@@ -243,10 +257,21 @@ function RatioRow({ label, value, type }: { label: string, value: number | null 
     return val.toFixed(2);
   };
 
+  const isNA = value === null || value === undefined;
+  const displayValue = formatValue(value);
+
   return (
     <tr className="group hover:bg-slate-50 transition-colors">
       <td className="py-3 px-5 text-xs font-medium text-gray-500 group-hover:text-gray-900">{label}</td>
-      <td className="py-3 px-5 text-xs font-black text-gray-900 text-right font-mono">{formatValue(value)}</td>
+      <td className="py-3 px-5 text-xs text-right font-mono">
+        {isNA && hint ? (
+          <span className="text-amber-500 font-medium text-[10px]" title={hint}>
+            {hint}
+          </span>
+        ) : (
+          <span className={isNA ? 'text-gray-400' : 'font-black text-gray-900'}>{displayValue}</span>
+        )}
+      </td>
     </tr>
   );
 }
