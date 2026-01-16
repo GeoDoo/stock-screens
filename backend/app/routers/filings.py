@@ -252,7 +252,7 @@ async def run_forensic_audit(
     from app.services.rate_limiter_sqlite import rate_limiter
     
     try:
-        # 1. TEXTUAL AUDIT (LLM)
+        # 1. Fetch HTML
         html_content = await sec_filings_service.get_filing_html(document_url)
         
         # Save granular sections for forensic persistence
@@ -260,9 +260,59 @@ async def run_forensic_audit(
             asyncio.create_task(sec_filings_service.save_filing_sections(accession_number, html_content))
             
         text_content = parser.clean_html(html_content)
-        report = await analyzer.analyze_forensic(text_content)
         
-        # 2. QUANTITATIVE AUDIT (NUMBERS FROM THE FILE)
+        # 2. TEXTUAL AUDIT (LLM) - With Graceful Degradation
+        report = None
+        try:
+            report = await analyzer.analyze_forensic(text_content)
+        except (LLMRateLimitError, ProviderRateLimitError) as e:
+            logger.warning("forensic_llm_scan_rate_limited", ticker=ticker)
+            error_msg = str(e)
+            if "Retry after" in error_msg:
+                try:
+                    parts = error_msg.split("after ")
+                    if len(parts) > 1:
+                        seconds = float(parts[1].split("s")[0])
+                        error_msg = f"Forensic AI is currently at its free-tier limit. Retry in {int(seconds)}s."
+                except:
+                    pass
+            
+            # Create graceful degradation report with correct RedFlagCategory schema
+            report = ForensicReport(
+                accounting_consistency_score=0,
+                red_flags=[{
+                    "category": "⚠️ AI Rate Limit",
+                    "score": 5,
+                    "severity": "Medium",
+                    "findings": ["Forensic AI (LLM) reached rate limits. Textual analysis unavailable."],
+                    "evidence_quotes": [error_msg]
+                }],
+                summary=f"Institutional Forensic Analysis: AI Rate Limit Reached. {error_msg} Numerical analysis is still available below.",
+                reported_eps=None,
+                forensic_eps_adjustment=0.0,
+                adjustments=[],
+                model="rate-limited"
+            )
+        except Exception as e:
+            logger.error("forensic_llm_scan_failed", ticker=ticker, error=str(e))
+            # Create error report with correct RedFlagCategory schema
+            report = ForensicReport(
+                accounting_consistency_score=0,
+                red_flags=[{
+                    "category": "Error",
+                    "score": 10,
+                    "severity": "Critical",
+                    "findings": ["AI scan failed"],
+                    "evidence_quotes": [str(e)]
+                }],
+                summary=f"Forensic scan failed: {str(e)}. Numerical analysis available below.",
+                reported_eps=None,
+                forensic_eps_adjustment=0.0,
+                adjustments=[],
+                model="error"
+            )
+        
+        # 3. QUANTITATIVE AUDIT (NUMBERS FROM THE FILE)
         report.quantitative_audit = QuantitativeAudit(sloan_ratio=None, altman_z_score=None, beneish_m_score=None, findings=[])
         client = None
         extractor = None
