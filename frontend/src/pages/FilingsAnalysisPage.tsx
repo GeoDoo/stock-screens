@@ -678,37 +678,88 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                     </div>
                   ) : forensicReport ? (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                      <div className="grid grid-cols-1 gap-8">
-                        {/* EPS Truth Bridge - AI-generated adjustments */}
-                        <TruthBridge 
-                          reportedEps={forensicReport.report.reported_eps}
-                          adjustments={forensicReport.report.adjustments}
-                          totalAdjustment={forensicReport.report.forensic_eps_adjustment}
-                        />
-
-                        {/* AI-generated Red Flags - the core intelligence output */}
-                        <RedFlagHeatmap 
-                          redFlags={forensicReport.report.red_flags} 
-                          consistencyScore={forensicReport.report.accounting_consistency_score} 
-                        />
-
-                        {forensicHistory.length > 0 && (
-                          <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                              <History className="w-4 h-4 text-indigo-600" />
-                              Historical Consistency Timeline
-                            </h3>
-                            <ForensicTimeline history={forensicHistory} />
+                      {/* Check if this is a rate-limited response (score=0, has rate limit red flag) */}
+                      {forensicReport.report.accounting_consistency_score === 0 && 
+                       forensicReport.report.red_flags?.some(rf => rf.category === 'AI RATE LIMIT') ? (
+                        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-12 text-center">
+                          <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <AlertCircle className="w-10 h-10 text-amber-600" />
                           </div>
-                        )}
-                      </div>
+                          <h3 className="text-2xl font-black text-amber-800 mb-4 tracking-tight">
+                            AI Analysis Temporarily Unavailable
+                          </h3>
+                          <p className="text-amber-700 max-w-lg mx-auto text-base leading-relaxed mb-6">
+                            Gemini's free tier has reached its rate limit. The AI-powered forensic analysis 
+                            (red flags, EPS adjustments, management tone) cannot be generated right now.
+                          </p>
+                          <div className="bg-white/50 rounded-xl p-6 max-w-md mx-auto">
+                            <p className="text-sm font-bold text-amber-800 mb-2">What you can do:</p>
+                            <ul className="text-sm text-amber-700 text-left space-y-2">
+                              <li>• <strong>Use FINANCIALS tab</strong> — all quantitative ratios are available instantly</li>
+                              <li>• <strong>Wait 1-2 minutes</strong> then try again</li>
+                              <li>• <strong>Scan a smaller section</strong> (e.g., "Item 7" instead of "Full Archive")</li>
+                            </ul>
+                          </div>
+                          <p className="text-xs text-amber-600 mt-6">
+                            Free tier: 15 requests/minute, 1,500/day
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-8">
+                          {/* EPS Truth Bridge - AI-generated adjustments */}
+                          <TruthBridge 
+                            reportedEps={forensicReport.report.reported_eps}
+                            adjustments={forensicReport.report.adjustments}
+                            totalAdjustment={forensicReport.report.forensic_eps_adjustment}
+                          />
+
+                          {/* AI-generated Red Flags - the core intelligence output */}
+                          <RedFlagHeatmap 
+                            redFlags={forensicReport.report.red_flags} 
+                            consistencyScore={forensicReport.report.accounting_consistency_score} 
+                          />
+
+                          {forensicHistory.length > 0 && (
+                            <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <History className="w-4 h-4 text-indigo-600" />
+                                Historical Consistency Timeline
+                              </h3>
+                              <ForensicTimeline history={forensicHistory} />
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : analysis ? (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                      {/* AI-generated analysis - no duplication of FINANCIALS tab */}
-                      <div className="bg-white p-10 rounded-2xl border border-gray-200 shadow-sm">
-                        <ForensicRedFlags analysis={analysis.analysis} />
-                      </div>
+                      {/* Check if rate-limited (analysis contains rate limit message) */}
+                      {analysis.analysis?.toLowerCase().includes('rate limit') ? (
+                        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-12 text-center">
+                          <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <AlertCircle className="w-10 h-10 text-amber-600" />
+                          </div>
+                          <h3 className="text-2xl font-black text-amber-800 mb-4 tracking-tight">
+                            AI Analysis Temporarily Unavailable
+                          </h3>
+                          <p className="text-amber-700 max-w-lg mx-auto text-base leading-relaxed mb-6">
+                            Gemini's free tier has reached its rate limit. The AI-powered analysis 
+                            cannot be generated right now.
+                          </p>
+                          <div className="bg-white/50 rounded-xl p-6 max-w-md mx-auto">
+                            <p className="text-sm font-bold text-amber-800 mb-2">What you can do:</p>
+                            <ul className="text-sm text-amber-700 text-left space-y-2">
+                              <li>• <strong>Use FINANCIALS tab</strong> — all quantitative ratios are available instantly</li>
+                              <li>• <strong>Wait 1-2 minutes</strong> then try again</li>
+                              <li>• <strong>Scan a smaller section</strong> (e.g., "Item 7" instead of "Full Archive")</li>
+                            </ul>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-white p-10 rounded-2xl border border-gray-200 shadow-sm">
+                          <ForensicRedFlags analysis={analysis.analysis} />
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-sm">
