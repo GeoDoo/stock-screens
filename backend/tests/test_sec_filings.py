@@ -375,6 +375,8 @@ class TestFilingsRouter:
         SINGLE SOURCE OF TRUTH: Forensic audit must ONLY use data from the SEC filing.
         No calls to external providers (FMP, Yahoo, etc.) are allowed.
         """
+        from app.schemas.forensic import ForensicReport
+        
         with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
             with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
                 with patch("app.routers.filings.get_stock_client") as mock_get_client:
@@ -385,15 +387,15 @@ class TestFilingsRouter:
                     </body></html>"""
                     
                     mock_analyzer = AsyncMock()
-                    mock_analyzer.analyze_forensic.return_value = MagicMock(
+                    # Return a proper ForensicReport object
+                    mock_analyzer.analyze_forensic.return_value = ForensicReport(
                         accounting_consistency_score=85,
                         red_flags=[],
                         summary="Test summary",
                         reported_eps=None,
                         forensic_eps_adjustment=0.0,
                         adjustments=[],
-                        model="gemini-2.5-flash",
-                        model_dump_json=lambda: "{}"
+                        model="gemini-2.5-flash"
                     )
                     mock_analyzer_func.return_value = mock_analyzer
                     
@@ -401,7 +403,7 @@ class TestFilingsRouter:
                         "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
                     )
                     
-                    assert response.status_code == 200
+                    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
                     
                     # CRITICAL: get_stock_client should NEVER be called
                     mock_get_client.assert_not_called()
