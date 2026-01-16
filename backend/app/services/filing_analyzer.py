@@ -127,7 +127,7 @@ class FilingAnalyzer:
         )
     """
     
-    MODEL = "gemini-flash-latest"  # Stable flash model with generous free tier quota
+    MODEL = "gemini-2.5-flash"  # Stable 2.5 Flash - works with free tier (2.0 was rate limited)
     
     def __init__(self, api_key: Optional[str] = None):
         """Initialize with API key from env or parameter."""
@@ -261,6 +261,10 @@ Provide a detailed, specific analysis with evidence from the filing."""
                 match = re.search(r'retry in (\d+\.?\d*)s', error_str.lower())
                 retry_after = float(match.group(1)) if match else 60.0
                 raise RateLimitError(retry_after=retry_after)
+            
+            if "502" in error_str or "Bad Gateway" in error_str:
+                # Temporary server error - suggest retry
+                raise AnalyzerError("Gemini API temporarily unavailable (502). Please try again in 30 seconds.")
             
             logger.error(f"Analysis failed: {e}")
             raise AnalyzerError(f"Analysis failed: {e}")
@@ -425,6 +429,10 @@ Critical Tasks:
                 match = re.search(r'retry in (\d+\.?\d*)s', error_str.lower())
                 retry_after = float(match.group(1)) if match else 60.0
                 raise RateLimitError(retry_after=retry_after)
+            
+            if "502" in error_str or "Bad Gateway" in error_str:
+                # Temporary server error - suggest retry
+                raise AnalyzerError("Gemini API temporarily unavailable (502). Please try again in 30 seconds.")
                 
             logger.error(f"Forensic analysis failed: {e}")
             raise AnalyzerError(f"Forensic analysis failed: {e}")
