@@ -368,3 +368,91 @@ class TestFilingsRouter:
             data = response.json()
             assert data["name"] == "Apple Inc."
             assert data["cik"] == "0000320193"
+    
+    @pytest.mark.asyncio
+    async def test_forensic_audit_rate_limit_returns_valid_schema(self, client):
+        """
+        Regression test: When LLM hits rate limit, error handler must return
+        valid ForensicReport with properly structured RedFlagCategory objects.
+        
+        RedFlagCategory requires:
+        - category: str
+        - score: int (1-10)
+        - severity: str ("Low", "Medium", "High", "Critical")
+        - findings: List[str]
+        - evidence_quotes: List[str]
+        """
+        from app.services.filing_analyzer import RateLimitError
+        
+        with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
+            with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
+                mock_html.return_value = "<html><body>Test filing content</body></html>"
+                
+                mock_analyzer = AsyncMock()
+                mock_analyzer.analyze_forensic.side_effect = RateLimitError(retry_after=60)
+                mock_analyzer_func.return_value = mock_analyzer
+                
+                response = client.post(
+                    "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
+                )
+                
+                # Should return 200 with graceful degradation, not 500
+                assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+                
+                data = response.json()
+                report = data["report"]
+                
+                # Verify model indicates rate-limited
+                assert report["model"] == "rate-limited"
+                
+                # Verify red_flags has correct schema
+                assert len(report["red_flags"]) >= 1
+                red_flag = report["red_flags"][0]
+                
+                # These are the required fields per RedFlagCategory schema
+                assert "category" in red_flag
+                assert "score" in red_flag
+                assert isinstance(red_flag["score"], int)
+                assert 1 <= red_flag["score"] <= 10
+                assert "severity" in red_flag
+                assert red_flag["severity"] in ["Low", "Medium", "High", "Critical"]
+                assert "findings" in red_flag
+                assert isinstance(red_flag["findings"], list)
+                assert "evidence_quotes" in red_flag
+                assert isinstance(red_flag["evidence_quotes"], list)
+    
+    @pytest.mark.asyncio
+    async def test_forensic_audit_generic_error_returns_valid_schema(self, client):
+        """
+        Regression test: When LLM throws generic exception, error handler must
+        return valid ForensicReport with properly structured RedFlagCategory.
+        """
+        with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
+            with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
+                mock_html.return_value = "<html><body>Test filing content</body></html>"
+                
+                mock_analyzer = AsyncMock()
+                mock_analyzer.analyze_forensic.side_effect = Exception("Unexpected LLM error")
+                mock_analyzer_func.return_value = mock_analyzer
+                
+                response = client.post(
+                    "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
+                )
+                
+                # Should return 200 with error report, not 500
+                assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+                
+                data = response.json()
+                report = data["report"]
+                
+                # Verify model indicates error
+                assert report["model"] == "error"
+                
+                # Verify red_flags has correct schema
+                red_flag = report["red_flags"][0]
+                assert "score" in red_flag
+                assert isinstance(red_flag["score"], int)
+                assert "severity" in red_flag
+                assert red_flag["severity"] in ["Low", "Medium", "High", "Critical"]
+                assert "findings" in red_flag
+                assert isinstance(red_flag["findings"], list)
