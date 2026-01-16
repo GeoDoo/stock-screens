@@ -127,7 +127,7 @@ class FilingAnalyzer:
         )
     """
     
-    MODEL = "gemini-flash-latest"  # Stable flash model with generous free tier quota
+    MODEL = "gemini-2.5-flash"  # Stable 2.5 Flash - works with free tier (2.0 was rate limited)
     
     def __init__(self, api_key: Optional[str] = None):
         """Initialize with API key from env or parameter."""
@@ -208,13 +208,17 @@ Provide a detailed, specific analysis with evidence from the filing."""
 
         try:
             # P0 Bug Fix: Use asynchronous client to avoid blocking the event loop
-            response = await self.client.aio.models.generate_content(
-                model=self.MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.2,  # Low temp for factual analysis
-                    max_output_tokens=4096,
+            # Add 120-second timeout to prevent infinite hangs
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=self.MODEL,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.2,  # Low temp for factual analysis
+                        max_output_tokens=65536,  # Gemini 2.5 Flash maximum output
+                    ),
                 ),
+                timeout=120.0  # 2 minutes max
             )
             
             duration_ms = (time.time() - start_time) * 1000
@@ -240,6 +244,18 @@ Provide a detailed, specific analysis with evidence from the filing."""
                 tokens_used=None,
             )
             
+        except asyncio.TimeoutError:
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("gemini_analysis_timeout", duration_ms=round(duration_ms, 2), timeout_seconds=120)
+            await telemetry_repo.record_metric(
+                trace_id=trace_id,
+                operation="gemini_analysis",
+                duration_ms=duration_ms,
+                status="timeout",
+                error_message="Request timed out after 120 seconds"
+            )
+            raise AnalyzerError("Analysis timed out after 2 minutes. The filing may be too large. Try analyzing a specific section instead of the full document.")
+            
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
             error_str = str(e)
@@ -261,6 +277,10 @@ Provide a detailed, specific analysis with evidence from the filing."""
                 match = re.search(r'retry in (\d+\.?\d*)s', error_str.lower())
                 retry_after = float(match.group(1)) if match else 60.0
                 raise RateLimitError(retry_after=retry_after)
+            
+            if "502" in error_str or "Bad Gateway" in error_str:
+                # Temporary server error - suggest retry
+                raise AnalyzerError("Gemini API temporarily unavailable (502). Please try again in 30 seconds.")
             
             logger.error(f"Analysis failed: {e}")
             raise AnalyzerError(f"Analysis failed: {e}")
@@ -334,25 +354,39 @@ For each red flag found, quote the relevant text and explain the economic risk t
         
         system_prompt = """You are a senior forensic accountant at a Tier-1 hedge fund.
 Your task is to analyze the provided SEC filing for accounting shenanigans and financial risk.
-You must output your findings in a strict JSON format matching the requested schema.
+You must output your findings in EXACTLY this JSON format:
 
-Evaluate these categories and include them in the 'red_flags' list:
-1. Revenue: Recognition shifts, aggressive accruals, channel stuffing.
-2. Expenses: Capitalization creep (hiding expenses in assets), under-reserving.
-3. Assets: Inventory/Sales divergence, goodwill impairment risk, 'Other Assets' bloat.
-4. Liabilities: Unrecorded obligations, 'Cookie Jar' reserves, off-balance sheet items.
-5. Cash Flow: Divergence from Net Income, unsustainable financing.
-6. Disclosures: Vague language in MD&A, removal of previously positive statements.
-7. Management: Tone shifts, risk factor bloat, executive turnover mentions.
-8. Auditor: Critical Audit Matters (CAMs), auditor tenure (>20 years is high risk), firm quality.
+{
+  "accounting_consistency_score": <int 1-100>,
+  "red_flags": [
+    {
+      "category": "<string: Revenue|Expenses|Assets|Liabilities|Cash Flow|Disclosures|Management|Auditor>",
+      "score": <int 1-10>,
+      "severity": "<string: Low|Medium|High|Critical>",
+      "findings": ["<string>", ...],
+      "evidence_quotes": ["<string>", ...]
+    }
+  ],
+  "summary": "<string: executive summary of findings>",
+  "reported_eps": <float or null if not found>,
+  "forensic_eps_adjustment": <float>,
+  "adjustments": [
+    {"reason": "<string>", "amount": <float>, "impact": "<string>"}
+  ]
+}
 
-Critical Tasks:
-- For the 'red_flags' list, include one entry for each category above.
-- Assign a score from 1 (Safe) to 10 (High Danger) for each category.
-- Calculate an overall 'Accounting Consistency Score' from 1 to 100.
-- Identify the 'Reported EPS' (Basic or Diluted).
-- Propose specific 'EPS Adjustments' to reach a 'Forensic EPS'. 
-- Ensure the JSON is complete and not truncated."""
+MANDATORY FIELDS:
+- accounting_consistency_score: 1-100 (100 = perfect)
+- red_flags: MUST include one entry for each category (8 total): Revenue, Expenses, Assets, Liabilities, Cash Flow, Disclosures, Management, Auditor
+- Each red_flag MUST have: category, score (1-10), severity (Low/Medium/High/Critical), findings (list), evidence_quotes (list)
+- summary: Executive summary paragraph
+- reported_eps: The EPS number from filing, or null if not found (MUST be a number or null, NOT a string)
+- forensic_eps_adjustment: Total per-share adjustment
+- adjustments: List of specific adjustments
+
+Severity mapping: score 1-3 = "Low", 4-5 = "Medium", 6-7 = "High", 8-10 = "Critical"
+
+DO NOT use any other field names (e.g., no "danger_level" - use "severity")."""
 
         query = "Perform a complete institutional-grade forensic audit of this filing."
 
@@ -372,14 +406,18 @@ Critical Tasks:
             # Use the new GenerateContentConfig with response_mime_type
             # We remove response_schema because it's causing 'additionalProperties' errors 
             # in some Gemini API environments. We will parse the JSON manually.
-            response = await self.client.aio.models.generate_content(
-                model=self.MODEL,
-                contents=[prompt],
-                config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    max_output_tokens=8192,
-                    response_mime_type="application/json",
+            # Add 120-second timeout to prevent infinite hangs
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=self.MODEL,
+                    contents=[prompt],
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=65536,  # Gemini 2.5 Flash maximum output
+                        response_mime_type="application/json",
+                    ),
                 ),
+                timeout=120.0  # 2 minutes max
             )
             
             duration_ms = (time.time() - start_time) * 1000
@@ -405,6 +443,18 @@ Critical Tasks:
             
             return report
             
+        except asyncio.TimeoutError:
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("gemini_forensic_analysis_timeout", duration_ms=round(duration_ms, 2), timeout_seconds=120)
+            await telemetry_repo.record_metric(
+                trace_id=trace_id,
+                operation="gemini_forensic_analysis",
+                duration_ms=duration_ms,
+                status="timeout",
+                error_message="Request timed out after 120 seconds"
+            )
+            raise AnalyzerError("Forensic analysis timed out after 2 minutes. The filing may be too large. Try analyzing a specific section instead of the full document.")
+            
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
             error_str = str(e)
@@ -425,6 +475,10 @@ Critical Tasks:
                 match = re.search(r'retry in (\d+\.?\d*)s', error_str.lower())
                 retry_after = float(match.group(1)) if match else 60.0
                 raise RateLimitError(retry_after=retry_after)
+            
+            if "502" in error_str or "Bad Gateway" in error_str:
+                # Temporary server error - suggest retry
+                raise AnalyzerError("Gemini API temporarily unavailable (502). Please try again in 30 seconds.")
                 
             logger.error(f"Forensic analysis failed: {e}")
             raise AnalyzerError(f"Forensic analysis failed: {e}")

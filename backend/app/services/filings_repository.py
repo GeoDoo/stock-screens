@@ -93,6 +93,7 @@ class FilingsRepository:
                     sentiment_score REAL,
                     consistency_score INTEGER,
                     forensic_report_json TEXT,
+                    quantitative_audit_json TEXT,  -- Pre-computed ratios (immutable per filing)
                     parsed_status TEXT DEFAULT 'pending',
                     created_at TEXT NOT NULL,
                     
@@ -134,6 +135,8 @@ class FilingsRepository:
                 conn.execute("ALTER TABLE sec_filings ADD COLUMN consistency_score INTEGER")
             if "forensic_report_json" not in sec_columns:
                 conn.execute("ALTER TABLE sec_filings ADD COLUMN forensic_report_json TEXT")
+            if "quantitative_audit_json" not in sec_columns:
+                conn.execute("ALTER TABLE sec_filings ADD COLUMN quantitative_audit_json TEXT")
             
             conn.commit()
     
@@ -443,6 +446,39 @@ class FilingsRepository:
                 (consistency_score, report_json, accession_number)
             )
             await db.commit()
+
+    async def save_quantitative_audit(
+        self,
+        accession_number: str,
+        quantitative_audit_json: str,
+    ):
+        """
+        Save pre-computed quantitative audit for a filing.
+        This is computed once when the filing is first processed (filing is immutable).
+        """
+        async with get_async_connection(self.db_path) as db:
+            await db.execute(
+                """
+                UPDATE sec_filings 
+                SET quantitative_audit_json = ?
+                WHERE accession_number = ?
+                """,
+                (quantitative_audit_json, accession_number)
+            )
+            await db.commit()
+
+    async def get_quantitative_audit(self, accession_number: str) -> Optional[str]:
+        """
+        Get pre-computed quantitative audit for a filing.
+        Returns None if not yet computed.
+        """
+        async with get_async_connection(self.db_path) as db:
+            async with db.execute(
+                "SELECT quantitative_audit_json FROM sec_filings WHERE accession_number = ?",
+                (accession_number,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row and row[0] else None
 
     async def save_section(
         self,

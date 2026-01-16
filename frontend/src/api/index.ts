@@ -530,3 +530,49 @@ export async function runForensicAudit(params: {
   );
   return handleResponse<FilingForensicResponse>(res);
 }
+
+export interface FilingFinancialsResponse {
+  ticker: string;
+  accession_number: string;
+  quantitative_audit: {
+    sloan_ratio: number | null;
+    altman_z_score: number | null;
+    beneish_m_score: number | null;
+    liquidity_ratios: Record<string, number | null>;
+    solvency_ratios: Record<string, number | null>;
+    efficiency_ratios: Record<string, number | null>;
+    profitability_ratios: Record<string, number | null>;
+    valuation_ratios: Record<string, number | null>;
+    accounting_corrections: Array<{
+      name: string;
+      description: string;
+      impact_on_ebit: number;
+      impact_on_assets: number;
+    }>;
+    input_provenance?: Record<string, {
+      source: string;
+      description: string;
+      confidence: string;
+    }>;
+    findings: string[];
+  } | null;
+  source: 'cached' | 'computed' | 'not_computed' | 'no_ixbrl';
+  message?: string;
+}
+
+export async function fetchFilingFinancials(params: {
+  ticker: string;
+  accessionNumber: string;
+  documentUrl?: string;
+}): Promise<FilingFinancialsResponse> {
+  const query = new URLSearchParams();
+  query.set('accession_number', params.accessionNumber);
+  if (params.documentUrl) {
+    query.set('document_url', params.documentUrl);
+  }
+  
+  const res = await fetch(
+    `${API_BASE}/api/filings/${params.ticker}/financials?${query.toString()}`
+  );
+  return handleResponse<FilingFinancialsResponse>(res);
+}

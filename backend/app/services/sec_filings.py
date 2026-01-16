@@ -408,8 +408,58 @@ class SECFilingsService:
         except Exception as e:
             raise SECFilingsError(f"Failed to fetch filing HTML: {e}")
 
-    async def save_filing_sections(self, accession_number: str, html_content: str):
-        """Extract and save granular sections of a filing."""
+    def compute_quantitative_audit(self, html_content: str, ticker: str) -> Optional[Dict[str, Any]]:
+        """
+        Compute quantitative audit from iXBRL data in HTML.
+        
+        This is computed ONCE when a filing is first accessed (filings are immutable).
+        Returns a dict that can be serialized to JSON, or None if no iXBRL data found.
+        """
+        from app.services.data_adapter import ixbrl_facts_to_legacy
+        from app.services.data_extractor import DataExtractor
+        from app.services.financial_audit import FinancialAuditService
+        
+        try:
+            ixbrl_facts = self.parser.extract_ixbrl_facts(html_content)
+            
+            if not ixbrl_facts:
+                logger.info("no_ixbrl_for_quantitative_audit", ticker=ticker)
+                return None
+            
+            legacy_data = ixbrl_facts_to_legacy(ixbrl_facts)
+            legacy_data["profile"]["symbol"] = ticker.upper()
+            
+            extractor = DataExtractor(legacy_data)
+            auditor = FinancialAuditService(extractor)
+            quant_results = auditor.analyze_statements()
+            
+            # Build the audit dict (matches QuantitativeAudit schema)
+            audit = {
+                "sloan_ratio": quant_results.get("sloan_ratio"),
+                "altman_z_score": quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
+                "beneish_m_score": quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
+                "liquidity_ratios": quant_results.get("liquidity_ratios", {}),
+                "solvency_ratios": quant_results.get("solvency_ratios", {}),
+                "efficiency_ratios": quant_results.get("efficiency_ratios", {}),
+                "profitability_ratios": quant_results.get("profitability_ratios", {}),
+                "valuation_ratios": quant_results.get("valuation_ratios", {}),
+                "accounting_corrections": quant_results.get("accounting_corrections", []),
+                "input_provenance": quant_results.get("input_provenance", {}),
+                "findings": [f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
+            }
+            
+            logger.info("quantitative_audit_computed", ticker=ticker, has_sloan=audit["sloan_ratio"] is not None)
+            return audit
+            
+        except Exception as e:
+            logger.warning("quantitative_audit_computation_failed", ticker=ticker, error=str(e))
+            return None
+
+    async def save_filing_sections(self, accession_number: str, html_content: str, ticker: Optional[str] = None):
+        """
+        Extract and save granular sections of a filing.
+        Also computes and stores the quantitative audit (once, since filings are immutable).
+        """
         repo = get_filings_repository()
         sections = self.parser.extract_sections(html_content)
         
@@ -422,6 +472,19 @@ class SECFilingsService:
                 )
         
         logger.info("sections_saved", accession_number=accession_number, count=len(sections))
+        
+        # Compute and store quantitative audit (if not already stored and ticker provided)
+        if ticker:
+            existing = await repo.get_quantitative_audit(accession_number)
+            if not existing:
+                import json
+                audit = self.compute_quantitative_audit(html_content, ticker)
+                if audit:
+                    await repo.save_quantitative_audit(
+                        accession_number=accession_number,
+                        quantitative_audit_json=json.dumps(audit)
+                    )
+                    logger.info("quantitative_audit_stored", accession_number=accession_number, ticker=ticker)
     
     async def get_filing_pdf(
         self,

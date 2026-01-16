@@ -1,5 +1,21 @@
 import { TrendingDown, TrendingUp } from 'lucide-react';
 import type { EPSAdjustment } from '../types';
+import { formatCurrency } from '../utils';
+
+/**
+ * Format adjustment amount - handles both per-share (small) and total dollar (large) amounts.
+ * LLM sometimes returns total dollar amounts instead of per-share, so we detect and format accordingly.
+ * Returns UNSIGNED value (caller adds +/- sign).
+ */
+function formatAdjustmentAmount(amount: number): string {
+  const absAmount = Math.abs(amount);
+  // If > $1000, treat as total dollar amount and use B/M/K scaling
+  if (absAmount > 1000) {
+    return formatCurrency(absAmount); // Use abs to avoid double-sign
+  }
+  // Otherwise treat as per-share amount
+  return `$${absAmount.toFixed(2)}`;
+}
 
 interface Props {
   reportedEps: number | null | undefined;
@@ -52,7 +68,7 @@ export function TruthBridge({ reportedEps, adjustments, totalAdjustment }: Props
                     }`}
                   >
                     <span className={`text-xs font-black ${adj.amount >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                      {adj.amount >= 0 ? '+' : ''}{adj.amount.toFixed(2)}
+                      {adj.amount >= 0 ? '+' : ''}{formatAdjustmentAmount(adj.amount)}
                     </span>
                     <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter whitespace-nowrap">
                       {adj.reason}
@@ -92,7 +108,7 @@ export function TruthBridge({ reportedEps, adjustments, totalAdjustment }: Props
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs font-black text-gray-900">{adj.reason}</span>
                     <span className={`text-[10px] font-bold ${adj.amount >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {adj.amount >= 0 ? '+' : ''}{adj.amount.toFixed(2)}
+                      {adj.amount >= 0 ? '+' : ''}{formatAdjustmentAmount(adj.amount)}
                     </span>
                   </div>
                   <p className="text-[12px] leading-relaxed text-gray-500 font-medium">{adj.impact}</p>

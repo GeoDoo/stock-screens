@@ -21,7 +21,9 @@ import {
   compareFilingSections,
   runForensicAudit,
   fetchForensicHistory,
-  type ForensicHistoryItem
+  fetchFilingFinancials,
+  type ForensicHistoryItem,
+  type FilingFinancialsResponse
 } from '../api';
 import type { 
   SECFiling, 
@@ -34,7 +36,6 @@ import { RedFlagHeatmap } from '../components/RedFlagHeatmap';
 import { TruthBridge } from '../components/TruthBridge';
 import { ForensicTimeline } from '../components/ForensicTimeline';
 import { FinancialAuditGrid } from '../components/FinancialAuditGrid';
-import { ExecutionRiskMatrix } from '../components/ExecutionRiskMatrix';
 import { Layout } from '../components/Layout';
 
 export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string }) {
@@ -54,14 +55,13 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
   const [loadingSections, setLoadingSections] = useState(false);
   const [analyzing, setAnalyzing] = useState<'none' | 'scan' | 'deep'>('none');
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'document' | 'intelligence'>('document');
+  const [activeTab, setActiveTab] = useState<'document' | 'financials' | 'intelligence'>('document');
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [financials, setFinancials] = useState<FilingFinancialsResponse | null>(null);
+  const [loadingFinancials, setLoadingFinancials] = useState(false);
 
-  useEffect(() => {
-    if (forensicReport || analysis) {
-      setActiveTab('intelligence');
-    }
-  }, [forensicReport, analysis]);
+  // DON'T auto-switch tabs - let user decide when to view results
+  // Instead, we show a notification badge on the INTELLIGENCE tab
 
   useEffect(() => {
     if (symbol) {
@@ -72,6 +72,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
   useEffect(() => {
     if (selectedFiling) {
       loadSections();
+      loadFinancials();
     }
   }, [selectedFiling]);
 
@@ -120,6 +121,24 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
       console.error('Failed to load sections', err);
     } finally {
       setLoadingSections(false);
+    }
+  };
+
+  const loadFinancials = async () => {
+    if (!selectedFiling || !symbol) return;
+    setLoadingFinancials(true);
+    setFinancials(null);
+    try {
+      const res = await fetchFilingFinancials({
+        ticker: symbol,
+        accessionNumber: selectedFiling.accession_number,
+        documentUrl: selectedFiling.document_url
+      });
+      setFinancials(res);
+    } catch (err) {
+      console.error('Failed to load financials', err);
+    } finally {
+      setLoadingFinancials(false);
     }
   };
 
@@ -329,16 +348,42 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                     Document
                   </button>
                   <button
+                    onClick={() => setActiveTab('financials')}
+                    className={`h-12 text-[10px] font-black uppercase tracking-[0.25em] transition-all border-b-2 -mb-[1px] flex items-center gap-2 ${
+                      activeTab === 'financials' 
+                        ? 'border-indigo-600 text-indigo-600' 
+                        : financials?.quantitative_audit
+                          ? 'border-transparent text-blue-600 hover:text-blue-700'
+                          : 'border-transparent text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    Financials
+                    {loadingFinancials && (
+                      <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
+                    )}
+                    {financials?.quantitative_audit && !loadingFinancials && activeTab !== 'financials' && (
+                      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                    )}
+                  </button>
+                  <button
                     onClick={() => setActiveTab('intelligence')}
                     className={`h-12 text-[10px] font-black uppercase tracking-[0.25em] transition-all border-b-2 -mb-[1px] flex items-center gap-2 ${
                       activeTab === 'intelligence' 
                         ? 'border-indigo-600 text-indigo-600' 
-                        : 'border-transparent text-gray-400 hover:text-gray-600'
+                        : (forensicReport || analysis)
+                          ? 'border-transparent text-emerald-600 hover:text-emerald-700'
+                          : 'border-transparent text-gray-400 hover:text-gray-600'
                     }`}
                   >
                     Intelligence
-                    {(forensicReport || analysis) && (
-                      <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-pulse" />
+                    {(forensicReport || analysis) && activeTab !== 'intelligence' && (
+                      <span className="flex items-center gap-1 bg-emerald-100 text-emerald-700 text-[8px] font-black px-1.5 py-0.5 rounded-full">
+                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                        READY
+                      </span>
+                    )}
+                    {analyzing !== 'none' && (
+                      <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
                     )}
                   </button>
                 </div>
@@ -417,9 +462,71 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
               </div>
             )}
 
+            {/* Global Status Bar - Always visible when analyzing */}
+            {analyzing !== 'none' && (
+              <div className="bg-indigo-600 px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  <span className="text-sm font-bold text-white">
+                    {analyzing === 'deep' ? 'Running Deep Forensic Audit...' : 'Running Quick Scan...'}
+                  </span>
+                  <span className="text-xs text-indigo-200">
+                    {analyzing === 'deep' 
+                      ? 'Analyzing all sections with institutional-grade forensic prompts'
+                      : compareWithPrevious 
+                        ? 'Comparing with previous filing for changes'
+                        : selectedSection 
+                          ? `Analyzing ${selectedSection}` 
+                          : 'Analyzing full filing'}
+                  </span>
+                </div>
+                <span className="text-xs text-indigo-200 font-mono">
+                  {selectedFiling?.form_type} • {selectedFiling?.filing_date}
+                </span>
+              </div>
+            )}
+
+            {/* Success notification when results are ready */}
+            {(forensicReport || analysis) && analyzing === 'none' && activeTab === 'document' && (
+              <div className="bg-emerald-600 px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
+                <div className="flex items-center gap-3">
+                  <Brain className="w-4 h-4 text-white" />
+                  <span className="text-sm font-bold text-white">
+                    {forensicReport ? 'Deep Audit Complete' : 'Scan Complete'}
+                  </span>
+                  <span className="text-xs text-emerald-200">
+                    Results ready to view
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveTab('intelligence')}
+                  className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  View Results →
+                </button>
+              </div>
+            )}
+
+            {/* Error notification */}
+            {error && analyzing === 'none' && (
+              <div className="bg-red-600 px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-4 h-4 text-white" />
+                  <span className="text-sm font-bold text-white">Analysis Failed</span>
+                  <span className="text-xs text-red-200 max-w-md truncate">{error}</span>
+                </div>
+                <button
+                  onClick={() => setError(null)}
+                  className="text-white/80 hover:text-white text-xs font-bold"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             <div className={`flex-1 overflow-y-auto ${isFocusMode ? 'p-0' : 'p-8'}`}>
               <div className={isFocusMode ? 'w-full h-full' : 'max-w-6xl mx-auto'}>
-                {activeTab === 'document' ? (
+                {activeTab === 'document' && (
                   selectedFiling ? (
                     <div className={`bg-white shadow-sm flex flex-col overflow-hidden ${
                       isFocusMode ? 'h-full w-full rounded-none' : 'rounded-2xl border border-gray-200 h-[calc(100vh-180px)]'
@@ -482,104 +589,183 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                         />
                       </div>
                     </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-[60vh] text-center bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                    <FileText className="w-12 h-12 text-gray-200 mb-4" />
-                    <h3 className="text-sm font-bold text-gray-900 mb-1">No Filing Selected</h3>
-                    <p className="text-xs text-gray-400">Select a document from the history to begin.</p>
-                  </div>
-                )
-              ) : (
-                <div className="space-y-8">
-                  {error && (
-                    <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex gap-3 text-red-800">
-                      <AlertCircle className="w-5 h-5 shrink-0" />
-                      <div>
-                        <div className="font-bold text-sm">Action Required</div>
-                        <div className="text-xs opacity-90 mt-1">{error}</div>
-                      </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-[60vh] text-center bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                      <FileText className="w-12 h-12 text-gray-200 mb-4" />
+                      <h3 className="text-sm font-bold text-gray-900 mb-1">No Filing Selected</h3>
+                      <p className="text-xs text-gray-400">Select a document from the history to begin.</p>
                     </div>
-                  )}
+                  )
+                )}
+
+                {activeTab === 'financials' && (
+                  <div className="space-y-8">
+                    {loadingFinancials ? (
+                      <div className="flex flex-col items-center justify-center py-24 gap-6 bg-white rounded-2xl border border-gray-200 shadow-sm">
+                        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+                        <div className="text-center">
+                          <p className="text-lg font-black text-gray-900 tracking-tight">Loading Financial Data</p>
+                          <p className="text-sm text-gray-500 mt-2">Extracting ratios from iXBRL...</p>
+                        </div>
+                      </div>
+                    ) : financials?.quantitative_audit ? (
+                      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-6 mb-8">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+                              <FileText className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h2 className="text-lg font-black text-gray-900 tracking-tight">File-Sourced Financials</h2>
+                              <p className="text-xs text-blue-600 font-bold uppercase tracking-widest">
+                                Single Source of Truth • No External APIs
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-3 leading-relaxed">
+                            All metrics below are computed directly from the iXBRL data embedded in this SEC filing.
+                            This data is immutable and calculated once per filing.
+                          </p>
+                          <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
+                            <span className="font-mono bg-white/50 px-2 py-1 rounded">{selectedFiling?.form_type}</span>
+                            <span className="font-mono bg-white/50 px-2 py-1 rounded">{selectedFiling?.filing_date}</span>
+                            <span className="text-blue-600 font-bold">Source: {financials.source}</span>
+                          </div>
+                        </div>
+                        <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                          <FinancialAuditGrid audit={financials.quantitative_audit as any} />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-sm">
+                        <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                          <AlertCircle className="w-10 h-10 text-amber-500" />
+                        </div>
+                        <h3 className="text-xl font-black text-gray-900 mb-3 tracking-tight">No iXBRL Data Available</h3>
+                        <p className="text-gray-500 max-w-md mx-auto text-sm leading-relaxed">
+                          {financials?.message || 'This filing does not contain embedded iXBRL financial data. This is common for older filings (pre-2020) or non-standard document types.'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'intelligence' && (
+                <div className="space-y-8">
+                  {/* Error is now shown in global banner above - this is just for context */}
 
                   {analyzing !== 'none' ? (
                     <div className="flex flex-col items-center justify-center py-24 gap-6 bg-white rounded-2xl border border-gray-200 shadow-sm">
                       <div className="relative">
-                        <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
-                        <Brain className="w-6 h-6 text-indigo-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                        <div className="w-20 h-20 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+                        <Brain className="w-8 h-8 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                       </div>
-                      <div className="text-center">
-                        <p className="text-lg font-black text-gray-900 tracking-tight">
-                          {analyzing === 'deep' ? 'Executing Deep Forensic Audit' : 'Digitizing Corporate Intelligence'}
+                      <div className="text-center max-w-md">
+                        <p className="text-xl font-black text-gray-900 tracking-tight">
+                          {analyzing === 'deep' ? 'Deep Forensic Audit in Progress' : 'Running Quick Scan'}
                         </p>
-                        <p className="text-sm text-gray-500 mt-2">
+                        <p className="text-sm text-gray-500 mt-3 leading-relaxed">
                           {analyzing === 'deep' 
-                            ? 'Applying comprehensive forensic prompt suite to all archive notes...'
-                            : 'Applying forensic accounting prompt suite to targeted section...'}
+                            ? 'Extracting iXBRL data, computing financial ratios, and running AI analysis on all sections. This may take 30-90 seconds.'
+                            : 'Analyzing targeted section with forensic accounting prompts...'}
                         </p>
+                        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-400">
+                          <span className="font-mono">{selectedFiling?.form_type}</span>
+                          <span>•</span>
+                          <span className="font-mono">{selectedFiling?.filing_date}</span>
+                        </div>
                       </div>
                     </div>
                   ) : forensicReport ? (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                      <div className="grid grid-cols-1 gap-8">
-                        <TruthBridge 
-                          reportedEps={forensicReport.report.reported_eps}
-                          adjustments={forensicReport.report.adjustments}
-                          totalAdjustment={forensicReport.report.forensic_eps_adjustment}
-                        />
-
-                        {forensicReport.report.quantitative_audit && (
-                          <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                              <Brain className="w-4 h-4 text-indigo-600" />
-                              Financial Statement Audit
-                            </h3>
-                            <FinancialAuditGrid audit={forensicReport.report.quantitative_audit} />
+                      {/* Check if this is a rate-limited/failed response - multiple detection methods */}
+                      {(forensicReport.report.accounting_consistency_score === 0 && 
+                        (forensicReport.report.red_flags?.some(rf => 
+                          rf.category?.toUpperCase().includes('RATE LIMIT') ||
+                          rf.findings?.some(f => f.toLowerCase().includes('rate limit'))
+                        ) ||
+                        forensicReport.report.summary?.toLowerCase().includes('rate limit') ||
+                        (forensicReport.report.reported_eps === null && forensicReport.report.forensic_eps_adjustment === 0)
+                        )) ? (
+                        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-12 text-center">
+                          <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <AlertCircle className="w-10 h-10 text-amber-600" />
                           </div>
-                        )}
-
-                        {forensicReport.report.quantitative_audit?.margin_growth_sensitivity && (
-                          <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                            <ExecutionRiskMatrix 
-                              margins={forensicReport.report.quantitative_audit.margin_growth_sensitivity.margins}
-                              growthRates={forensicReport.report.quantitative_audit.margin_growth_sensitivity.growth_rates}
-                              matrix={forensicReport.report.quantitative_audit.margin_growth_sensitivity.matrix}
-                              roicFlags={forensicReport.report.quantitative_audit.margin_growth_sensitivity.roic_flags}
-                              baseMargin={forensicReport.report.quantitative_audit.margin_growth_sensitivity.base_margin}
-                              baseGrowth={forensicReport.report.quantitative_audit.margin_growth_sensitivity.base_growth}
-                            />
+                          <h3 className="text-2xl font-black text-amber-800 mb-4 tracking-tight">
+                            AI Analysis Temporarily Unavailable
+                          </h3>
+                          <p className="text-amber-700 max-w-lg mx-auto text-base leading-relaxed mb-6">
+                            Gemini's free tier has reached its rate limit. The AI-powered forensic analysis 
+                            (red flags, EPS adjustments, management tone) cannot be generated right now.
+                          </p>
+                          <div className="bg-white/50 rounded-xl p-6 max-w-md mx-auto">
+                            <p className="text-sm font-bold text-amber-800 mb-2">What you can do:</p>
+                            <ul className="text-sm text-amber-700 text-left space-y-2">
+                              <li>• <strong>Use FINANCIALS tab</strong> — all quantitative ratios are available instantly</li>
+                              <li>• <strong>Wait 1-2 minutes</strong> then try again</li>
+                              <li>• <strong>Scan a smaller section</strong> (e.g., "Item 7" instead of "Full Archive")</li>
+                            </ul>
                           </div>
-                        )}
-                        
-                        <RedFlagHeatmap 
-                          redFlags={forensicReport.report.red_flags} 
-                          consistencyScore={forensicReport.report.accounting_consistency_score} 
-                        />
+                          <p className="text-xs text-amber-600 mt-6">
+                            Free tier: 15 requests/minute, 1,500/day
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-8">
+                          {/* EPS Truth Bridge - AI-generated adjustments */}
+                          <TruthBridge 
+                            reportedEps={forensicReport.report.reported_eps}
+                            adjustments={forensicReport.report.adjustments}
+                            totalAdjustment={forensicReport.report.forensic_eps_adjustment}
+                          />
 
-                        {forensicHistory.length > 0 && (
-                          <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                              <History className="w-4 h-4 text-indigo-600" />
-                              Historical Consistency Timeline
-                            </h3>
-                            <ForensicTimeline history={forensicHistory} />
-                          </div>
-                        )}
-                      </div>
+                          {/* AI-generated Red Flags - the core intelligence output */}
+                          <RedFlagHeatmap 
+                            redFlags={forensicReport.report.red_flags} 
+                            consistencyScore={forensicReport.report.accounting_consistency_score} 
+                          />
+
+                          {forensicHistory.length > 0 && (
+                            <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <History className="w-4 h-4 text-indigo-600" />
+                                Historical Consistency Timeline
+                              </h3>
+                              <ForensicTimeline history={forensicHistory} />
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : analysis ? (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                      {analysis.quantitative_audit && (
-                        <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                            <Brain className="w-4 h-4 text-indigo-600" />
-                            Financial Statement Audit
+                      {/* Check if rate-limited (analysis contains rate limit message) */}
+                      {analysis.analysis?.toLowerCase().includes('rate limit') ? (
+                        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-12 text-center">
+                          <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <AlertCircle className="w-10 h-10 text-amber-600" />
+                          </div>
+                          <h3 className="text-2xl font-black text-amber-800 mb-4 tracking-tight">
+                            AI Analysis Temporarily Unavailable
                           </h3>
-                          <FinancialAuditGrid audit={analysis.quantitative_audit} />
+                          <p className="text-amber-700 max-w-lg mx-auto text-base leading-relaxed mb-6">
+                            Gemini's free tier has reached its rate limit. The AI-powered analysis 
+                            cannot be generated right now.
+                          </p>
+                          <div className="bg-white/50 rounded-xl p-6 max-w-md mx-auto">
+                            <p className="text-sm font-bold text-amber-800 mb-2">What you can do:</p>
+                            <ul className="text-sm text-amber-700 text-left space-y-2">
+                              <li>• <strong>Use FINANCIALS tab</strong> — all quantitative ratios are available instantly</li>
+                              <li>• <strong>Wait 1-2 minutes</strong> then try again</li>
+                              <li>• <strong>Scan a smaller section</strong> (e.g., "Item 7" instead of "Full Archive")</li>
+                            </ul>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-white p-10 rounded-2xl border border-gray-200 shadow-sm">
+                          <ForensicRedFlags analysis={analysis.analysis} />
                         </div>
                       )}
-                      <div className="bg-white p-10 rounded-2xl border border-gray-200 shadow-sm">
-                        <ForensicRedFlags analysis={analysis.analysis} />
-                      </div>
                     </div>
                   ) : (
                     <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-sm">

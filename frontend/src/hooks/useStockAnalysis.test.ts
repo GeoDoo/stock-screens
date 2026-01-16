@@ -146,7 +146,7 @@ describe('useStockAnalysis', () => {
     const { result } = renderHook(() => useStockAnalysis());
 
     await act(async () => {
-      await result.current.analyzeStock('AAPL', 'fmp', mockProviders, onSuccess);
+      await result.current.analyzeStock('AAPL', 'fmp', mockProviders, 'USD', onSuccess);
     });
 
     // onSuccess receives both the stock data and the actual provider used
@@ -168,7 +168,7 @@ describe('useStockAnalysis', () => {
     const { result } = renderHook(() => useStockAnalysis());
 
     await act(async () => {
-      await result.current.analyzeStock('AAPL', 'fmp', mockProviders, asyncOnSuccess);
+      await result.current.analyzeStock('AAPL', 'fmp', mockProviders, 'USD', asyncOnSuccess);
     });
 
     // The hook should wait for the async callback to complete

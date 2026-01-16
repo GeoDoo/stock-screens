@@ -2,7 +2,7 @@
 
 > **Auto-generated** from source code structure.
 > 
-> Last updated: 2026-01-15 15:32
+> Last updated: 2026-01-16 14:44
 > 
 > Do not edit manually. Run `python scripts/generate_all_docs.py` to regenerate.
 
@@ -190,7 +190,7 @@ The application uses a single SQLite database (`stock_screens.db`) with the foll
 
 | Layer | Test Files | Framework |
 |-------|------------|-----------|
-| Backend | 55 test files | pytest |
+| Backend | 56 test files | pytest |
 | Frontend | 24 test files | vitest |
 
 ## Constants (`backend/app/constants.py`)

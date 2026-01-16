@@ -74,7 +74,7 @@ class TestFilingAnalyzer:
         assert "revenue recognition" in result.response.lower()
         assert mock_record.called
         # Check that we used the correct model
-        assert result.model == "gemini-flash-latest"
+        assert result.model == "gemini-2.5-flash"
 
     @pytest.mark.asyncio
     async def test_analyze_forensic_with_structured_schema(self, analyzer):
@@ -82,6 +82,7 @@ class TestFilingAnalyzer:
         from app.schemas.forensic import ForensicReport, RedFlagCategory
         
         # Create a real ForensicReport instance for the mock
+        import json
         report_data = {
             "accounting_consistency_score": 90,
             "red_flags": [
@@ -96,13 +97,12 @@ class TestFilingAnalyzer:
             "summary": "Great",
             "reported_eps": 1.0,
             "forensic_eps_adjustment": 0.0,
-            "adjustments": [],
-            "model": "gemini-flash-latest"
+            "adjustments": []
         }
-        mock_report = ForensicReport(**report_data)
         
         mock_response = MagicMock()
-        mock_response.parsed = mock_report
+        # analyze_forensic uses response.text, not response.parsed
+        mock_response.text = json.dumps(report_data)
         
         analyzer.client.aio.models.generate_content = AsyncMock(return_value=mock_response)
         

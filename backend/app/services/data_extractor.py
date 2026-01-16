@@ -785,6 +785,34 @@ class DataExtractor:
         """Historical revenue (oldest first)."""
         return self._get_history(self.income_statement, "revenue")
 
+    def revenue_cagr(self, years: int = 3) -> Optional[float]:
+        """
+        Calculate Compound Annual Growth Rate of revenue.
+        
+        Args:
+            years: Number of years to look back (default 3)
+            
+        Returns:
+            CAGR as decimal (e.g., 0.10 for 10%) or None if insufficient data
+        """
+        history = self.revenue_history()
+        if len(history) < 2:
+            return None
+        
+        # Use available years, up to requested
+        n_periods = min(len(history) - 1, years)
+        if n_periods < 1:
+            return None
+            
+        start_val = history[-(n_periods + 1)]  # Oldest in range
+        end_val = history[-1]  # Most recent
+        
+        if start_val <= 0 or end_val <= 0:
+            return None
+            
+        # CAGR = (end/start)^(1/n) - 1
+        return (end_val / start_val) ** (1 / n_periods) - 1
+
     def ebit_history(self) -> List[float]:
         """Historical EBIT / operating income (oldest first)."""
         return self._get_history(self.income_statement, "operatingIncome")

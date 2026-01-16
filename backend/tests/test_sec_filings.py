@@ -368,3 +368,282 @@ class TestFilingsRouter:
             data = response.json()
             assert data["name"] == "Apple Inc."
             assert data["cik"] == "0000320193"
+    
+    @pytest.mark.asyncio
+    async def test_forensic_audit_no_external_api_calls(self, client):
+        """
+        SINGLE SOURCE OF TRUTH: Forensic audit must ONLY use data from the SEC filing.
+        No calls to external providers (FMP, Yahoo, etc.) are allowed.
+        """
+        from app.schemas.forensic import ForensicReport
+        
+        with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
+            with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
+                with patch("app.routers.filings.get_stock_client") as mock_get_client:
+                    # Provide minimal HTML with iXBRL data
+                    mock_html.return_value = """<html><body>
+                        <ix:nonfraction name="us-gaap:Revenues" contextRef="FY2024" decimals="-6">164501000000</ix:nonfraction>
+                        <ix:nonfraction name="us-gaap:NetIncomeLoss" contextRef="FY2024" decimals="-6">62360000000</ix:nonfraction>
+                    </body></html>"""
+                    
+                    mock_analyzer = AsyncMock()
+                    # Return a proper ForensicReport object
+                    mock_analyzer.analyze_forensic.return_value = ForensicReport(
+                        accounting_consistency_score=85,
+                        red_flags=[],
+                        summary="Test summary",
+                        reported_eps=None,
+                        forensic_eps_adjustment=0.0,
+                        adjustments=[],
+                        model="gemini-2.5-flash"
+                    )
+                    mock_analyzer_func.return_value = mock_analyzer
+                    
+                    response = client.post(
+                        "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
+                    )
+                    
+                    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+                    
+                    # CRITICAL: get_stock_client should NEVER be called
+                    mock_get_client.assert_not_called()
+    
+    @pytest.mark.asyncio
+    async def test_forensic_audit_rate_limit_returns_valid_schema(self, client):
+        """
+        Regression test: When LLM hits rate limit, error handler must return
+        valid ForensicReport with properly structured RedFlagCategory objects.
+        
+        RedFlagCategory requires:
+        - category: str
+        - score: int (1-10)
+        - severity: str ("Low", "Medium", "High", "Critical")
+        - findings: List[str]
+        - evidence_quotes: List[str]
+        """
+        from app.services.filing_analyzer import RateLimitError
+        
+        with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
+            with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
+                mock_html.return_value = "<html><body>Test filing content</body></html>"
+                
+                mock_analyzer = AsyncMock()
+                mock_analyzer.analyze_forensic.side_effect = RateLimitError(retry_after=60)
+                mock_analyzer_func.return_value = mock_analyzer
+                
+                response = client.post(
+                    "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
+                )
+                
+                # Should return 200 with graceful degradation, not 500
+                assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+                
+                data = response.json()
+                report = data["report"]
+                
+                # Verify model indicates rate-limited
+                assert report["model"] == "rate-limited"
+                
+                # Verify red_flags has correct schema
+                assert len(report["red_flags"]) >= 1
+                red_flag = report["red_flags"][0]
+                
+                # These are the required fields per RedFlagCategory schema
+                assert "category" in red_flag
+                assert "score" in red_flag
+                assert isinstance(red_flag["score"], int)
+                assert 1 <= red_flag["score"] <= 10
+                assert "severity" in red_flag
+                assert red_flag["severity"] in ["Low", "Medium", "High", "Critical"]
+                assert "findings" in red_flag
+                assert isinstance(red_flag["findings"], list)
+                assert "evidence_quotes" in red_flag
+                assert isinstance(red_flag["evidence_quotes"], list)
+    
+    @pytest.mark.asyncio
+    async def test_forensic_audit_generic_error_returns_valid_schema(self, client):
+        """
+        Regression test: When LLM throws generic exception, error handler must
+        return valid ForensicReport with properly structured RedFlagCategory.
+        """
+        with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
+            with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
+                mock_html.return_value = "<html><body>Test filing content</body></html>"
+                
+                mock_analyzer = AsyncMock()
+                mock_analyzer.analyze_forensic.side_effect = Exception("Unexpected LLM error")
+                mock_analyzer_func.return_value = mock_analyzer
+                
+                response = client.post(
+                    "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
+                )
+                
+                # Should return 200 with error report, not 500
+                assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+                
+                data = response.json()
+                report = data["report"]
+                
+                # Verify model indicates error
+                assert report["model"] == "error"
+                
+                # Verify red_flags has correct schema
+                red_flag = report["red_flags"][0]
+                assert "score" in red_flag
+                assert isinstance(red_flag["score"], int)
+                assert "severity" in red_flag
+                assert red_flag["severity"] in ["Low", "Medium", "High", "Critical"]
+                assert "findings" in red_flag
+                assert isinstance(red_flag["findings"], list)
+    
+    @pytest.mark.asyncio
+    async def test_forensic_audit_sensitivity_matrix_generation(self, client):
+        """
+        Regression test: SensitivityCalculator must be instantiated with correct
+        dataclass fields (projected_fcfs, total_debt, cash, etc.) and method
+        generate_margin_growth_matrix must be called with correct arguments.
+        
+        Bug: Code was passing invalid params (base_fcf, discount_rate, terminal_growth_rate)
+        and calling non-existent method (margin_growth_matrix).
+        """
+        from app.schemas.forensic import ForensicReport
+        
+        # Rich iXBRL data that should trigger matrix generation
+        ixbrl_html = """<html><body>
+            <ix:nonfraction name="us-gaap:Revenues" contextRef="FY2024" decimals="-6">100000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:CostOfRevenue" contextRef="FY2024" decimals="-6">60000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:GrossProfit" contextRef="FY2024" decimals="-6">40000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:OperatingIncomeLoss" contextRef="FY2024" decimals="-6">20000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:NetIncomeLoss" contextRef="FY2024" decimals="-6">15000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:Assets" contextRef="FY2024" decimals="-6">300000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:Liabilities" contextRef="FY2024" decimals="-6">150000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:StockholdersEquity" contextRef="FY2024" decimals="-6">150000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:CommonStockSharesOutstanding" contextRef="FY2024" decimals="-6">5000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:NetCashProvidedByUsedInOperatingActivities" contextRef="FY2024" decimals="-6">25000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:PaymentsToAcquirePropertyPlantAndEquipment" contextRef="FY2024" decimals="-6">5000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:CashAndCashEquivalentsAtCarryingValue" contextRef="FY2024" decimals="-6">30000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:LongTermDebt" contextRef="FY2024" decimals="-6">20000000000</ix:nonfraction>
+        </body></html>"""
+        
+        with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
+            with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
+                mock_html.return_value = ixbrl_html
+                
+                mock_analyzer = AsyncMock()
+                mock_analyzer.analyze_forensic.return_value = ForensicReport(
+                    accounting_consistency_score=85,
+                    red_flags=[],
+                    summary="Test summary",
+                    reported_eps=None,
+                    forensic_eps_adjustment=0.0,
+                    adjustments=[],
+                    model="gemini-2.5-flash"
+                )
+                mock_analyzer_func.return_value = mock_analyzer
+                
+                response = client.post(
+                    "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
+                )
+                
+                # Should not crash with TypeError from SensitivityCalculator
+                assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+                
+                data = response.json()
+                quant_audit = data["report"]["quantitative_audit"]
+                
+                # Verify matrix was generated (or at least didn't crash)
+                # The matrix may be None if data was insufficient, but code must not crash
+                assert "findings" in quant_audit
+    
+    @pytest.mark.asyncio
+    async def test_forensic_audit_operating_margin_calculation(self, client):
+        """
+        Regression test: Code must calculate operating margin inline from
+        latest_operating_income() / latest_revenue() since DataExtractor
+        does not have an operating_margin() method.
+        
+        Bug: extractor.operating_margin() throws AttributeError.
+        """
+        from app.schemas.forensic import ForensicReport
+        
+        # iXBRL with revenue and operating income to allow margin calculation
+        ixbrl_html = """<html><body>
+            <ix:nonfraction name="us-gaap:Revenues" contextRef="FY2024" decimals="-6">100000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:OperatingIncomeLoss" contextRef="FY2024" decimals="-6">30000000000</ix:nonfraction>
+        </body></html>"""
+        
+        with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
+            with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
+                mock_html.return_value = ixbrl_html
+                
+                mock_analyzer = AsyncMock()
+                mock_analyzer.analyze_forensic.return_value = ForensicReport(
+                    accounting_consistency_score=85,
+                    red_flags=[],
+                    summary="Test summary",
+                    reported_eps=None,
+                    forensic_eps_adjustment=0.0,
+                    adjustments=[],
+                    model="gemini-2.5-flash"
+                )
+                mock_analyzer_func.return_value = mock_analyzer
+                
+                response = client.post(
+                    "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
+                )
+                
+                # Should not crash with AttributeError: 'DataExtractor' object has no attribute 'operating_margin'
+                assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    
+    @pytest.mark.asyncio
+    async def test_forensic_audit_zero_operating_income_margin(self, client):
+        """
+        Regression test: When operating income is 0 (break-even company),
+        the margin should be calculated as 0%, not defaulted to 15%.
+        
+        Bug: `if op_income and revenue` treats 0 as falsy, silently using 0.15 default.
+        Fix: Use `if op_income is not None and revenue is not None`
+        """
+        from app.schemas.forensic import ForensicReport
+        
+        # iXBRL with revenue but ZERO operating income (break-even)
+        ixbrl_html = """<html><body>
+            <ix:nonfraction name="us-gaap:Revenues" contextRef="FY2024" decimals="-6">100000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:OperatingIncomeLoss" contextRef="FY2024" decimals="-6">0</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:NetIncomeLoss" contextRef="FY2024" decimals="-6">0</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:Assets" contextRef="FY2024" decimals="-6">50000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:StockholdersEquity" contextRef="FY2024" decimals="-6">25000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:NetCashProvidedByUsedInOperatingActivities" contextRef="FY2024" decimals="-6">5000000000</ix:nonfraction>
+        </body></html>"""
+        
+        with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
+            with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
+                mock_html.return_value = ixbrl_html
+                
+                mock_analyzer = AsyncMock()
+                mock_analyzer.analyze_forensic.return_value = ForensicReport(
+                    accounting_consistency_score=85,
+                    red_flags=[],
+                    summary="Test summary",
+                    reported_eps=None,
+                    forensic_eps_adjustment=0.0,
+                    adjustments=[],
+                    model="gemini-2.5-flash"
+                )
+                mock_analyzer_func.return_value = mock_analyzer
+                
+                response = client.post(
+                    "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
+                )
+                
+                assert response.status_code == 200
+                
+                # The profitability ratios should show 0% operating margin, not fallback to 15%
+                data = response.json()
+                quant_audit = data["report"]["quantitative_audit"]
+                prof_ratios = quant_audit.get("profitability_ratios", {})
+                
+                # Operating margin should be 0 (or very close), NOT 0.15 (the fallback)
+                op_margin = prof_ratios.get("operating_margin")
+                if op_margin is not None:
+                    assert abs(op_margin) < 0.01, f"Expected ~0% operating margin for break-even, got {op_margin*100}%"
