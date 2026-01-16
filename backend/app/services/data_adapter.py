@@ -170,7 +170,13 @@ def ixbrl_facts_to_legacy(facts_list: List[Dict[str, Any]]) -> dict:
 
         gross_profit = facts.get("gross_profit")
         revenue = facts.get("revenue")
-        gross_profit_ratio = (gross_profit / revenue) if gross_profit is not None and revenue else None
+        cost_of_revenue = facts.get("cost_of_revenue")
+        
+        # Fallback: calculate gross_profit from revenue - cost_of_revenue
+        if gross_profit is None and revenue is not None and cost_of_revenue is not None:
+            gross_profit = revenue - cost_of_revenue
+        
+        gross_profit_ratio = (gross_profit / revenue) if gross_profit is not None and revenue and revenue != 0 else None
         
         operating_income = facts.get("ebit")
         if operating_income is None:
@@ -223,11 +229,20 @@ def ixbrl_facts_to_legacy(facts_list: List[Dict[str, Any]]) -> dict:
                 "weightedAverageShsOutDil": facts.get("shares_diluted"),
             })
             
+            operating_cf = facts.get("operating_cash_flow")
+            capex = facts.get("capex")
+            # Calculate FCF: OCF - |CapEx| (normalize sign per project rules)
+            free_cash_flow = None
+            if operating_cf is not None and capex is not None:
+                # CapEx should be positive expenditure; some filings report it negative
+                free_cash_flow = operating_cf - abs(capex)
+            
             cash_flows.append({
                 "date": date_str,
                 "period": period,
-                "operatingCashFlow": facts.get("operating_cash_flow"),
-                "capitalExpenditure": facts.get("capex"),
+                "operatingCashFlow": operating_cf,
+                "capitalExpenditure": capex,
+                "freeCashFlow": free_cash_flow,
                 "depreciationAndAmortization": facts.get("da"),
                 "stockBasedCompensation": facts.get("sbc"),
                 "dividendsPaid": facts.get("dividends"),
