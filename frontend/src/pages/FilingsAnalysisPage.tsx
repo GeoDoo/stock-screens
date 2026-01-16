@@ -36,7 +36,6 @@ import { RedFlagHeatmap } from '../components/RedFlagHeatmap';
 import { TruthBridge } from '../components/TruthBridge';
 import { ForensicTimeline } from '../components/ForensicTimeline';
 import { FinancialAuditGrid } from '../components/FinancialAuditGrid';
-import { ExecutionRiskMatrix } from '../components/ExecutionRiskMatrix';
 import { Layout } from '../components/Layout';
 
 export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string }) {
@@ -680,35 +679,14 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                   ) : forensicReport ? (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
                       <div className="grid grid-cols-1 gap-8">
+                        {/* EPS Truth Bridge - AI-generated adjustments */}
                         <TruthBridge 
                           reportedEps={forensicReport.report.reported_eps}
                           adjustments={forensicReport.report.adjustments}
                           totalAdjustment={forensicReport.report.forensic_eps_adjustment}
                         />
 
-                        {forensicReport.report.quantitative_audit && (
-                          <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                              <Brain className="w-4 h-4 text-indigo-600" />
-                              Financial Statement Audit
-                            </h3>
-                            <FinancialAuditGrid audit={forensicReport.report.quantitative_audit} />
-                          </div>
-                        )}
-
-                        {forensicReport.report.quantitative_audit?.margin_growth_sensitivity && (
-                          <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                            <ExecutionRiskMatrix 
-                              margins={forensicReport.report.quantitative_audit.margin_growth_sensitivity.margins}
-                              growthRates={forensicReport.report.quantitative_audit.margin_growth_sensitivity.growth_rates}
-                              matrix={forensicReport.report.quantitative_audit.margin_growth_sensitivity.matrix}
-                              roicFlags={forensicReport.report.quantitative_audit.margin_growth_sensitivity.roic_flags}
-                              baseMargin={forensicReport.report.quantitative_audit.margin_growth_sensitivity.base_margin}
-                              baseGrowth={forensicReport.report.quantitative_audit.margin_growth_sensitivity.base_growth}
-                            />
-                          </div>
-                        )}
-                        
+                        {/* AI-generated Red Flags - the core intelligence output */}
                         <RedFlagHeatmap 
                           redFlags={forensicReport.report.red_flags} 
                           consistencyScore={forensicReport.report.accounting_consistency_score} 
@@ -727,15 +705,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                     </div>
                   ) : analysis ? (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                      {analysis.quantitative_audit && (
-                        <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-6 flex items-center gap-2">
-                            <Brain className="w-4 h-4 text-indigo-600" />
-                            Financial Statement Audit
-                          </h3>
-                          <FinancialAuditGrid audit={analysis.quantitative_audit} />
-                        </div>
-                      )}
+                      {/* AI-generated analysis - no duplication of FINANCIALS tab */}
                       <div className="bg-white p-10 rounded-2xl border border-gray-200 shadow-sm">
                         <ForensicRedFlags analysis={analysis.analysis} />
                       </div>
