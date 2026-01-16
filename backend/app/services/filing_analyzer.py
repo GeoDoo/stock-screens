@@ -338,25 +338,39 @@ For each red flag found, quote the relevant text and explain the economic risk t
         
         system_prompt = """You are a senior forensic accountant at a Tier-1 hedge fund.
 Your task is to analyze the provided SEC filing for accounting shenanigans and financial risk.
-You must output your findings in a strict JSON format matching the requested schema.
+You must output your findings in EXACTLY this JSON format:
 
-Evaluate these categories and include them in the 'red_flags' list:
-1. Revenue: Recognition shifts, aggressive accruals, channel stuffing.
-2. Expenses: Capitalization creep (hiding expenses in assets), under-reserving.
-3. Assets: Inventory/Sales divergence, goodwill impairment risk, 'Other Assets' bloat.
-4. Liabilities: Unrecorded obligations, 'Cookie Jar' reserves, off-balance sheet items.
-5. Cash Flow: Divergence from Net Income, unsustainable financing.
-6. Disclosures: Vague language in MD&A, removal of previously positive statements.
-7. Management: Tone shifts, risk factor bloat, executive turnover mentions.
-8. Auditor: Critical Audit Matters (CAMs), auditor tenure (>20 years is high risk), firm quality.
+{
+  "accounting_consistency_score": <int 1-100>,
+  "red_flags": [
+    {
+      "category": "<string: Revenue|Expenses|Assets|Liabilities|Cash Flow|Disclosures|Management|Auditor>",
+      "score": <int 1-10>,
+      "severity": "<string: Low|Medium|High|Critical>",
+      "findings": ["<string>", ...],
+      "evidence_quotes": ["<string>", ...]
+    }
+  ],
+  "summary": "<string: executive summary of findings>",
+  "reported_eps": <float or null if not found>,
+  "forensic_eps_adjustment": <float>,
+  "adjustments": [
+    {"reason": "<string>", "amount": <float>, "impact": "<string>"}
+  ]
+}
 
-Critical Tasks:
-- For the 'red_flags' list, include one entry for each category above.
-- Assign a score from 1 (Safe) to 10 (High Danger) for each category.
-- Calculate an overall 'Accounting Consistency Score' from 1 to 100.
-- Identify the 'Reported EPS' (Basic or Diluted).
-- Propose specific 'EPS Adjustments' to reach a 'Forensic EPS'. 
-- Ensure the JSON is complete and not truncated."""
+MANDATORY FIELDS:
+- accounting_consistency_score: 1-100 (100 = perfect)
+- red_flags: MUST include one entry for each category (8 total): Revenue, Expenses, Assets, Liabilities, Cash Flow, Disclosures, Management, Auditor
+- Each red_flag MUST have: category, score (1-10), severity (Low/Medium/High/Critical), findings (list), evidence_quotes (list)
+- summary: Executive summary paragraph
+- reported_eps: The EPS number from filing, or null if not found (MUST be a number or null, NOT a string)
+- forensic_eps_adjustment: Total per-share adjustment
+- adjustments: List of specific adjustments
+
+Severity mapping: score 1-3 = "Low", 4-5 = "Medium", 6-7 = "High", 8-10 = "Critical"
+
+DO NOT use any other field names (e.g., no "danger_level" - use "severity")."""
 
         query = "Perform a complete institutional-grade forensic audit of this filing."
 
