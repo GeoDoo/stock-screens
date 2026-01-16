@@ -407,9 +407,14 @@ async def run_forensic_audit(
                     margin_steps = [-0.05, -0.025, 0, 0.025, 0.05]
                     growth_steps = [-0.05, -0.025, 0, 0.025, 0.05]
                     
+                    # Calculate operating margin inline (DataExtractor doesn't have this method)
+                    op_income = extractor.latest_operating_income()
+                    revenue = extractor.latest_revenue()
+                    base_margin = (op_income / revenue) if op_income and revenue and revenue != 0 else 0.15
+                    
                     matrix = sens_calc.generate_margin_growth_matrix(
-                        base_revenue=extractor.latest_revenue() or 1,
-                        base_margin=extractor.operating_margin() or 0.15,
+                        base_revenue=revenue or 1,
+                        base_margin=base_margin,
                         base_growth=base_growth,
                         discount_rate=wacc,
                         terminal_growth=terminal_growth,

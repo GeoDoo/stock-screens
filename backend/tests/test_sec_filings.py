@@ -554,3 +554,43 @@ class TestFilingsRouter:
                 # Verify matrix was generated (or at least didn't crash)
                 # The matrix may be None if data was insufficient, but code must not crash
                 assert "findings" in quant_audit
+    
+    @pytest.mark.asyncio
+    async def test_forensic_audit_operating_margin_calculation(self, client):
+        """
+        Regression test: Code must calculate operating margin inline from
+        latest_operating_income() / latest_revenue() since DataExtractor
+        does not have an operating_margin() method.
+        
+        Bug: extractor.operating_margin() throws AttributeError.
+        """
+        from app.schemas.forensic import ForensicReport
+        
+        # iXBRL with revenue and operating income to allow margin calculation
+        ixbrl_html = """<html><body>
+            <ix:nonfraction name="us-gaap:Revenues" contextRef="FY2024" decimals="-6">100000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:OperatingIncomeLoss" contextRef="FY2024" decimals="-6">30000000000</ix:nonfraction>
+        </body></html>"""
+        
+        with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
+            with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
+                mock_html.return_value = ixbrl_html
+                
+                mock_analyzer = AsyncMock()
+                mock_analyzer.analyze_forensic.return_value = ForensicReport(
+                    accounting_consistency_score=85,
+                    red_flags=[],
+                    summary="Test summary",
+                    reported_eps=None,
+                    forensic_eps_adjustment=0.0,
+                    adjustments=[],
+                    model="gemini-2.5-flash"
+                )
+                mock_analyzer_func.return_value = mock_analyzer
+                
+                response = client.post(
+                    "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
+                )
+                
+                # Should not crash with AttributeError: 'DataExtractor' object has no attribute 'operating_margin'
+                assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
