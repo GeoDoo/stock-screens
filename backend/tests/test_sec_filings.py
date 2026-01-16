@@ -370,6 +370,43 @@ class TestFilingsRouter:
             assert data["cik"] == "0000320193"
     
     @pytest.mark.asyncio
+    async def test_forensic_audit_no_external_api_calls(self, client):
+        """
+        SINGLE SOURCE OF TRUTH: Forensic audit must ONLY use data from the SEC filing.
+        No calls to external providers (FMP, Yahoo, etc.) are allowed.
+        """
+        with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
+            with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
+                with patch("app.routers.filings.get_stock_client") as mock_get_client:
+                    # Provide minimal HTML with iXBRL data
+                    mock_html.return_value = """<html><body>
+                        <ix:nonfraction name="us-gaap:Revenues" contextRef="FY2024" decimals="-6">164501000000</ix:nonfraction>
+                        <ix:nonfraction name="us-gaap:NetIncomeLoss" contextRef="FY2024" decimals="-6">62360000000</ix:nonfraction>
+                    </body></html>"""
+                    
+                    mock_analyzer = AsyncMock()
+                    mock_analyzer.analyze_forensic.return_value = MagicMock(
+                        accounting_consistency_score=85,
+                        red_flags=[],
+                        summary="Test summary",
+                        reported_eps=None,
+                        forensic_eps_adjustment=0.0,
+                        adjustments=[],
+                        model="gemini-2.5-flash",
+                        model_dump_json=lambda: "{}"
+                    )
+                    mock_analyzer_func.return_value = mock_analyzer
+                    
+                    response = client.post(
+                        "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
+                    )
+                    
+                    assert response.status_code == 200
+                    
+                    # CRITICAL: get_stock_client should NEVER be called
+                    mock_get_client.assert_not_called()
+    
+    @pytest.mark.asyncio
     async def test_forensic_audit_rate_limit_returns_valid_schema(self, client):
         """
         Regression test: When LLM hits rate limit, error handler must return
