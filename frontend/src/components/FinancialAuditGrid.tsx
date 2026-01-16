@@ -56,7 +56,9 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
             <span className={`text-[10px] font-bold uppercase ${sloan.color}`}>{sloan.label}</span>
           </div>
           <p className="text-[10px] text-gray-500 mt-3 leading-relaxed font-medium">
-            Measures accrual quality. Ratio &gt; 10% indicates earnings aren't backed by cash, suggesting aggressive accounting.
+            {audit.sloan_ratio === null 
+              ? "Requires: Net Income, Operating Cash Flow, Total Assets from filing."
+              : "Measures accrual quality. Ratio > 10% indicates earnings aren't backed by cash, suggesting aggressive accounting."}
           </p>
         </div>
 
@@ -73,7 +75,9 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
             <span className={`text-[10px] font-bold uppercase ${altman.color}`}>{altman.label}</span>
           </div>
           <p className="text-[10px] text-gray-500 mt-3 leading-relaxed font-medium">
-            Predicts bankruptcy risk. Score &lt; 1.81 indicates high distress probability for public manufacturing firms.
+            {audit.altman_z_score === null 
+              ? "Requires: Working Capital, Retained Earnings, EBIT, Revenue, Total Assets/Liabilities. Market Cap needed for full score."
+              : "Predicts bankruptcy risk. Score < 1.81 indicates high distress probability for public manufacturing firms."}
           </p>
         </div>
 
@@ -90,7 +94,9 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
             <span className={`text-[10px] font-bold uppercase ${beneish.color}`}>{beneish.label}</span>
           </div>
           <p className="text-[10px] text-gray-500 mt-3 leading-relaxed font-medium">
-            Probabilistic model for earnings manipulation. Score &gt; -1.78 suggests a high risk of "cooking the books".
+            {audit.beneish_m_score === null 
+              ? "Requires: 2+ years of historical data (Revenue, Receivables, Margins, Assets)."
+              : "Probabilistic model for earnings manipulation. Score > -1.78 suggests a high risk of \"cooking the books\"."}
           </p>
         </div>
       </div>
