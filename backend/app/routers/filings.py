@@ -420,26 +420,6 @@ async def run_forensic_audit(
                 except Exception as e:
                     logger.warning("matrix_generation_failed", ticker=ticker, error=str(e))
             
-        except LLMRateLimitError as e:
-            logger.warning("quantitative_audit_llm_rate_limited", ticker=ticker)
-            # Graceful degradation: include a finding that quantitative data was rate-limited
-            error_msg = str(e)
-            if "Retry after" in error_msg:
-                try:
-                    # Clean up the message if it has long floats
-                    parts = error_msg.split("after ")
-                    if len(parts) > 1:
-                        seconds = float(parts[1].split("s")[0])
-                        error_msg = f"Rate limit reached. Retry after {int(seconds)}s."
-                except Exception:
-                    pass
-            
-            report.quantitative_audit = QuantitativeAudit(
-                sloan_ratio=None,
-                altman_z_score=None,
-                beneish_m_score=None,
-                findings=[f"Numerical audit unavailable: {error_msg}"]
-            )
         except Exception as e:
             logger.warning("quantitative_audit_failed", ticker=ticker, error=str(e))
             # Don't fail the whole audit if numerical data is missing
