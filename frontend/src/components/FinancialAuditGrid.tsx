@@ -1,5 +1,6 @@
 import { Shield, AlertTriangle, CheckCircle2, Info, Calculator, Activity, BarChart3 } from 'lucide-react';
 import type { QuantitativeAudit } from '../types';
+import { formatCurrency } from '../utils';
 
 interface FinancialAuditGridProps {
   audit: QuantitativeAudit;
@@ -206,13 +207,13 @@ export function FinancialAuditGrid({ audit }: FinancialAuditGridProps) {
                   <div>
                     <span className="block text-[10px] font-bold text-gray-400 uppercase">EBIT Impact</span>
                     <span className={`text-xs font-bold ${correction.impact_on_ebit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {correction.impact_on_ebit >= 0 ? '+' : '-'}${Math.abs(correction.impact_on_ebit / 1e6).toFixed(1)}M
+                      {correction.impact_on_ebit >= 0 ? '+' : ''}{formatCurrency(correction.impact_on_ebit)}
                     </span>
                   </div>
                   <div>
                     <span className="block text-[10px] font-bold text-gray-400 uppercase">Asset Impact</span>
                     <span className={`text-xs font-bold ${correction.impact_on_assets >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {correction.impact_on_assets >= 0 ? '+' : '-'}${Math.abs(correction.impact_on_assets / 1e6).toFixed(1)}M
+                      {correction.impact_on_assets >= 0 ? '+' : ''}{formatCurrency(correction.impact_on_assets)}
                     </span>
                   </div>
                 </div>
