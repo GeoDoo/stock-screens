@@ -213,7 +213,7 @@ Provide a detailed, specific analysis with evidence from the filing."""
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.2,  # Low temp for factual analysis
-                    max_output_tokens=32768,  # Gemini 2.5 Flash supports up to 65k - use 32k for full reports
+                    max_output_tokens=65536,  # Gemini 2.5 Flash maximum output
                 ),
             )
             
@@ -395,7 +395,7 @@ DO NOT use any other field names (e.g., no "danger_level" - use "severity")."""
                 contents=[prompt],
                 config=types.GenerateContentConfig(
                     temperature=0.1,
-                    max_output_tokens=32768,  # Gemini 2.5 Flash supports up to 65k - use 32k for full reports
+                    max_output_tokens=65536,  # Gemini 2.5 Flash maximum output
                     response_mime_type="application/json",
                 ),
             )

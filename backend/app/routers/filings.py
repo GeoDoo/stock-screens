@@ -158,7 +158,7 @@ async def analyze_filing_section(
             
             # Save all sections if we had to fetch the full HTML anyway
             if accession_number and section_text:
-                asyncio.create_task(sec_filings_service.save_filing_sections(accession_number, html_content))
+                asyncio.create_task(sec_filings_service.save_filing_sections(accession_number, html_content, ticker))
         
         if not section_text:
             raise HTTPException(status_code=404, detail=f"Section '{section_name}' not found in filing")
@@ -255,9 +255,9 @@ async def run_forensic_audit(
         # 1. Fetch HTML
         html_content = await sec_filings_service.get_filing_html(document_url)
         
-        # Save granular sections for forensic persistence
+        # Save granular sections for forensic persistence (also computes quantitative audit)
         if accession_number:
-            asyncio.create_task(sec_filings_service.save_filing_sections(accession_number, html_content))
+            asyncio.create_task(sec_filings_service.save_filing_sections(accession_number, html_content, ticker))
             
         text_content = parser.clean_html(html_content)
         
@@ -313,125 +313,136 @@ async def run_forensic_audit(
             )
         
         # 3. QUANTITATIVE AUDIT (SINGLE SOURCE OF TRUTH: FILE ONLY - NO API CALLS)
+        # Try to read pre-computed audit from DB first (filings are immutable)
         report.quantitative_audit = QuantitativeAudit(sloan_ratio=None, altman_z_score=None, beneish_m_score=None, findings=[])
         extractor = None
-        try:
-            # Extract numerical facts directly from the iXBRL in the HTML (Source of Truth)
-            from app.services.data_adapter import ixbrl_facts_to_legacy
-            ixbrl_facts_by_period = parser.extract_ixbrl_facts(html_content)
-            
-            # LTM Data Merging (NOTES2.md Item #8)
-            # Reconstruct TTM facts if we have 10-Q data
-            if ixbrl_facts_by_period:
-                ixbrl_facts_by_period = await _get_ltm_facts_if_needed(ticker, ixbrl_facts_by_period, document_url)
-
-            if ixbrl_facts_by_period:
-                logger.info("file_sourced_quantitative_audit_started", ticker=ticker)
-                legacy_data = ixbrl_facts_to_legacy(ixbrl_facts_by_period)
-                legacy_data["profile"]["symbol"] = ticker.upper()
+        cached_audit = None
+        
+        if accession_number:
+            repo = get_filings_repository()
+            cached_audit_json = await repo.get_quantitative_audit(accession_number)
+            if cached_audit_json:
+                import json
+                cached_audit = json.loads(cached_audit_json)
+                report.quantitative_audit = QuantitativeAudit(**cached_audit)
+                logger.info("quantitative_audit_loaded_from_cache", accession_number=accession_number)
+        
+        # If not cached, compute from HTML
+        if not cached_audit:
+            try:
+                # Extract numerical facts directly from the iXBRL in the HTML (Source of Truth)
+                from app.services.data_adapter import ixbrl_facts_to_legacy
+                ixbrl_facts_by_period = parser.extract_ixbrl_facts(html_content)
                 
-                extractor = DataExtractor(legacy_data)
-                auditor = FinancialAuditService(extractor)
-                quant_results = auditor.analyze_statements()
-                
-                report.quantitative_audit = QuantitativeAudit(
-                    sloan_ratio=quant_results.get("sloan_ratio"),
-                    altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
-                    beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
-                    liquidity_ratios=quant_results.get("liquidity_ratios", {}),
-                    solvency_ratios=quant_results.get("solvency_ratios", {}),
-                    efficiency_ratios=quant_results.get("efficiency_ratios", {}),
-                    profitability_ratios=quant_results.get("profitability_ratios", {}),
-                    valuation_ratios=quant_results.get("valuation_ratios", {}),
-                    accounting_corrections=quant_results.get("accounting_corrections", []),
-                    input_provenance=quant_results.get("input_provenance", {}),
-                    findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
-                )
-            else:
-                # NO API FALLBACK - Single source of truth: file only
-                logger.info("no_ixbrl_found_file_only_mode", ticker=ticker)
-                report.quantitative_audit.findings = [
-                    "No iXBRL data found in filing. This is common for older filings (pre-2020).",
-                    "Quantitative analysis limited to AI textual scan."
-                ]
+                # LTM Data Merging (NOTES2.md Item #8)
+                # Reconstruct TTM facts if we have 10-Q data
+                if ixbrl_facts_by_period:
+                    ixbrl_facts_by_period = await _get_ltm_facts_if_needed(ticker, ixbrl_facts_by_period, document_url)
 
-            # Generate Execution Risk Matrix using file data only (no external API)
-            if extractor:
-                try:
-                    from app.services.sensitivity_calculator import SensitivityCalculator
-                    # Use standard WACC assumption for file-only mode (KISS)
-                    wacc = 0.10  # Standard 10% discount rate
+                if ixbrl_facts_by_period:
+                    logger.info("file_sourced_quantitative_audit_computing", ticker=ticker)
+                    legacy_data = ixbrl_facts_to_legacy(ixbrl_facts_by_period)
+                    legacy_data["profile"]["symbol"] = ticker.upper()
                     
-                    # Calculate from file data where available
+                    extractor = DataExtractor(legacy_data)
+                    auditor = FinancialAuditService(extractor)
+                    quant_results = auditor.analyze_statements()
+                    
+                    report.quantitative_audit = QuantitativeAudit(
+                        sloan_ratio=quant_results.get("sloan_ratio"),
+                        altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
+                        beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
+                        liquidity_ratios=quant_results.get("liquidity_ratios", {}),
+                        solvency_ratios=quant_results.get("solvency_ratios", {}),
+                        efficiency_ratios=quant_results.get("efficiency_ratios", {}),
+                        profitability_ratios=quant_results.get("profitability_ratios", {}),
+                        valuation_ratios=quant_results.get("valuation_ratios", {}),
+                        accounting_corrections=quant_results.get("accounting_corrections", []),
+                        input_provenance=quant_results.get("input_provenance", {}),
+                        findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
+                    )
+                else:
+                    # NO API FALLBACK - Single source of truth: file only
+                    logger.info("no_ixbrl_found_file_only_mode", ticker=ticker)
+                    report.quantitative_audit.findings = [
+                        "No iXBRL data found in filing. This is common for older filings (pre-2020).",
+                        "Quantitative analysis limited to AI textual scan."
+                    ]
+                # Generate Execution Risk Matrix using file data only (no external API)
+                if extractor:
                     try:
-                        risk_free = 0.045  # Standard assumption
-                        beta = extractor.beta() or 1.0
-                        cost_of_debt = extractor.cost_of_debt(risk_free) or (risk_free + 0.02)
-                        from app.services.wacc_calculator import WACCCalculator
-                        wacc_calc = WACCCalculator(
-                            risk_free_rate=risk_free,
-                            beta=beta,
-                            market_risk_premium=extractor.market_risk_premium(),
-                            cost_of_debt=cost_of_debt,
-                            tax_rate=extractor.tax_rate() or 0.25,
-                            market_cap=extractor.market_cap() or 1e9,
-                            total_debt=extractor.total_debt() or 0
+                        from app.services.sensitivity_calculator import SensitivityCalculator
+                        # Use standard WACC assumption for file-only mode (KISS)
+                        wacc = 0.10  # Standard 10% discount rate
+                        
+                        # Calculate from file data where available
+                        try:
+                            risk_free = 0.045  # Standard assumption
+                            beta = extractor.beta() or 1.0
+                            cost_of_debt = extractor.cost_of_debt(risk_free) or (risk_free + 0.02)
+                            from app.services.wacc_calculator import WACCCalculator
+                            wacc_calc = WACCCalculator(
+                                risk_free_rate=risk_free,
+                                beta=beta,
+                                market_risk_premium=extractor.market_risk_premium(),
+                                cost_of_debt=cost_of_debt,
+                                tax_rate=extractor.tax_rate() or 0.25,
+                                market_cap=extractor.market_cap() or 1e9,
+                                total_debt=extractor.total_debt() or 0
+                            )
+                            wacc = wacc_calc.calculate()
+                        except Exception as e:
+                            logger.debug("wacc_calculation_failed_for_matrix_using_default", error=str(e))
+                        
+                        # Build matrix from file data
+                        # SensitivityCalculator requires projected FCFs, not base FCF
+                        base_fcf = extractor.free_cash_flow() or 0
+                        base_growth = extractor.revenue_cagr() or 0.05
+                        projection_years = 5
+                        terminal_growth = 0.025
+                        
+                        # Project FCFs for the required periods (simple growth model)
+                        projected_fcfs = []
+                        current_fcf = base_fcf
+                        for year in range(projection_years):
+                            current_fcf = current_fcf * (1 + base_growth)
+                            projected_fcfs.append(current_fcf)
+                        
+                        sens_calc = SensitivityCalculator(
+                            projected_fcfs=projected_fcfs,
+                            projection_years=projection_years,
+                            shares_outstanding=extractor.shares_outstanding() or 1,
+                            total_debt=extractor.total_debt() or 0,
+                            cash=extractor.cash() or 0
                         )
-                        wacc = wacc_calc.calculate()
+                        
+                        # Standard margin/growth steps for execution risk matrix
+                        margin_steps = [-0.05, -0.025, 0, 0.025, 0.05]
+                        growth_steps = [-0.05, -0.025, 0, 0.025, 0.05]
+                        
+                        # Calculate operating margin inline (DataExtractor doesn't have this method)
+                        # Use explicit None checks - 0 is a valid value (break-even company)
+                        op_income = extractor.latest_operating_income()
+                        revenue = extractor.latest_revenue()
+                        if op_income is not None and revenue is not None and revenue != 0:
+                            base_margin = op_income / revenue
+                        else:
+                            base_margin = 0.15  # Fallback only when data is truly missing
+                        
+                        matrix = sens_calc.generate_margin_growth_matrix(
+                            base_revenue=revenue or 1,
+                            base_margin=base_margin,
+                            base_growth=base_growth,
+                            discount_rate=wacc,
+                            terminal_growth=terminal_growth,
+                            margin_steps=margin_steps,
+                            growth_steps=growth_steps
+                        )
+                        report.quantitative_audit.margin_growth_sensitivity = matrix
                     except Exception as e:
-                        logger.debug("wacc_calculation_failed_for_matrix_using_default", error=str(e))
-                    
-                    # Build matrix from file data
-                    # SensitivityCalculator requires projected FCFs, not base FCF
-                    base_fcf = extractor.free_cash_flow() or 0
-                    base_growth = extractor.revenue_cagr() or 0.05
-                    projection_years = 5
-                    terminal_growth = 0.025
-                    
-                    # Project FCFs for the required periods (simple growth model)
-                    projected_fcfs = []
-                    current_fcf = base_fcf
-                    for year in range(projection_years):
-                        current_fcf = current_fcf * (1 + base_growth)
-                        projected_fcfs.append(current_fcf)
-                    
-                    sens_calc = SensitivityCalculator(
-                        projected_fcfs=projected_fcfs,
-                        projection_years=projection_years,
-                        shares_outstanding=extractor.shares_outstanding() or 1,
-                        total_debt=extractor.total_debt() or 0,
-                        cash=extractor.cash() or 0
-                    )
-                    
-                    # Standard margin/growth steps for execution risk matrix
-                    margin_steps = [-0.05, -0.025, 0, 0.025, 0.05]
-                    growth_steps = [-0.05, -0.025, 0, 0.025, 0.05]
-                    
-                    # Calculate operating margin inline (DataExtractor doesn't have this method)
-                    # Use explicit None checks - 0 is a valid value (break-even company)
-                    op_income = extractor.latest_operating_income()
-                    revenue = extractor.latest_revenue()
-                    if op_income is not None and revenue is not None and revenue != 0:
-                        base_margin = op_income / revenue
-                    else:
-                        base_margin = 0.15  # Fallback only when data is truly missing
-                    
-                    matrix = sens_calc.generate_margin_growth_matrix(
-                        base_revenue=revenue or 1,
-                        base_margin=base_margin,
-                        base_growth=base_growth,
-                        discount_rate=wacc,
-                        terminal_growth=terminal_growth,
-                        margin_steps=margin_steps,
-                        growth_steps=growth_steps
-                    )
-                    report.quantitative_audit.margin_growth_sensitivity = matrix
-                except Exception as e:
-                    logger.warning("matrix_generation_failed", ticker=ticker, error=str(e))
-            
-        except Exception as e:
-            logger.warning("quantitative_audit_failed", ticker=ticker, error=str(e))
-            # Don't fail the whole audit if numerical data is missing
+                        logger.warning("matrix_generation_failed", ticker=ticker, error=str(e))
+            except Exception as e:
+                logger.warning("quantitative_audit_computation_failed", ticker=ticker, error=str(e))
         
         # 3. PERSISTENCE: Save to DB if accession_number is provided
         if accession_number:
@@ -685,53 +696,68 @@ async def analyze_filing(
     try:
         html_content = await sec_filings_service.get_filing_html(document_url)
         
-        # Save granular sections for forensic persistence
+        # Save granular sections for forensic persistence (also computes quantitative audit)
         if accession_number:
-            asyncio.create_task(sec_filings_service.save_filing_sections(accession_number, html_content))
+            asyncio.create_task(sec_filings_service.save_filing_sections(accession_number, html_content, ticker))
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch filing: {str(e)}")
 
     # 2. Fast Quantitative Audit (SINGLE SOURCE OF TRUTH: FILE ONLY - NO API CALLS)
+    # Try to read pre-computed audit from DB first (filings are immutable)
     quant_audit = QuantitativeAudit(sloan_ratio=None, altman_z_score=None, beneish_m_score=None, findings=[])
-    try:
-        from app.services.data_adapter import ixbrl_facts_to_legacy
-        ixbrl_facts = parser.extract_ixbrl_facts(html_content)
-        
-        # LTM Data Merging (NOTES2.md Item #8)
-        if ixbrl_facts:
-            ixbrl_facts = await _get_ltm_facts_if_needed(ticker, ixbrl_facts, document_url)
-        
-        if ixbrl_facts:
-            legacy_data = ixbrl_facts_to_legacy(ixbrl_facts)
-            legacy_data["profile"]["symbol"] = ticker.upper()
-
-            extractor = DataExtractor(legacy_data)
-            auditor = FinancialAuditService(extractor)
-            quant_results = auditor.analyze_statements()
+    cached_audit = None
+    
+    if accession_number:
+        repo = get_filings_repository()
+        cached_audit_json = await repo.get_quantitative_audit(accession_number)
+        if cached_audit_json:
+            import json
+            cached_audit = json.loads(cached_audit_json)
+            quant_audit = QuantitativeAudit(**cached_audit)
+            logger.info("scan_quantitative_audit_loaded_from_cache", accession_number=accession_number)
+    
+    # If not cached, compute from HTML
+    if not cached_audit:
+        try:
+            from app.services.data_adapter import ixbrl_facts_to_legacy
+            ixbrl_facts = parser.extract_ixbrl_facts(html_content)
             
-            quant_audit = QuantitativeAudit(
-                sloan_ratio=quant_results.get("sloan_ratio"),
-                altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
-                beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
-                liquidity_ratios=quant_results.get("liquidity_ratios", {}),
-                solvency_ratios=quant_results.get("solvency_ratios", {}),
-                efficiency_ratios=quant_results.get("efficiency_ratios", {}),
-                profitability_ratios=quant_results.get("profitability_ratios", {}),
-                valuation_ratios=quant_results.get("valuation_ratios", {}),
-                accounting_corrections=quant_results.get("accounting_corrections", []),
-                input_provenance=quant_results.get("input_provenance", {}),
-                findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
-            )
-        else:
-            # NO API FALLBACK - Single source of truth
-            logger.info("no_ixbrl_found_file_only_mode", ticker=ticker)
-            quant_audit.findings = [
-                "No iXBRL data found in filing. This is common for older filings (pre-2020).",
-                "Quantitative analysis limited to AI textual scan."
-            ]
-    except Exception as e:
-        logger.warning("scan_quantitative_audit_failed", ticker=ticker, error=str(e))
+            # LTM Data Merging (NOTES2.md Item #8)
+            if ixbrl_facts:
+                ixbrl_facts = await _get_ltm_facts_if_needed(ticker, ixbrl_facts, document_url)
+            
+            if ixbrl_facts:
+                logger.info("scan_quantitative_audit_computing", ticker=ticker)
+                legacy_data = ixbrl_facts_to_legacy(ixbrl_facts)
+                legacy_data["profile"]["symbol"] = ticker.upper()
+
+                extractor = DataExtractor(legacy_data)
+                auditor = FinancialAuditService(extractor)
+                quant_results = auditor.analyze_statements()
+                
+                quant_audit = QuantitativeAudit(
+                    sloan_ratio=quant_results.get("sloan_ratio"),
+                    altman_z_score=quant_results.get("altman_z_score", {}).get("score") if quant_results.get("altman_z_score") else None,
+                    beneish_m_score=quant_results.get("beneish_m_score", {}).get("score") if quant_results.get("beneish_m_score") else None,
+                    liquidity_ratios=quant_results.get("liquidity_ratios", {}),
+                    solvency_ratios=quant_results.get("solvency_ratios", {}),
+                    efficiency_ratios=quant_results.get("efficiency_ratios", {}),
+                    profitability_ratios=quant_results.get("profitability_ratios", {}),
+                    valuation_ratios=quant_results.get("valuation_ratios", {}),
+                    accounting_corrections=quant_results.get("accounting_corrections", []),
+                    input_provenance=quant_results.get("input_provenance", {}),
+                    findings=[f"[FILE SOURCED] {f}" for f in quant_results.get("quantitative_findings", [])]
+                )
+            else:
+                # NO API FALLBACK - Single source of truth
+                logger.info("no_ixbrl_found_file_only_mode", ticker=ticker)
+                quant_audit.findings = [
+                    "No iXBRL data found in filing. This is common for older filings (pre-2020).",
+                    "Quantitative analysis limited to AI textual scan."
+                ]
+        except Exception as e:
+            logger.warning("scan_quantitative_audit_failed", ticker=ticker, error=str(e))
 
     # 3. Textual Forensic Scan (LLM) - Clean HTML to save tokens/prevent TPM limit
     try:
