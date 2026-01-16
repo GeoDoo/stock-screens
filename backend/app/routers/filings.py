@@ -408,9 +408,13 @@ async def run_forensic_audit(
                     growth_steps = [-0.05, -0.025, 0, 0.025, 0.05]
                     
                     # Calculate operating margin inline (DataExtractor doesn't have this method)
+                    # Use explicit None checks - 0 is a valid value (break-even company)
                     op_income = extractor.latest_operating_income()
                     revenue = extractor.latest_revenue()
-                    base_margin = (op_income / revenue) if op_income and revenue and revenue != 0 else 0.15
+                    if op_income is not None and revenue is not None and revenue != 0:
+                        base_margin = op_income / revenue
+                    else:
+                        base_margin = 0.15  # Fallback only when data is truly missing
                     
                     matrix = sens_calc.generate_margin_growth_matrix(
                         base_revenue=revenue or 1,

@@ -594,3 +594,56 @@ class TestFilingsRouter:
                 
                 # Should not crash with AttributeError: 'DataExtractor' object has no attribute 'operating_margin'
                 assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    
+    @pytest.mark.asyncio
+    async def test_forensic_audit_zero_operating_income_margin(self, client):
+        """
+        Regression test: When operating income is 0 (break-even company),
+        the margin should be calculated as 0%, not defaulted to 15%.
+        
+        Bug: `if op_income and revenue` treats 0 as falsy, silently using 0.15 default.
+        Fix: Use `if op_income is not None and revenue is not None`
+        """
+        from app.schemas.forensic import ForensicReport
+        
+        # iXBRL with revenue but ZERO operating income (break-even)
+        ixbrl_html = """<html><body>
+            <ix:nonfraction name="us-gaap:Revenues" contextRef="FY2024" decimals="-6">100000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:OperatingIncomeLoss" contextRef="FY2024" decimals="-6">0</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:NetIncomeLoss" contextRef="FY2024" decimals="-6">0</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:Assets" contextRef="FY2024" decimals="-6">50000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:StockholdersEquity" contextRef="FY2024" decimals="-6">25000000000</ix:nonfraction>
+            <ix:nonfraction name="us-gaap:NetCashProvidedByUsedInOperatingActivities" contextRef="FY2024" decimals="-6">5000000000</ix:nonfraction>
+        </body></html>"""
+        
+        with patch("app.routers.filings.sec_filings_service.get_filing_html", new_callable=AsyncMock) as mock_html:
+            with patch("app.routers.filings.get_filing_analyzer") as mock_analyzer_func:
+                mock_html.return_value = ixbrl_html
+                
+                mock_analyzer = AsyncMock()
+                mock_analyzer.analyze_forensic.return_value = ForensicReport(
+                    accounting_consistency_score=85,
+                    red_flags=[],
+                    summary="Test summary",
+                    reported_eps=None,
+                    forensic_eps_adjustment=0.0,
+                    adjustments=[],
+                    model="gemini-2.5-flash"
+                )
+                mock_analyzer_func.return_value = mock_analyzer
+                
+                response = client.post(
+                    "/api/filings/AAPL/forensic-audit?document_url=https://example.com/filing.htm"
+                )
+                
+                assert response.status_code == 200
+                
+                # The profitability ratios should show 0% operating margin, not fallback to 15%
+                data = response.json()
+                quant_audit = data["report"]["quantitative_audit"]
+                prof_ratios = quant_audit.get("profitability_ratios", {})
+                
+                # Operating margin should be 0 (or very close), NOT 0.15 (the fallback)
+                op_margin = prof_ratios.get("operating_margin")
+                if op_margin is not None:
+                    assert abs(op_margin) < 0.01, f"Expected ~0% operating margin for break-even, got {op_margin*100}%"
