@@ -213,7 +213,7 @@ Provide a detailed, specific analysis with evidence from the filing."""
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.2,  # Low temp for factual analysis
-                    max_output_tokens=4096,
+                    max_output_tokens=8192,  # Increased from 4096 to prevent truncation
                 ),
             )
             
