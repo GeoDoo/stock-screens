@@ -213,7 +213,7 @@ Provide a detailed, specific analysis with evidence from the filing."""
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     temperature=0.2,  # Low temp for factual analysis
-                    max_output_tokens=8192,  # Increased from 4096 to prevent truncation
+                    max_output_tokens=32768,  # Gemini 2.5 Flash supports up to 65k - use 32k for full reports
                 ),
             )
             
@@ -381,7 +381,7 @@ Critical Tasks:
                 contents=[prompt],
                 config=types.GenerateContentConfig(
                     temperature=0.1,
-                    max_output_tokens=8192,
+                    max_output_tokens=32768,  # Gemini 2.5 Flash supports up to 65k - use 32k for full reports
                     response_mime_type="application/json",
                 ),
             )
