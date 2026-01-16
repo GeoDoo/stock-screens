@@ -57,11 +57,8 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
   const [activeTab, setActiveTab] = useState<'document' | 'intelligence'>('document');
   const [isFocusMode, setIsFocusMode] = useState(false);
 
-  useEffect(() => {
-    if (forensicReport || analysis) {
-      setActiveTab('intelligence');
-    }
-  }, [forensicReport, analysis]);
+  // DON'T auto-switch tabs - let user decide when to view results
+  // Instead, we show a notification badge on the INTELLIGENCE tab
 
   useEffect(() => {
     if (symbol) {
@@ -333,12 +330,20 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                     className={`h-12 text-[10px] font-black uppercase tracking-[0.25em] transition-all border-b-2 -mb-[1px] flex items-center gap-2 ${
                       activeTab === 'intelligence' 
                         ? 'border-indigo-600 text-indigo-600' 
-                        : 'border-transparent text-gray-400 hover:text-gray-600'
+                        : (forensicReport || analysis)
+                          ? 'border-transparent text-emerald-600 hover:text-emerald-700'
+                          : 'border-transparent text-gray-400 hover:text-gray-600'
                     }`}
                   >
                     Intelligence
-                    {(forensicReport || analysis) && (
-                      <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-pulse" />
+                    {(forensicReport || analysis) && activeTab !== 'intelligence' && (
+                      <span className="flex items-center gap-1 bg-emerald-100 text-emerald-700 text-[8px] font-black px-1.5 py-0.5 rounded-full">
+                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                        READY
+                      </span>
+                    )}
+                    {analyzing !== 'none' && (
+                      <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
                     )}
                   </button>
                 </div>
@@ -417,6 +422,68 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
               </div>
             )}
 
+            {/* Global Status Bar - Always visible when analyzing */}
+            {analyzing !== 'none' && (
+              <div className="bg-indigo-600 px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  <span className="text-sm font-bold text-white">
+                    {analyzing === 'deep' ? 'Running Deep Forensic Audit...' : 'Running Quick Scan...'}
+                  </span>
+                  <span className="text-xs text-indigo-200">
+                    {analyzing === 'deep' 
+                      ? 'Analyzing all sections with institutional-grade forensic prompts'
+                      : compareWithPrevious 
+                        ? 'Comparing with previous filing for changes'
+                        : selectedSection 
+                          ? `Analyzing ${selectedSection}` 
+                          : 'Analyzing full filing'}
+                  </span>
+                </div>
+                <span className="text-xs text-indigo-200 font-mono">
+                  {selectedFiling?.form_type} • {selectedFiling?.filing_date}
+                </span>
+              </div>
+            )}
+
+            {/* Success notification when results are ready */}
+            {(forensicReport || analysis) && analyzing === 'none' && activeTab === 'document' && (
+              <div className="bg-emerald-600 px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
+                <div className="flex items-center gap-3">
+                  <Brain className="w-4 h-4 text-white" />
+                  <span className="text-sm font-bold text-white">
+                    {forensicReport ? 'Deep Audit Complete' : 'Scan Complete'}
+                  </span>
+                  <span className="text-xs text-emerald-200">
+                    Results ready to view
+                  </span>
+                </div>
+                <button
+                  onClick={() => setActiveTab('intelligence')}
+                  className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  View Results →
+                </button>
+              </div>
+            )}
+
+            {/* Error notification */}
+            {error && analyzing === 'none' && (
+              <div className="bg-red-600 px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-4 h-4 text-white" />
+                  <span className="text-sm font-bold text-white">Analysis Failed</span>
+                  <span className="text-xs text-red-200 max-w-md truncate">{error}</span>
+                </div>
+                <button
+                  onClick={() => setError(null)}
+                  className="text-white/80 hover:text-white text-xs font-bold"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
             <div className={`flex-1 overflow-y-auto ${isFocusMode ? 'p-0' : 'p-8'}`}>
               <div className={isFocusMode ? 'w-full h-full' : 'max-w-6xl mx-auto'}>
                 {activeTab === 'document' ? (
@@ -491,31 +558,28 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                 )
               ) : (
                 <div className="space-y-8">
-                  {error && (
-                    <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex gap-3 text-red-800">
-                      <AlertCircle className="w-5 h-5 shrink-0" />
-                      <div>
-                        <div className="font-bold text-sm">Action Required</div>
-                        <div className="text-xs opacity-90 mt-1">{error}</div>
-                      </div>
-                    </div>
-                  )}
+                  {/* Error is now shown in global banner above - this is just for context */}
 
                   {analyzing !== 'none' ? (
                     <div className="flex flex-col items-center justify-center py-24 gap-6 bg-white rounded-2xl border border-gray-200 shadow-sm">
                       <div className="relative">
-                        <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
-                        <Brain className="w-6 h-6 text-indigo-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                        <div className="w-20 h-20 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+                        <Brain className="w-8 h-8 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                       </div>
-                      <div className="text-center">
-                        <p className="text-lg font-black text-gray-900 tracking-tight">
-                          {analyzing === 'deep' ? 'Executing Deep Forensic Audit' : 'Digitizing Corporate Intelligence'}
+                      <div className="text-center max-w-md">
+                        <p className="text-xl font-black text-gray-900 tracking-tight">
+                          {analyzing === 'deep' ? 'Deep Forensic Audit in Progress' : 'Running Quick Scan'}
                         </p>
-                        <p className="text-sm text-gray-500 mt-2">
+                        <p className="text-sm text-gray-500 mt-3 leading-relaxed">
                           {analyzing === 'deep' 
-                            ? 'Applying comprehensive forensic prompt suite to all archive notes...'
-                            : 'Applying forensic accounting prompt suite to targeted section...'}
+                            ? 'Extracting iXBRL data, computing financial ratios, and running AI analysis on all sections. This may take 30-90 seconds.'
+                            : 'Analyzing targeted section with forensic accounting prompts...'}
                         </p>
+                        <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-400">
+                          <span className="font-mono">{selectedFiling?.form_type}</span>
+                          <span>•</span>
+                          <span className="font-mono">{selectedFiling?.filing_date}</span>
+                        </div>
                       </div>
                     </div>
                   ) : forensicReport ? (
