@@ -21,7 +21,9 @@ import {
   compareFilingSections,
   runForensicAudit,
   fetchForensicHistory,
-  type ForensicHistoryItem
+  fetchFilingFinancials,
+  type ForensicHistoryItem,
+  type FilingFinancialsResponse
 } from '../api';
 import type { 
   SECFiling, 
@@ -54,8 +56,10 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
   const [loadingSections, setLoadingSections] = useState(false);
   const [analyzing, setAnalyzing] = useState<'none' | 'scan' | 'deep'>('none');
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'document' | 'intelligence'>('document');
+  const [activeTab, setActiveTab] = useState<'document' | 'financials' | 'intelligence'>('document');
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [financials, setFinancials] = useState<FilingFinancialsResponse | null>(null);
+  const [loadingFinancials, setLoadingFinancials] = useState(false);
 
   // DON'T auto-switch tabs - let user decide when to view results
   // Instead, we show a notification badge on the INTELLIGENCE tab
@@ -69,6 +73,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
   useEffect(() => {
     if (selectedFiling) {
       loadSections();
+      loadFinancials();
     }
   }, [selectedFiling]);
 
@@ -117,6 +122,24 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
       console.error('Failed to load sections', err);
     } finally {
       setLoadingSections(false);
+    }
+  };
+
+  const loadFinancials = async () => {
+    if (!selectedFiling || !symbol) return;
+    setLoadingFinancials(true);
+    setFinancials(null);
+    try {
+      const res = await fetchFilingFinancials({
+        ticker: symbol,
+        accessionNumber: selectedFiling.accession_number,
+        documentUrl: selectedFiling.document_url
+      });
+      setFinancials(res);
+    } catch (err) {
+      console.error('Failed to load financials', err);
+    } finally {
+      setLoadingFinancials(false);
     }
   };
 
@@ -326,6 +349,24 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                     Document
                   </button>
                   <button
+                    onClick={() => setActiveTab('financials')}
+                    className={`h-12 text-[10px] font-black uppercase tracking-[0.25em] transition-all border-b-2 -mb-[1px] flex items-center gap-2 ${
+                      activeTab === 'financials' 
+                        ? 'border-indigo-600 text-indigo-600' 
+                        : financials?.quantitative_audit
+                          ? 'border-transparent text-blue-600 hover:text-blue-700'
+                          : 'border-transparent text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    Financials
+                    {loadingFinancials && (
+                      <Loader2 className="w-3 h-3 animate-spin text-blue-500" />
+                    )}
+                    {financials?.quantitative_audit && !loadingFinancials && activeTab !== 'financials' && (
+                      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                    )}
+                  </button>
+                  <button
                     onClick={() => setActiveTab('intelligence')}
                     className={`h-12 text-[10px] font-black uppercase tracking-[0.25em] transition-all border-b-2 -mb-[1px] flex items-center gap-2 ${
                       activeTab === 'intelligence' 
@@ -486,7 +527,7 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
 
             <div className={`flex-1 overflow-y-auto ${isFocusMode ? 'p-0' : 'p-8'}`}>
               <div className={isFocusMode ? 'w-full h-full' : 'max-w-6xl mx-auto'}>
-                {activeTab === 'document' ? (
+                {activeTab === 'document' && (
                   selectedFiling ? (
                     <div className={`bg-white shadow-sm flex flex-col overflow-hidden ${
                       isFocusMode ? 'h-full w-full rounded-none' : 'rounded-2xl border border-gray-200 h-[calc(100vh-180px)]'
@@ -549,14 +590,68 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                         />
                       </div>
                     </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-[60vh] text-center bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                    <FileText className="w-12 h-12 text-gray-200 mb-4" />
-                    <h3 className="text-sm font-bold text-gray-900 mb-1">No Filing Selected</h3>
-                    <p className="text-xs text-gray-400">Select a document from the history to begin.</p>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-[60vh] text-center bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                      <FileText className="w-12 h-12 text-gray-200 mb-4" />
+                      <h3 className="text-sm font-bold text-gray-900 mb-1">No Filing Selected</h3>
+                      <p className="text-xs text-gray-400">Select a document from the history to begin.</p>
+                    </div>
+                  )
+                )}
+
+                {activeTab === 'financials' && (
+                  <div className="space-y-8">
+                    {loadingFinancials ? (
+                      <div className="flex flex-col items-center justify-center py-24 gap-6 bg-white rounded-2xl border border-gray-200 shadow-sm">
+                        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+                        <div className="text-center">
+                          <p className="text-lg font-black text-gray-900 tracking-tight">Loading Financial Data</p>
+                          <p className="text-sm text-gray-500 mt-2">Extracting ratios from iXBRL...</p>
+                        </div>
+                      </div>
+                    ) : financials?.quantitative_audit ? (
+                      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-6 mb-8">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+                              <FileText className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h2 className="text-lg font-black text-gray-900 tracking-tight">File-Sourced Financials</h2>
+                              <p className="text-xs text-blue-600 font-bold uppercase tracking-widest">
+                                Single Source of Truth • No External APIs
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-3 leading-relaxed">
+                            All metrics below are computed directly from the iXBRL data embedded in this SEC filing.
+                            This data is immutable and calculated once per filing.
+                          </p>
+                          <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
+                            <span className="font-mono bg-white/50 px-2 py-1 rounded">{selectedFiling?.form_type}</span>
+                            <span className="font-mono bg-white/50 px-2 py-1 rounded">{selectedFiling?.filing_date}</span>
+                            <span className="text-blue-600 font-bold">Source: {financials.source}</span>
+                          </div>
+                        </div>
+                        <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                          <FinancialAuditGrid audit={financials.quantitative_audit as any} />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center shadow-sm">
+                        <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                          <AlertCircle className="w-10 h-10 text-amber-500" />
+                        </div>
+                        <h3 className="text-xl font-black text-gray-900 mb-3 tracking-tight">No iXBRL Data Available</h3>
+                        <p className="text-gray-500 max-w-md mx-auto text-sm leading-relaxed">
+                          {financials?.message || 'This filing does not contain embedded iXBRL financial data. This is common for older filings (pre-2020) or non-standard document types.'}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                )
-              ) : (
+                )}
+
+                {activeTab === 'intelligence' && (
                 <div className="space-y-8">
                   {/* Error is now shown in global banner above - this is just for context */}
 

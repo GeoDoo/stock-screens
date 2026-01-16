@@ -128,6 +128,76 @@ async def get_filing_sections(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{ticker}/financials")
+async def get_filing_financials(
+    ticker: str,
+    accession_number: str = Query(..., description="SEC accession number"),
+    document_url: Optional[str] = Query(None, description="SEC document URL (for computing if not cached)"),
+):
+    """
+    Get pre-computed quantitative financial data for a filing.
+    
+    This returns the ratios, scores, and metrics computed solely from the SEC filing (iXBRL).
+    Data is computed once and cached (filings are immutable).
+    """
+    import json
+    from app.services.logging_config import logger
+    
+    repo = get_filings_repository()
+    
+    # Try to get cached data first
+    cached_audit_json = await repo.get_quantitative_audit(accession_number)
+    
+    if cached_audit_json:
+        logger.info("financials_loaded_from_cache", accession_number=accession_number)
+        return {
+            "ticker": ticker.upper(),
+            "accession_number": accession_number,
+            "quantitative_audit": json.loads(cached_audit_json),
+            "source": "cached"
+        }
+    
+    # If not cached and document_url provided, compute it
+    if document_url:
+        try:
+            html_content = await sec_filings_service.get_filing_html(document_url)
+            audit = sec_filings_service.compute_quantitative_audit(html_content, ticker)
+            
+            if audit:
+                # Save to cache
+                await repo.save_quantitative_audit(
+                    accession_number=accession_number,
+                    quantitative_audit_json=json.dumps(audit)
+                )
+                logger.info("financials_computed_and_cached", accession_number=accession_number)
+                return {
+                    "ticker": ticker.upper(),
+                    "accession_number": accession_number,
+                    "quantitative_audit": audit,
+                    "source": "computed"
+                }
+            else:
+                return {
+                    "ticker": ticker.upper(),
+                    "accession_number": accession_number,
+                    "quantitative_audit": None,
+                    "source": "no_ixbrl",
+                    "message": "No iXBRL data found in filing. Common for older filings (pre-2020)."
+                }
+        except Exception as e:
+            logger.warning("financials_computation_failed", accession_number=accession_number, error=str(e))
+            raise HTTPException(status_code=500, detail=f"Failed to compute financials: {str(e)}")
+    
+    # No cached data and no URL to compute from
+    return {
+        "ticker": ticker.upper(),
+        "accession_number": accession_number,
+        "quantitative_audit": None,
+        "source": "not_computed",
+        "message": "Financial data not yet computed. Provide document_url to compute."
+    }
+
+
 @router.post("/analyze-section")
 async def analyze_filing_section(
     ticker: str = Query(..., description="Stock ticker symbol"),

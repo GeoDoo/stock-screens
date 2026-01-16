@@ -250,6 +250,29 @@ GET /api/filings/sections
 
 ---
 
+### Get Filing Financials
+
+Get pre-computed quantitative financial data for a filing.
+
+This returns the ratios, scores, and metrics computed solely from the SEC filing (iXBRL).
+Data is computed once and cached (filings are immutable).
+
+```
+GET /api/filings/{ticker}/financials
+```
+
+**Parameters**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ticker` | string | Yes |  |
+| `accession_number` | string | Yes | SEC accession number |
+| `document_url` | string | null | No | SEC document URL (for computing if not cached) |
+
+
+
+---
+
 ### Analyze Filing Section
 
 Run analysis on a specific section of a filing.
