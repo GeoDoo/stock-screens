@@ -400,7 +400,7 @@ async def run_forensic_audit(
                         projection_years=projection_years,
                         shares_outstanding=extractor.shares_outstanding() or 1,
                         total_debt=extractor.total_debt() or 0,
-                        cash=extractor.cash_and_equivalents() or 0
+                        cash=extractor.cash() or 0
                     )
                     
                     # Standard margin/growth steps for execution risk matrix
