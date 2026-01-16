@@ -408,7 +408,7 @@ async def run_forensic_audit(
                     growth_steps = [-0.05, -0.025, 0, 0.025, 0.05]
                     
                     matrix = sens_calc.generate_margin_growth_matrix(
-                        base_revenue=extractor.revenue() or 1,
+                        base_revenue=extractor.latest_revenue() or 1,
                         base_margin=extractor.operating_margin() or 0.15,
                         base_growth=base_growth,
                         discount_rate=wacc,
@@ -430,8 +430,6 @@ async def run_forensic_audit(
             await repo.update_forensic_report(
                 accession_number=accession_number,
                 consistency_score=report.accounting_consistency_score,
-                reported_eps=report.reported_eps,
-                forensic_eps_adjustment=report.forensic_eps_adjustment,
                 report_json=report.model_dump_json()
             )
         
