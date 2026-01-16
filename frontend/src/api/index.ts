@@ -544,10 +544,15 @@ export interface FilingFinancialsResponse {
     profitability_ratios: Record<string, number | null>;
     valuation_ratios: Record<string, number | null>;
     accounting_corrections: Array<{
-      category: string;
+      name: string;
       description: string;
       impact_on_ebit: number;
       impact_on_assets: number;
+    }>;
+    input_provenance?: Record<string, {
+      source: string;
+      description: string;
+      confidence: string;
     }>;
     findings: string[];
   } | null;

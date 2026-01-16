@@ -208,13 +208,17 @@ Provide a detailed, specific analysis with evidence from the filing."""
 
         try:
             # P0 Bug Fix: Use asynchronous client to avoid blocking the event loop
-            response = await self.client.aio.models.generate_content(
-                model=self.MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.2,  # Low temp for factual analysis
-                    max_output_tokens=65536,  # Gemini 2.5 Flash maximum output
+            # Add 120-second timeout to prevent infinite hangs
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=self.MODEL,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.2,  # Low temp for factual analysis
+                        max_output_tokens=65536,  # Gemini 2.5 Flash maximum output
+                    ),
                 ),
+                timeout=120.0  # 2 minutes max
             )
             
             duration_ms = (time.time() - start_time) * 1000
@@ -239,6 +243,18 @@ Provide a detailed, specific analysis with evidence from the filing."""
                 model=self.MODEL,
                 tokens_used=None,
             )
+            
+        except asyncio.TimeoutError:
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("gemini_analysis_timeout", duration_ms=round(duration_ms, 2), timeout_seconds=120)
+            await telemetry_repo.record_metric(
+                trace_id=trace_id,
+                operation="gemini_analysis",
+                duration_ms=duration_ms,
+                status="timeout",
+                error_message="Request timed out after 120 seconds"
+            )
+            raise AnalyzerError("Analysis timed out after 2 minutes. The filing may be too large. Try analyzing a specific section instead of the full document.")
             
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
@@ -390,14 +406,18 @@ DO NOT use any other field names (e.g., no "danger_level" - use "severity")."""
             # Use the new GenerateContentConfig with response_mime_type
             # We remove response_schema because it's causing 'additionalProperties' errors 
             # in some Gemini API environments. We will parse the JSON manually.
-            response = await self.client.aio.models.generate_content(
-                model=self.MODEL,
-                contents=[prompt],
-                config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    max_output_tokens=65536,  # Gemini 2.5 Flash maximum output
-                    response_mime_type="application/json",
+            # Add 120-second timeout to prevent infinite hangs
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=self.MODEL,
+                    contents=[prompt],
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=65536,  # Gemini 2.5 Flash maximum output
+                        response_mime_type="application/json",
+                    ),
                 ),
+                timeout=120.0  # 2 minutes max
             )
             
             duration_ms = (time.time() - start_time) * 1000
@@ -422,6 +442,18 @@ DO NOT use any other field names (e.g., no "danger_level" - use "severity")."""
             )
             
             return report
+            
+        except asyncio.TimeoutError:
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error("gemini_forensic_analysis_timeout", duration_ms=round(duration_ms, 2), timeout_seconds=120)
+            await telemetry_repo.record_metric(
+                trace_id=trace_id,
+                operation="gemini_forensic_analysis",
+                duration_ms=duration_ms,
+                status="timeout",
+                error_message="Request timed out after 120 seconds"
+            )
+            raise AnalyzerError("Forensic analysis timed out after 2 minutes. The filing may be too large. Try analyzing a specific section instead of the full document.")
             
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000

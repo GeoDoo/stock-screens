@@ -1562,10 +1562,10 @@ export default function App() {
                             {isSignificant ? (
                               <div className="text-xs">
                                 <p className="font-medium text-amber-800 mb-1">
-                                  WC is {mismatch > 0 ? 'ABOVE' : 'BELOW'} target by {formatCurrency(Math.abs(mismatch, stockData?.currency || "USD"))}
+                                  WC is {mismatch > 0 ? 'ABOVE' : 'BELOW'} target by {formatCurrency(Math.abs(mismatch), stockData?.currency || "USD")}
                                 </p>
                                 <p className="text-amber-700">
-                                  <strong>Year 1 FCF difference:</strong> {formatCurrency(Math.abs(fcfDiff, stockData?.currency || "USD"))}
+                                  <strong>Year 1 FCF difference:</strong> {formatCurrency(Math.abs(fcfDiff), stockData?.currency || "USD")}
                                   {fcfDiff > 0 
                                     ? ' — Level mode releases cash (WC normalizes down)'
                                     : ' — Level mode invests cash (WC builds up)'}
@@ -1577,7 +1577,7 @@ export default function App() {
                             ) : (
                               <div className="text-xs text-emerald-700">
                                 <p className="font-medium mb-1">WC is close to target ratio</p>
-                                <p>Year 1 FCF difference: ~{formatCurrency(Math.abs(fcfDiff, stockData?.currency || "USD"))} (minimal impact)</p>
+                                <p>Year 1 FCF difference: ~{formatCurrency(Math.abs(fcfDiff), stockData?.currency || "USD")} (minimal impact)</p>
                                 <p className="text-emerald-600 mt-1">Both modes will produce similar results for this company.</p>
                               </div>
                             )}
@@ -1807,12 +1807,12 @@ export default function App() {
                             <td className="py-3 font-mono font-medium">{year}</td>
                             <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.revenue, stockData?.currency || "USD")}</td>
                             <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.ebit, stockData?.currency || "USD")}</td>
-                            <td className="py-3 text-right font-mono text-gray-400">({formatCurrency(Math.abs(taxes, stockData?.currency || "USD"))})</td>
+                            <td className="py-3 text-right font-mono text-gray-400">({formatCurrency(Math.abs(taxes), stockData?.currency || "USD")})</td>
                             <td className="py-3 text-right font-mono text-gray-600">{formatCurrency(p.nopat, stockData?.currency || "USD")}</td>
                             <td className="py-3 text-right font-mono text-emerald-600">+{formatCurrency(p.da, stockData?.currency || "USD")}</td>
-                            <td className="py-3 text-right font-mono text-red-600">−{formatCurrency(Math.abs(p.capex, stockData?.currency || "USD"))}</td>
+                            <td className="py-3 text-right font-mono text-red-600">−{formatCurrency(Math.abs(p.capex), stockData?.currency || "USD")}</td>
                             <td className={`py-3 text-right font-mono ${p.delta_wc >= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                              {p.delta_wc >= 0 ? '−' : '+'}{formatCurrency(Math.abs(p.delta_wc, stockData?.currency || "USD"))}
+                              {p.delta_wc >= 0 ? '−' : '+'}{formatCurrency(Math.abs(p.delta_wc), stockData?.currency || "USD")}
                             </td>
                             <td className={`py-3 text-right font-mono font-medium border-l border-gray-200 pl-3 ${p.fcf >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                               {formatCurrency(p.fcf, stockData?.currency || "USD")}
