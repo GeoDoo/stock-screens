@@ -678,9 +678,15 @@ export function FilingsAnalysisPage({ symbol: propSymbol }: { symbol?: string })
                     </div>
                   ) : forensicReport ? (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-                      {/* Check if this is a rate-limited response (score=0, has rate limit red flag) */}
-                      {forensicReport.report.accounting_consistency_score === 0 && 
-                       forensicReport.report.red_flags?.some(rf => rf.category === 'AI RATE LIMIT') ? (
+                      {/* Check if this is a rate-limited/failed response - multiple detection methods */}
+                      {(forensicReport.report.accounting_consistency_score === 0 && 
+                        (forensicReport.report.red_flags?.some(rf => 
+                          rf.category?.toUpperCase().includes('RATE LIMIT') ||
+                          rf.findings?.some(f => f.toLowerCase().includes('rate limit'))
+                        ) ||
+                        forensicReport.report.summary?.toLowerCase().includes('rate limit') ||
+                        (forensicReport.report.reported_eps === null && forensicReport.report.forensic_eps_adjustment === 0)
+                        )) ? (
                         <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-12 text-center">
                           <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
                             <AlertCircle className="w-10 h-10 text-amber-600" />
